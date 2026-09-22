@@ -24,6 +24,7 @@ function itemCount(order: Order) {
 
 export function OrderBoard({ orders, userId }: { orders: Order[]; userId: string }) {
   const router = useRouter();
+  const [view, setView] = useState<"all" | "mine">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [ean, setEan] = useState("");
@@ -31,6 +32,11 @@ export function OrderBoard({ orders, userId }: { orders: Order[]; userId: string
   const scanRef = useRef<HTMLInputElement>(null);
   const selected = useMemo(() => orders.find((order) => order.id === selectedId) ?? null, [orders, selectedId]);
   const activeOrders = orders.filter((order) => order.status !== "returned");
+  const visibleOrders = view === "mine" ? activeOrders.filter((order) => order.claimed_by === userId && order.status !== "handed_to_courier") : activeOrders;
+  const inProgress = activeOrders.filter((order) => !["handed_to_courier"].includes(order.status)).length;
+  const pendingCount = activeOrders.filter((order) => order.status === "pending").length;
+  const mineCount = activeOrders.filter((order) => order.claimed_by === userId && order.status !== "handed_to_courier").length;
+  const readyCount = activeOrders.filter((order) => order.status === "ready").length;
   const mine = selected?.claimed_by === userId;
   const scanned = selected?.online_order_items.reduce((sum, item) => sum + item.scanned_quantity, 0) ?? 0;
   const total = selected ? itemCount(selected) : 0;
@@ -70,26 +76,38 @@ export function OrderBoard({ orders, userId }: { orders: Order[]; userId: string
   return (
     <div className="workspace">
       <div className="board-area">
-        <div className="board-summary"><span><strong>{activeOrders.length}</strong> comenzi în board</span><span className="summary-divider" /><span><strong>{activeOrders.filter((o) => o.status === "pending").length}</strong> de preluat</span><span className="summary-divider" /><span><strong>{activeOrders.filter((o) => o.claimed_by === userId && !["handed_to_courier"].includes(o.status)).length}</strong> ale mele</span></div>
-        <div className="board" aria-label="Board comenzi online">
-          {columns.map((column) => {
-            const cards = activeOrders.filter((order) => order.status === column.status);
-            return (
-              <section className="board-column" key={column.status}>
-                <div className="column-heading"><div><h2>{column.label}</h2><p>{column.hint}</p></div><span className="count-pill">{cards.length}</span></div>
-                <div className="column-cards">
-                  {cards.length ? cards.map((order) => (
-                    <button key={order.id} className={`order-card ${selectedId === order.id ? "selected" : ""}`} onClick={() => { setSelectedId(order.id); setFeedback(null); setEan(""); }} aria-label={`Deschide comanda cu factura ${order.invoice_number}`}>
-                      <div className="card-top"><span className="invoice">#{order.invoice_number}</span><span className={`source-tag ${order.source}`}>{order.source === "shopify" ? "Shopify" : "Marketplace"}</span></div>
-                      <p className="card-subtitle">{itemCount(order)} {itemCount(order) === 1 ? "produs" : "produse"} · {order.online_order_items.length} {order.online_order_items.length === 1 ? "poziție" : "poziții"}</p>
-                      <div className="card-bottom"><time dateTime={order.created_at}>{formatDate(order.created_at)}</time><span className={order.claimed_by === userId ? "mine-label" : "card-arrow"}>{order.claimed_by === userId ? "A mea" : "↗"}</span></div>
-                    </button>
-                  )) : <div className="column-empty">Nicio comandă aici</div>}
-                </div>
-              </section>
-            );
-          })}
+        <div className="stat-grid" aria-label="Rezumat comenzi">
+          <div className="stat-card"><span className="stat-icon blue">◫</span><div><p>Comenzi în lucru</p><strong>{inProgress}</strong><small>În fluxul depozitului</small></div></div>
+          <div className="stat-card"><span className="stat-icon orange">◷</span><div><p>De preluat</p><strong>{pendingCount}</strong><small>Așteaptă un operator</small></div></div>
+          <div className="stat-card"><span className="stat-icon purple">◎</span><div><p>Comenzile mele</p><strong>{mineCount}</strong><small>Preluate de tine</small></div></div>
+          <div className="stat-card"><span className="stat-icon green">✓</span><div><p>Pregătite</p><strong>{readyCount}</strong><small>Gata de predare</small></div></div>
         </div>
+        <section className="board-panel" aria-labelledby="board-title">
+          <div className="board-panel-heading"><div><h2 id="board-title">Fluxul comenzilor</h2><p>Urmărește fiecare comandă de la preluare până la predare.</p></div><button className="refresh-button" type="button" onClick={() => router.refresh()} aria-label="Reîncarcă comenzile"><span aria-hidden="true">↻</span> Actualizează</button></div>
+          <div className="board-tabs" role="group" aria-label="Filtrează comenzile">
+            <button type="button" className={view === "all" ? "active" : ""} aria-pressed={view === "all"} onClick={() => setView("all")}>Toate comenzile <span>{activeOrders.length}</span></button>
+            <button type="button" className={view === "mine" ? "active" : ""} aria-pressed={view === "mine"} onClick={() => setView("mine")}>Comenzile mele <span>{mineCount}</span></button>
+          </div>
+          {visibleOrders.length ? <div className="board" aria-label="Board comenzi online">
+            {columns.map((column) => {
+              const cards = visibleOrders.filter((order) => order.status === column.status);
+              return (
+                <section className="board-column" key={column.status}>
+                  <div className="column-heading"><div><h3>{column.label}</h3><p>{column.hint}</p></div><span className="count-pill">{cards.length}</span></div>
+                  <div className="column-cards">
+                    {cards.length ? cards.map((order) => (
+                      <button key={order.id} className={`order-card ${selectedId === order.id ? "selected" : ""}`} onClick={() => { setSelectedId(order.id); setFeedback(null); setEan(""); }} aria-label={`Deschide comanda cu factura ${order.invoice_number}`}>
+                        <div className="card-top"><span className="invoice">#{order.invoice_number}</span><span className={`source-tag ${order.source}`}>{order.source === "shopify" ? "Shopify" : "Marketplace"}</span></div>
+                        <p className="card-subtitle">{itemCount(order)} {itemCount(order) === 1 ? "produs" : "produse"} · {order.online_order_items.length} {order.online_order_items.length === 1 ? "poziție" : "poziții"}</p>
+                        <div className="card-bottom"><time dateTime={order.created_at}>{formatDate(order.created_at)}</time><span className={order.claimed_by === userId ? "mine-label" : "card-arrow"}>{order.claimed_by === userId ? "A mea" : "↗"}</span></div>
+                      </button>
+                    )) : <div className="column-empty">Nicio comandă</div>}
+                  </div>
+                </section>
+              );
+            })}
+          </div> : <div className="board-empty"><div className="empty-icon" aria-hidden="true"><svg viewBox="0 0 64 64" fill="none"><rect x="11" y="18" width="42" height="34" rx="5" stroke="currentColor" strokeWidth="2.5"/><path d="M11 29h42M25 18v-5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5M25 39h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></div><h3>{view === "mine" ? "Nu ai comenzi preluate" : "Nicio comandă de procesat"}</h3><p>{view === "mine" ? "Comenzile pe care le preiei vor apărea aici." : "După configurarea sincronizării, comenzile noi vor apărea aici."}</p></div>}
+        </section>
       </div>
 
       {selected && <div className="detail-backdrop" onClick={() => setSelectedId(null)} aria-hidden="true" />}
