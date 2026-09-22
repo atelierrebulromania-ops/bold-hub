@@ -2,7 +2,9 @@ export type OrderStatus = "pending" | "claimed" | "preparing" | "ready" | "hande
 
 export type OrderItem = {
   id: string;
-  ean: string;
+  ean: string | null;
+  scan_code: string;
+  scan_code_type: "sku" | "ean";
   quantity: number;
   scanned_quantity: number;
   products: { name: string; sku: string; variant_label: string | null } | null;

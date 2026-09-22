@@ -4,8 +4,8 @@ export type BocpOrderPage = BocpListPage;
 export type BocpConnectorPage = BocpListPage;
 
 /** Account-wide order feed; each row can identify its originating connector. */
-export function listBocpOrders(options: { page?: number; modifiedAfter?: string } = {}): Promise<BocpOrderPage> {
-  return bocpGetList("marketplace/orders/list", { page: options.page ?? 1, modifiedAfter: options.modifiedAfter });
+export function listBocpOrders(options: { page?: number; modifiedAfter?: string; dateFrom?: string } = {}): Promise<BocpOrderPage> {
+  return bocpGetList("marketplace/orders/list", { page: options.page ?? 1, modifiedAfter: options.modifiedAfter, dateFrom: options.dateFrom });
 }
 
 /** Discover connector IDs before mapping BOCP orders into BoldHub sources. */
