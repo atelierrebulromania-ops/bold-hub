@@ -42,4 +42,10 @@ Migrațiile din `supabase/migrations/` au fost aplicate proiectului BoldHub. Nu 
 
 Pentru Vercel, setează `NEXT_PUBLIC_SUPABASE_URL` și `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ca variabile de mediu. Nicio cheie `service_role` / `secret` nu intră în client sau în Git.
 
-Integrarea BOCP are nevoie de o soluție pentru IP-ul de ieșire whitelisted și de confirmarea structurii reale a răspunsului `/invoices/list/` înainte de implementarea sincronizării automate.
+Integrarea BOCP are nevoie de o soluție pentru IP-ul de ieșire whitelisted și de confirmarea structurii reale a răspunsurilor `/marketplace/orders/list/` și `/invoices/list/` înainte de implementarea sincronizării automate.
+
+## Pregătirea integrării BOCP
+
+Clientul server-side din `lib/bocp/` poate face doar cereri `GET` către lista comenzilor marketplace, lista conectorilor și lista facturilor. Nu este apelat automat și nu importă încă date în Supabase: structura răspunsurilor și legătura dintre comandă, sursă și factură trebuie validate pe date reale înainte de a crea carduri în board.
+
+Pentru testare, este necesar un utilizator BOCP REST API **separat**, limitat la `marketplace[GET],invoices[GET]`, cu IP-ul de ieșire explicit în whitelist și învățarea automată a IP-urilor dezactivată. Nu modifica utilizatorul API existent și nu folosi `*` în producție. După ce utilizatorul și IP-ul sunt stabilite, completează `BOCP_API_BASE_URL`, `BOCP_API_USERNAME` și `BOCP_API_PASSWORD` în `.env.local` sau în variabilele server-side ale platformei de hosting. Nu adăuga parola în Git și nu folosi prefixul `NEXT_PUBLIC_` pentru ea. Un răspuns `401` poate însemna și IP nepermis; nu relua automat încercarea.
