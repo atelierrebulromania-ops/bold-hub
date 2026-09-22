@@ -44,12 +44,12 @@ export async function handToCourier(orderId: string) {
   return runOrderAction("hand_online_order_to_courier", orderId, "Predarea către curier sau șofer a fost înregistrată.", "Comanda trebuie să fie pregătită înainte de predare.");
 }
 
-export async function scanItem(orderId: string, ean: string): Promise<Result> {
+export async function scanItem(orderId: string, enteredCode: string): Promise<Result> {
   const supabase = await warehouseClient();
   if (!supabase) return { ok: false, message: "Sesiunea sau accesul nu mai este valid." };
-  const code = ean.trim();
-  if (!code) return { ok: false, message: "Scanează codul EAN de pe produs." };
-  const { data, error } = await supabase.rpc("scan_online_order_item", { p_order_id: orderId, p_ean: code });
+  const code = enteredCode.trim();
+  if (!code) return { ok: false, message: "Introdu codul produsului." };
+  const { data, error } = await supabase.rpc("scan_online_order_code", { p_order_id: orderId, p_code: code });
   if (error) return { ok: false, message: "Scanarea nu a putut fi salvată. Încearcă din nou." };
-  return { ok: data === true, message: data === true ? "Produs confirmat." : "Codul nu corespunde unui produs rămas de scanat în această comandă." };
+  return { ok: data === true, message: data === true ? "Produs confirmat." : "Codul nu corespunde unui produs rămas de confirmat în această comandă." };
 }

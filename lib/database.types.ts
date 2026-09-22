@@ -216,29 +216,35 @@ export type Database = {
       online_order_items: {
         Row: {
           created_at: string
-          ean: string
+          ean: string | null
           id: string
           order_id: string
           product_id: string
           quantity: number
+          scan_code: string
+          scan_code_type: "sku" | "ean"
           scanned_quantity: number
         }
         Insert: {
           created_at?: string
-          ean: string
+          ean?: string | null
           id?: string
           order_id: string
           product_id: string
           quantity: number
+          scan_code: string
+          scan_code_type?: "sku" | "ean"
           scanned_quantity?: number
         }
         Update: {
           created_at?: string
-          ean?: string
+          ean?: string | null
           id?: string
           order_id?: string
           product_id?: string
           quantity?: number
+          scan_code?: string
+          scan_code_type?: "sku" | "ean"
           scanned_quantity?: number
         }
         Relationships: [
@@ -260,6 +266,7 @@ export type Database = {
       }
       online_orders: {
         Row: {
+          bocp_invoice_id: string | null
           bocp_order_id: string | null
           claimed_at: string | null
           claimed_by: string | null
@@ -278,6 +285,7 @@ export type Database = {
           status: Database["public"]["Enums"]["online_order_status"]
         }
         Insert: {
+          bocp_invoice_id?: string | null
           bocp_order_id?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
@@ -296,6 +304,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["online_order_status"]
         }
         Update: {
+          bocp_invoice_id?: string | null
           bocp_order_id?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
@@ -819,8 +828,12 @@ export type Database = {
         Returns: boolean
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
-      scan_online_order_item: {
-        Args: { p_ean: string; p_order_id: string }
+      import_bocp_online_orders: {
+        Args: { p_orders: Json }
+        Returns: Json
+      }
+      scan_online_order_code: {
+        Args: { p_code: string; p_order_id: string }
         Returns: boolean
       }
     }
