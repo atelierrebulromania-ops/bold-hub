@@ -87,7 +87,7 @@ function sourceOf(order: DataRecord): "shopify" | "marketplace" | null {
   return /shopify/i.test(connectorType) ? "shopify" : "marketplace";
 }
 
-function isEan(value: unknown): boolean {
+export function isEan(value: unknown): boolean {
   const code = string(value);
   if (!/^(?:\d{8}|\d{12,14})$/.test(code)) return false;
   const digits = [...code].map(Number);

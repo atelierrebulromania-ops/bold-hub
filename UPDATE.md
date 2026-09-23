@@ -1,47 +1,148 @@
-# BoldHub — actualizare stadiu implementare
+# BoldHub — stadiul implementării
 
-Rezumat al lucrului din această iterație (sesiune Codex), verificat înainte de deschiderea PR-ului: `npm test` (8/8), `npm run typecheck` și `npm run build` trec toate curat pe acest cod.
+Ultima actualizare: **23 septembrie 2026**. Referința funcțională este documentul intern `proiect-aplicatie-depozit-atelier-rebul.md` (păstrat doar local).
 
-## Ce s-a făcut
+## Pe scurt
 
-### Board comenzi online — pivot temporar pe SKU
-- Confirmarea la picking s-a mutat temporar de pe EAN pe **SKU**, ca să existe un flux cap-coadă testabil înainte ca EAN-urile din BOCP să fie complete. Coloana `ean` a devenit opțională; s-au adăugat `scan_code` / `scan_code_type` (`sku` | `ean`) pe `online_order_items`, iar RPC-ul `scan_online_order_item` a fost înlocuit cu `scan_online_order_code`.
-- UI-ul de picking ([app/orders/order-board.tsx](app/orders/order-board.tsx)) afișează explicit modul curent ("Confirmare după SKU" vs. "Scanare EAN") ca operatorii să nu confunde confirmarea temporară cu scanarea fizică reală.
-- Migrații: [`20260922214737_sku_scan_mode.sql`](supabase/migrations/20260922214737_sku_scan_mode.sql), hardening suplimentar de autorizare în [`20260922215359_harden_sku_rpc_auth.sql`](supabase/migrations/20260922215359_harden_sku_rpc_auth.sql) (RPC-urile interne nu mai sunt apelabile direct, doar prin wrapper-ele publice cu verificare de rol).
+Toate fluxurile din document sunt implementate cap-coadă pentru toate rolurile:
+- comenzi online: board, preluare, scanare SKU/EAN, predare;
+- refill revânzători: coș, rezervare, cele 3 triggere de livrare, facturare, predare;
+- retururi;
+- dashboard pentru owner;
+- notificări in-app și în browser;
+- căutarea comenzilor greșite;
+- trecerea de la SKU la EAN.
 
-### Import BOCP → Supabase (manual, blocat până la 1 octombrie 2026)
-- [lib/bocp/feeds.ts](lib/bocp/feeds.ts) + [lib/bocp/preview.ts](lib/bocp/preview.ts): citesc Orders + Invoices din BOCP (paginat, cu plafon de siguranță de 8 pagini/feed), corelează comanda cu factura și clasifică fiecare linie (eligibilă pe SKU / fără SKU / cantitate invalidă / serviciu / neclasificată). Lipsa EAN e acum doar diagnostic, nu blochează.
-- RPC atomic [`import_bocp_online_orders`](supabase/migrations/20260922214800_bocp_import_rpc.sql): creează comenzi + produse (upsert pe SKU) în loturi de maximum 25 facturi, idempotent pe `invoice_number`, blocat explicit înainte de 1 octombrie 2026.
-- Rută admin [app/api/admin/bocp/import/route.ts](app/api/admin/bocp/import/route.ts) + buton "Importă comenzile" în [/admin/integrations](app/admin/integrations/preview-panel.tsx) — doar administratorul autentificat poate declanșa, verificare same-origin, refuză înainte de data de lansare.
-- **Testat cu date sintetice, într-o tranzacție anulată** (traseu complet import → preluare → confirmare → predare); nicio comandă de test nu a rămas în baza reală.
+Ce lipsește depinde de acces extern: IP fix pentru BOCP, contul WhatsApp Business, furnizorul de email, tokenul Shopify pentru verificarea AWB și testul pe dispozitivele Zebra. Detalii în [Ce rămâne](#ce-rămâne).
 
-### Job automat de import (pregătit, dezactivat)
-- [app/api/cron/bocp-import/route.ts](app/api/cron/bocp-import/route.ts): rută server-side separată, protejată prin `Authorization: Bearer CRON_SECRET`, activă doar dacă `BOCP_AUTO_IMPORT_ENABLED=true` și doar după 1 octombrie 2026. Reia ultimele 7 zile de facturi la fiecare rulare, ca să recupereze întreruperi scurte.
-- Migrația [`20260922220856_bocp_scheduled_import.sql`](supabase/migrations/20260922220856_bocp_scheduled_import.sql) (acces `service_role` la RPC-ul de import) **este scrisă dar NU e aplicată pe baza live**.
-- **Nimic din acest job nu rulează încă** — nu există job programat (Vercel Cron sau altul), `BOCP_AUTO_IMPORT_ENABLED` rămâne `false`, iar problema IP-ului fix de ieșire (whitelist BOCP) e nerezolvată.
+**Verificat:**
+- `npm test` (14/14), `npm run typecheck` și `npm run build` trec;
+- testul de flow per rol [`supabase/tests/role_flows.sql`](supabase/tests/role_flows.sql) trece complet: **74/74** (admin 11, depozit 34, facturare 13, revânzător 8, owner 8);
+- fiecare migrație a fost rulată întâi cu date sintetice într-o tranzacție anulată, apoi aplicată pe baza live;
+- ecranele au fost încărcate cu contul de admin.
 
-### Administrare revânzători (configurare, nu flux operațional)
-- Pagină nouă [/admin/resellers](app/admin/resellers/page.tsx): firme (`reseller_companies`), Delivery Groups, adăugare locație/revânzător, asociere în grupuri, setare stoc inițial (par level) per SKU.
-- Nu creează conturi Auth pentru revânzători, nu generează coșuri și nu declanșează nimic din fluxul de refill descris în documentul de proiect — e doar ecranul de configurare de bază.
+**Starea bazei live:** 523 de produse sincronizate din BOCP, dintre care 231 au EAN. Nu există încă nicio comandă, revânzător sau retur. Importul comenzilor este blocat până la 1 octombrie 2026.
 
-### Conturi noi
-- `admin@atelierrebul.ro` → owner, `marketing@chicchic.ro` → operator_facturare, `contact@atelierrebul.ro` → operator_depozit, adăugate în Supabase Auth și legate de `app_users`. **Doar contul operator_depozit are un ecran funcțional** (board-ul de comenzi); owner și operator_facturare nu au încă nicio pagină dedicată.
+## Acoperire față de documentul de proiect
 
-## Ce a rămas neimplementat (față de `proiect-aplicatie-depozit-atelier-rebul.md`)
+| Secțiune | Stare | Unde |
+|---|---|---|
+| §2 Roluri | ✅ admin, owner, operator_depozit, operator_facturare, revânzător (rolul `account` e nedecis) | [lib/auth.ts](lib/auth.ts), [components/app-shell.tsx](components/app-shell.tsx) |
+| §3.1 Stoc inițial per revânzător/produs | ✅ | `/admin/resellers` |
+| §3.2 Cerere refill din aplicație, calcul automat al necesarului | ✅ | `/reseller` |
+| §3.3 Automatizare WhatsApp | ⏳ cererile se introduc manual în `/refill` (sursa WhatsApp/telefon este păstrată) | — |
+| §3.4 Rezervare stoc | ✅ `quantity_reserved`, eliberat la predare | `/refill` |
+| §3.5 Delivery Groups + cele 3 triggere (manual, client important, countdown 48h) | ✅ countdown prin pg_cron la 15 minute | `/refill` |
+| §3.6 Flux invers spre facturare, până la „predat șoferului/curierului” | ✅ | `/refill`, `/billing` |
+| §3.7 Cont revânzător: istoric | ✅ · „comandă din nou” / „frecvent comandate” ⏳ | `/reseller` |
+| §4 Board comenzi online, preluare exclusivă, eliberare, predare | ✅ | `/orders` |
+| §4.3 Comenzi greșite (căutare la cerere) | ✅ | `/orders/search` |
+| §5 Retururi (înregistrare, verificare fizică, notificare, raport lunar, marcare Shopify) | ✅ | `/returns` |
+| §6 Scanare EAN (verde/roșu, progres, buton blocat) | ✅ per produs, după activare · test Zebra ⏳ · „Add to Home Screen” ⏳ | `/orders`, `/admin/catalog` |
+| §7 Notificări in-app + browser | ✅ · email / WhatsApp ⏳ | `/notifications`, clopoțelul din bara de sus |
+| §8 Dashboard owner | ✅ toți indicatorii sugerați | `/dashboard` |
+| §9 Verificare zilnică AWB Ecolet/Shopify | ⏳ lipsesc tokenul și răspunsurile la întrebări | — |
+| §10 BOCP: import facturi, catalog, EAN, stoc | ✅ manual · sincronizare automată ⏳ (IP fix) | `/admin/integrations`, `/admin/catalog` |
 
-În ordinea de impact recomandată în conversație:
+## Ecrane pe rol
 
-1. **Punerea în funcțiune reală a sincronizării BOCP** — alegerea hostingului cu IP de ieșire fix, whitelisting la BOCP, aplicarea migrației de scheduled import, programarea jobului și un test end-to-end după 1 octombrie (factură nouă → import fără dubluri → board → confirmare → predare, plus recuperare după întrerupere).
-2. **Revenirea de la SKU la EAN** — completarea EAN-urilor lipsă în catalogul BOCP (8 produse identificate în audit la ultima verificare), apoi comutarea per-articol `scan_code_type` de la `sku` la `ean` și testare pe scannerele Zebra TC26 / DataWedge. Momentan confirmarea e explicit temporară.
-3. **Flux 1 — Refill revânzători/horeca**, dincolo de ecranul de configurare admin: conturi + acces pentru revânzători, coșuri persistente, cereri din aplicație și automatizare WhatsApp, rezervare stoc, cele 3 triggere de livrare (manual / client important / countdown 48h), fluxul invers spre facturare.
-4. **Retururi** — căutare comandă, înregistrare de către operator_facturare, verificare fizică, revenire în stoc, notificare + raport agregat pentru admin. Tabelul `order_returns` există, dar fără UI.
-5. **Ecrane pentru `operator_facturare` și `owner`** — niciunul nu are pagină funcțională momentan; owner ar trebui să capete dashboard read-only (KPI-uri din secțiunea 8), facturare ar trebui să capete emitere factură + retururi.
-6. **Notificări** (in-app, email, browser, WhatsApp) — doar tabelul `notifications` există, fără nicio integrare.
-7. **Verificarea zilnică AWB Ecolet/Shopify** (secțiunea 9 din document) — neînceput.
-8. **Ecran "comenzi greșite"** — căutare manuală după nume/email/telefon/nr. comandă pentru admin/operatori (nu tracking automat, doar investigare la cerere).
+| Rol | Ecran la login | Acces |
+|---|---|---|
+| admin | `/orders` | tot, plus Revânzători, Catalog & EAN, Integrări |
+| operator_depozit (`contact@atelierrebul.ro`) | `/orders` | Comenzi online, Refill revânzători, Căutare comenzi, Retururi (verificare fizică), Notificări |
+| operator_facturare (`marketing@chicchic.ro`) | `/returns` | Retururi (înregistrare), Facturare refill, Căutare comenzi, Notificări |
+| owner (`admin@atelierrebul.ro`) | `/dashboard` | doar dashboard (cifre agregate, fără date de client) |
+| revânzător | `/reseller` | cererea proprie de refill, coșul, livrările, istoricul |
 
-## De reținut / riscuri deschise semnalate în timpul lucrului
+Contul de admin este `atelierrebulromania@gmail.com`. Conturile de revânzător se creează în Supabase → Authentication → Users (Invite user), apoi se asociază locației din `/admin/resellers`.
 
-- Cheia API BOCP dedicată (#2) e restricționată doar pe IP-ul curent de birou, **nu și pe metodă** — interfața BOCP nu permite limitarea la `[GET]` din ecranul folosit; suportul BOCP ar trebui contactat pentru a limita cheia strict la `marketplace[GET],invoices[GET]` (+ celelalte module marcate pentru viitor). Codul aplicației face doar `GET`, dar cheia însăși permite azi mai mult.
-- IP-ul de ieșire al găzduirii (Vercel implicit e dinamic) trebuie rezolvat înainte de orice sincronizare automată — opțiune candidată: Vercel Static IP (plan superior) sau un gateway dedicat.
-- Cele două documente interne (`proiect-aplicatie-depozit-atelier-rebul.md`, `schema-baza-de-date-depozit.md`) rămân **doar locale**, neincluse în acest PR, conform deciziei explicite de a nu publica detalii interne de discovery/BOCP într-un repository public.
+## Migrații
+
+Toate sunt aplicate pe proiectul BoldHub, cu excepția celei marcate.
+
+| Migrație | Conținut |
+|---|---|
+| `20260922195906` … `20260922215359` | schema inițială, RLS, fluxul comenzilor online, confirmarea după SKU, importul BOCP (iterația 1) |
+| `20260922220856_bocp_scheduled_import` | **neaplicată intenționat**: acces `service_role` pentru jobul automat de import |
+| [`20260923120839_billing_returns_dashboard`](supabase/migrations/20260923120839_billing_returns_dashboard.sql) | retururi (un retur per comandă, scrierea directă închisă), căutare comenzi, facturare refill, agregat pentru dashboard |
+| [`20260923122608_refill_flow_notifications`](supabase/migrations/20260923122608_refill_flow_notifications.sql) | coșuri, rezervare, cele 3 triggere, flux invers, conturi revânzător, notificări + Realtime, job pg_cron |
+| [`20260923123114_ean_scan_mode`](supabase/migrations/20260923123114_ean_scan_mode.sql) | `products.scan_mode` per produs; trigger care preia EAN-ul din factură și aplică modul EAN |
+| [`20260923124056_bocp_catalog_sync`](supabase/migrations/20260923124056_bocp_catalog_sync.sql) | sincronizare catalog BOCP: produse, EAN, stoc |
+
+Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pentru citire, pe rol.
+
+## Iterațiile 2–4 (23 septembrie 2026)
+
+### Retururi, facturare, căutare, dashboard
+- **`/returns`**: facturarea caută comanda (după factură, comandă, nume, email sau telefon) și înregistrează returul, doar pentru comenzile predate. La înregistrare se trimit notificări pentru admin și depozit. Depozitul confirmă verificarea fizică, iar adminul vede raportul lunar pe motive, cu rata de retur. Stocul real se actualizează în BOCP.
+- **`/billing`**: livrările refill confirmate de depozit primesc numărul facturii emise în BOCP. Depozitul este apoi notificat că livrarea poate pleca.
+- **`/orders/search`**: investigarea comenzilor greșite arată cine a pregătit comanda și ce conținea. Nu există urmărire automată a erorilor.
+- **`/dashboard`**: intervalele sunt azi / 7 zile / 30 zile / luna curentă / personalizat, calculate în ora României ([lib/dashboard-range.ts](lib/dashboard-range.ts), cu teste). Indicatori:
+  - comenzi noi și predate;
+  - timp mediu de pregătire și timp de la import la predare;
+  - volum per operator;
+  - retururi și rata de retur;
+  - coșuri și livrări refill;
+  - stoc rezervat față de BOCP și discrepanțe;
+  - grafic zilnic, cu vedere de tabel.
+- **Navigație comună pe roluri**, iar la login fiecare rol ajunge direct pe ecranul lui.
+
+### Flux refill complet
+- **`/refill`** (depozit + admin):
+  - livrări în lucru: confirmare pregătire, scoatere coș, anulare, predare posibilă doar după factură;
+  - coșuri deschise grupate pe traseu, cu contor 48h;
+  - introducere manuală a cererilor venite pe WhatsApp sau telefon;
+  - stocul rezervat, actualizat în timp real.
+- **`/reseller`** (mobil): revânzătorul scrie câte bucăți mai are pe raft. Necesarul se calculează ca stocul inițial minus ce a rămas, minus ce e deja în coș sau pe drum, deci nu apar comenzi duble. Vede și coșul (poate scoate produse), livrările și istoricul.
+- **Client important**: la cerere se propune automat livrarea, împreună cu coșurile din același Delivery Group, cu confirmarea operatorului.
+- **Countdown 48h**: coșurile vechi de 48h devin automat propuneri de livrare, cu alertă. Rulează la 15 minute prin pg_cron, chiar dacă nimeni nu are aplicația deschisă.
+
+### Notificări
+- Clopoțel cu numărul de necitite, actualizat în timp real, și pagina `/notifications`. Notificările în browser se activează per dispozitiv. Notificările trimise unui rol sunt comune echipei: marcată ca citită de un operator, dispare pentru toți.
+- Evenimente: refill nou, client important, countdown 48h, livrare de facturat, factură emisă, retur înregistrat, retur de verificat.
+
+### EAN: „Cod bare” din BOCP (verificat pe date reale)
+- În BOCP, EAN-ul de pe etichetă este în **„Cod bare”**. Câmpul „Cod EAN” e gol peste tot și nu se folosește.
+- În API, „Cod bare” apare în două locuri:
+  - `custom_barcode` în catalog (`/product/list/`), unde `barcode` conține codul intern, de ex. `1-ATEL`;
+  - `barcode` pe liniile de factură.
+- **Catalog BOCP (23.09):** 523 de produse active; 233 au EAN valid, 290 au „Cod bare” gol. Un singur EAN e duplicat: `8691226652214`, la AT03317 și AT03672.
+- **Comparația cu Shopify:** dintre cele 290 fără EAN, 262 nu există în Shopify, iar 28 nu au barcode nici acolo, deci Shopify nu are nimic de completat. Tot în Shopify, **AT02308** are același barcode ca **AT02512**.
+- **`/admin/catalog`:**
+  - butonul „Sincronizează din BOCP” ([lib/bocp/catalog.ts](lib/bocp/catalog.ts)) creează produsele după SKU, completează EAN-ul și aduce stocul global. Nu șterge niciodată un EAN, iar dacă răspunsul BOCP e incomplet nu aplică nimic. Rulat pe 23.09.
+  - EAN-ul se poate completa manual, cu filtrele „fără EAN” / „încă pe SKU”;
+  - trecerea pe EAN se face per produs sau pentru toate produsele care au EAN. Schimbarea afectează doar comenzile nepreluate.
+
+## Ce rămâne
+
+**Depinde de acces sau decizii externe:**
+1. **Sincronizarea automată BOCP** (comenzi + catalog/stoc): IP fix de ieșire pentru hosting (de ex. Vercel Static IP sau un gateway), apoi aplicarea migrației `20260922220856`, setarea `CRON_SECRET` / `SUPABASE_SECRET_KEY` pe server și programarea jobului. Test cap-coadă după 1 octombrie.
+2. **Bot WhatsApp** (§3.3): cont Meta WhatsApp Business Cloud API și modelul AI pentru citirea etichetelor. La pornire se adaugă și coada de verificare `flagged_for_review` pentru operatori.
+3. **Notificări pe email:** furnizor (de ex. Resend) cu domeniu de expeditor verificat și cheie API.
+4. **Verificarea AWB Ecolet/Shopify** (§9): token Shopify Admin API (custom app) și răspunsuri la cele 6 întrebări deschise.
+5. **Scanare EAN în producție:** completarea „Cod bare” în BOCP pentru produsele care se scanează, corectarea duplicatelor, test pe Zebra TC26/DataWedge, apoi „Activează EAN”. Mai trebuie decis dacă un dispozitiv e al unei persoane sau comun.
+6. **Suport BOCP:** ce face ruta `delegatedresellerorderfeedback` (§10.5) și limitarea cheii API doar la `GET`.
+
+**Se poate face fără input extern:**
+- aplicație instalabilă pe telefon („Add to Home Screen”, pe tot ecranul) pentru Zebra și revânzători;
+- „Comandă din nou” și „produse comandate frecvent” pentru revânzători (§3.7);
+- notificarea „comandă nouă” pentru depozit la import;
+- alegerea „șofer propriu” / „curier extern” la predare (coloana există, dar nu se completează).
+
+## De reținut / riscuri
+
+- Cheia API BOCP e restricționată pe IP, **nu și pe metodă**. Codul face doar `GET`, dar cheia permite mai mult; trebuie limitată prin suportul BOCP.
+- Sincronizarea din `/admin/catalog` și importul merg doar de pe IP-ul din whitelist-ul BOCP (acum, local la birou).
+- Documentele interne (`proiect-aplicatie-depozit-atelier-rebul.md`, `schema-baza-de-date-depozit.md`) rămân **doar locale** și nu intră în repository.
+- `admin@atelierrebul.ro` are rolul **owner**, iar adminul este `atelierrebulromania@gmail.com`. Rolurile trebuie confirmate.
+
+## Istoric: iterația 1 (sesiune Codex, 22 septembrie 2026)
+
+- **Board comenzi online** cu confirmare temporară după **SKU** (`scan_code` / `scan_code_type` pe `online_order_items`), ca să existe un flux testabil înainte ca EAN-urile să fie complete. Interfața afișează explicit modul curent.
+- **Import BOCP → Supabase:**
+  - [lib/bocp/feeds.ts](lib/bocp/feeds.ts) + [lib/bocp/preview.ts](lib/bocp/preview.ts) citesc Orders + Invoices, corelează comanda cu factura și clasifică liniile;
+  - RPC-ul atomic `import_bocp_online_orders` lucrează în loturi de maximum 25 și e idempotent pe numărul facturii;
+  - butonul de import din `/admin/integrations` e blocat până la 1 octombrie 2026.
+- **Job automat de import** ([app/api/cron/bocp-import/route.ts](app/api/cron/bocp-import/route.ts)): pregătit, dar dezactivat (`BOCP_AUTO_IMPORT_ENABLED=false`, fără programare).
+- **`/admin/resellers`:** firme, Delivery Groups, locații, stoc inițial per SKU.
+- **Conturi Supabase Auth** legate de `app_users` pentru owner, facturare și depozit.

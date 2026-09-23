@@ -10,9 +10,10 @@ Aplicație internă pentru operațiunile de depozit. Specificația funcțională
 - Primul flux funcțional: board de comenzi online, preluare exclusivă, eliberare, confirmare temporară după SKU cu progres și predare curierului/șoferului. EAN-ul rămâne în schemă pentru activarea ulterioară a scanării fizice.
 - Actualizare prin Supabase Realtime, cu reîmprospătare periodică de rezervă.
 - Pagină de administrare `/admin/integrations` cu audit BOCP doar prin `GET`, pe Orders și Invoices. SKU-ul decide eligibilitatea; lipsa EAN-ului este afișată separat ca diagnostic pentru etapa de scanare fizică. Auditul nu salvează datele primite.
+- Retururi (`/returns`), facturare refill (`/billing`), căutare comenzi greșite (`/orders/search`) și dashboard read-only pentru owner (`/dashboard`), toate prin RPC-uri cu verificare de rol. Detalii în `UPDATE.md`.
 - Pagină de administrare `/admin/resellers` pentru firme, locații, Delivery Groups și par levels per SKU. Formularele verifică rolul admin și respectă RLS. Nu creează conturi Auth pentru revânzători și nu importă produse fictive.
 
-Contul administratorului există, dar catalogul și comenzile nu sunt importate încă, așa că board-ul este gol. Importul manual al facturilor online din 1 octombrie 2026 este implementat, dar blocat până la acea dată. Până atunci, fluxul este verificat cu date sintetice într-o tranzacție anulată. Confirmarea după SKU este doar o etapă internă: nu echivalează cu scanarea fizică a EAN-ului. Refill-ul este în etapa de configurare admin; cererile prin aplicație/WhatsApp, coșurile, livrările, retururile, dashboard-ul owner și notificările rămân de construit. Conturile noi de owner, facturare și depozit au profiluri și roluri în Supabase, dar owner și facturare nu au încă ecrane operaționale.
+Contul administratorului există, dar catalogul și comenzile nu sunt importate încă, așa că board-ul este gol. Importul manual al facturilor online din 1 octombrie 2026 este implementat, dar blocat până la acea dată. Până atunci, fluxul este verificat cu date sintetice într-o tranzacție anulată. Confirmarea după SKU este doar o etapă internă: nu echivalează cu scanarea fizică a EAN-ului. Fluxul de refill (coșuri, rezervare, cele 3 triggere, facturare, predare), contul de revânzător, notificările in-app/browser și trecerea SKU → EAN sunt implementate; botul WhatsApp, emailul, verificarea AWB și stocul BOCP live depind de acces extern (vezi `UPDATE.md`).
 
 ## Pornire locală
 
@@ -20,7 +21,7 @@ Contul administratorului există, dar catalogul și comenzile nu sunt importate 
 2. Copiază `.env.example` în `.env.local` și setează URL-ul și cheia *publishable* ale proiectului Supabase BoldHub. În acest workspace, `.env.local` este deja configurat și ignorat de Git.
 3. Rulează `npm run dev` și deschide `http://localhost:3000`.
 
-Verificare: `npm test`, `npm run typecheck` și `npm run build`. Build-ul folosește Webpack, deoarece Turbopack nu poate deschide procesele interne necesare în acest mediu.
+Verificare: `npm test`, `npm run typecheck` și `npm run build`. Fluxurile per rol (admin, depozit, facturare, revânzător, owner) se verifică cu [`supabase/tests/role_flows.sql`](supabase/tests/role_flows.sql), rulat în SQL Editor-ul Supabase. Rularea e sigură și pe baza live: totul se anulează la final, iar rezultatul apare ca mesaj de eroare, de forma `ROLE FLOWS: 74/74 passed`. Build-ul folosește Webpack, deoarece Turbopack nu poate deschide procesele interne necesare în acest mediu.
 
 ## Primul administrator
 
@@ -40,7 +41,7 @@ Ecranul de login folosește email și parolă. Nu există înregistrare publică
 
 ## Bază de date și deploy
 
-Migrațiile operaționale până la `20260922215359_harden_sku_rpc_auth.sql` au fost aplicate proiectului BoldHub. Migrația `20260922220856_bocp_scheduled_import.sql` este pregătită, dar **nu este aplicată** până la decizia de activare a jobului. Nu se reaplică manual migrațiile existente. Proiectul local este conectat prin URL și cheia publishable; autentificarea CLI Supabase este separată și trebuie legată de contul corect înainte de comenzile `supabase db`.
+Migrațiile operaționale până la `20260922215359_harden_sku_rpc_auth.sql`, plus `20260923120839_billing_returns_dashboard.sql`, `20260923122608_refill_flow_notifications.sql` și `20260923123114_ean_scan_mode.sql`, au fost aplicate proiectului BoldHub. Migrația `20260922220856_bocp_scheduled_import.sql` este pregătită, dar **nu este aplicată** până la decizia de activare a jobului. Nu se reaplică manual migrațiile existente. Proiectul local este conectat prin URL și cheia publishable; autentificarea CLI Supabase este separată și trebuie legată de contul corect înainte de comenzile `supabase db`.
 
 Pentru Vercel, setează `NEXT_PUBLIC_SUPABASE_URL` și `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ca variabile de mediu. Nicio cheie `service_role` / `secret` nu intră în client sau în Git.
 
