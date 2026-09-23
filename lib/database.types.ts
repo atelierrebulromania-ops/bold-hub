@@ -339,6 +339,8 @@ export type Database = {
           reason: Database["public"]["Enums"]["return_reason"]
           registered_at: string
           registered_by: string | null
+          restocked_at: string | null
+          restocked_by: string | null
           shopify_marked_manually: boolean
           status: Database["public"]["Enums"]["return_status"]
         }
@@ -348,6 +350,8 @@ export type Database = {
           reason?: Database["public"]["Enums"]["return_reason"]
           registered_at?: string
           registered_by?: string | null
+          restocked_at?: string | null
+          restocked_by?: string | null
           shopify_marked_manually?: boolean
           status?: Database["public"]["Enums"]["return_status"]
         }
@@ -357,6 +361,8 @@ export type Database = {
           reason?: Database["public"]["Enums"]["return_reason"]
           registered_at?: string
           registered_by?: string | null
+          restocked_at?: string | null
+          restocked_by?: string | null
           shopify_marked_manually?: boolean
           status?: Database["public"]["Enums"]["return_status"]
         }
@@ -364,13 +370,20 @@ export type Database = {
           {
             foreignKeyName: "order_returns_online_order_id_fkey"
             columns: ["online_order_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "online_orders"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "order_returns_registered_by_fkey"
             columns: ["registered_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_returns_restocked_by_fkey"
+            columns: ["restocked_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
@@ -387,6 +400,7 @@ export type Database = {
           id: string
           image_url: string | null
           name: string
+          scan_mode: string
           sku: string
           synced_at: string | null
           variant_label: string | null
@@ -400,6 +414,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           name: string
+          scan_mode?: string
           sku: string
           synced_at?: string | null
           variant_label?: string | null
@@ -413,6 +428,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           name?: string
+          scan_mode?: string
           sku?: string
           synced_at?: string | null
           variant_label?: string | null
@@ -818,13 +834,76 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_delivery: { Args: { p_delivery_id: string }; Returns: boolean }
       claim_online_order: { Args: { p_order_id: string }; Returns: boolean }
+      confirm_delivery_ready: {
+        Args: { p_delivery_id: string }
+        Returns: boolean
+      }
+      create_manual_delivery: {
+        Args: { p_cart_ids: string[]; p_group: string | null }
+        Returns: string | null
+      }
+      hand_delivery_to_driver: {
+        Args: { p_delivery_id: string }
+        Returns: boolean
+      }
+      link_reseller_account: {
+        Args: { p_email: string; p_reseller_id: string }
+        Returns: string
+      }
+      mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number }
+      release_cart_from_delivery: {
+        Args: { p_cart_id: string; p_delivery_id: string }
+        Returns: boolean
+      }
+      remove_cart_item: { Args: { p_item_id: string }; Returns: boolean }
+      run_refill_countdowns: { Args: never; Returns: number }
+      staff_add_refill: {
+        Args: { p_items: Json; p_reseller_id: string; p_source: string }
+        Returns: Json
+      }
+      submit_refill_counts: { Args: { p_counts: Json }; Returns: Json }
+      enable_ean_for_all: { Args: never; Returns: number }
+      sync_bocp_catalog: { Args: { p_products: Json }; Returns: Json }
+      set_product_ean: {
+        Args: { p_ean: string; p_product_id: string }
+        Returns: string
+      }
+      set_product_scan_mode: {
+        Args: { p_mode: string; p_product_id: string }
+        Returns: string
+      }
+      confirm_return_restock: {
+        Args: { p_return_id: string }
+        Returns: boolean
+      }
+      dashboard_summary: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       hand_online_order_to_courier: {
         Args: { p_order_id: string }
         Returns: boolean
       }
+      mark_fulfillment_invoiced: {
+        Args: { p_fulfillment_id: string; p_invoice_number: string }
+        Returns: boolean
+      }
       mark_online_order_ready: {
         Args: { p_order_id: string }
+        Returns: boolean
+      }
+      mark_return_in_shopify: {
+        Args: { p_return_id: string }
+        Returns: boolean
+      }
+      register_order_return: {
+        Args: {
+          p_order_id: string
+          p_reason: Database["public"]["Enums"]["return_reason"]
+          p_shopify_marked: boolean
+        }
         Returns: boolean
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
@@ -836,6 +915,7 @@ export type Database = {
         Args: { p_code: string; p_order_id: string }
         Returns: boolean
       }
+      search_online_orders: { Args: { p_query: string }; Returns: Json }
     }
     Enums: {
       cart_status: "open" | "pending_delivery" | "delivered"

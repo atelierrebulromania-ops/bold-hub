@@ -1,6 +1,6 @@
 /** Fixed, read-only BOCP endpoints. Keep credentials on the server. */
 
-type BocpListEndpoint = "invoices/list" | "marketplace/orders/list" | "marketplace/connectors/list";
+type BocpListEndpoint = "invoices/list" | "marketplace/orders/list" | "marketplace/connectors/list" | "product/list";
 
 type BocpListEnvelope = {
   is_error?: boolean | number;

@@ -126,3 +126,26 @@ export async function setParLevel(form: FormData) {
   if (error) fail("save_failed");
   done("par_saved");
 }
+
+const linkResults: Record<string, string> = {
+  linked: "account_linked",
+  unlinked: "account_unlinked",
+  no_user: "account_no_user",
+  staff_account: "account_staff",
+  already_linked: "account_taken",
+};
+
+export async function linkAccount(form: FormData) {
+  const { supabase } = await adminContext();
+  const resellerId = value(form, "reseller_id", 36);
+  const rawEmail = form.get("email");
+  const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
+  if (!resellerId || !uuid.test(resellerId) || email.length > 254
+    || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("account_invalid");
+  const { data, error } = await supabase.rpc("link_reseller_account", { p_reseller_id: resellerId, p_email: email });
+  if (error || !data) fail("save_failed");
+  const code = linkResults[data];
+  if (!code) fail("save_failed");
+  if (data === "linked" || data === "unlinked") done(code);
+  fail(code);
+}
