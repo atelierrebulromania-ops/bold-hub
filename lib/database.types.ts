@@ -52,7 +52,7 @@ export type Database = {
           route_order: Json | null
           status: Database["public"]["Enums"]["delivery_status"]
           trigger_type: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_reseller_id: string | null
+          triggered_by_partner_id: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -64,7 +64,7 @@ export type Database = {
           route_order?: Json | null
           status?: Database["public"]["Enums"]["delivery_status"]
           trigger_type: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_reseller_id?: string | null
+          triggered_by_partner_id?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -76,7 +76,7 @@ export type Database = {
           route_order?: Json | null
           status?: Database["public"]["Enums"]["delivery_status"]
           trigger_type?: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_reseller_id?: string | null
+          triggered_by_partner_id?: string | null
         }
         Relationships: [
           {
@@ -94,10 +94,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "deliveries_triggered_by_reseller_id_fkey"
-            columns: ["triggered_by_reseller_id"]
+            foreignKeyName: "deliveries_triggered_by_partner_id_fkey"
+            columns: ["triggered_by_partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -120,7 +120,7 @@ export type Database = {
             foreignKeyName: "delivery_carts_cart_id_fkey"
             columns: ["cart_id"]
             isOneToOne: true
-            referencedRelation: "reseller_carts"
+            referencedRelation: "partner_carts"
             referencedColumns: ["id"]
           },
           {
@@ -160,7 +160,7 @@ export type Database = {
           id: string
           message: string
           read_at: string | null
-          recipient_reseller_id: string | null
+          recipient_partner_id: string | null
           recipient_role: Database["public"]["Enums"]["user_role"] | null
           recipient_user_id: string | null
           related_entity_id: string | null
@@ -174,7 +174,7 @@ export type Database = {
           id?: string
           message: string
           read_at?: string | null
-          recipient_reseller_id?: string | null
+          recipient_partner_id?: string | null
           recipient_role?: Database["public"]["Enums"]["user_role"] | null
           recipient_user_id?: string | null
           related_entity_id?: string | null
@@ -188,7 +188,7 @@ export type Database = {
           id?: string
           message?: string
           read_at?: string | null
-          recipient_reseller_id?: string | null
+          recipient_partner_id?: string | null
           recipient_role?: Database["public"]["Enums"]["user_role"] | null
           recipient_user_id?: string | null
           related_entity_id?: string | null
@@ -198,10 +198,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "notifications_recipient_reseller_id_fkey"
-            columns: ["recipient_reseller_id"]
+            foreignKeyName: "notifications_recipient_partner_id_fkey"
+            columns: ["recipient_partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
           {
@@ -279,6 +279,7 @@ export type Database = {
           id: string
           invoice_number: string
           invoice_pdf_url: string | null
+          ready_at: string | null
           released_at: string | null
           shipping_address: string | null
           source: Database["public"]["Enums"]["order_source"]
@@ -298,6 +299,7 @@ export type Database = {
           id?: string
           invoice_number: string
           invoice_pdf_url?: string | null
+          ready_at?: string | null
           released_at?: string | null
           shipping_address?: string | null
           source: Database["public"]["Enums"]["order_source"]
@@ -317,6 +319,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           invoice_pdf_url?: string | null
+          ready_at?: string | null
           released_at?: string | null
           shipping_address?: string | null
           source?: Database["public"]["Enums"]["order_source"]
@@ -448,7 +451,7 @@ export type Database = {
           phone_number: string | null
           quantity: number | null
           raw_text: string | null
-          reseller_id: string | null
+          partner_id: string | null
           source: string
           status: Database["public"]["Enums"]["refill_request_status"]
         }
@@ -464,7 +467,7 @@ export type Database = {
           phone_number?: string | null
           quantity?: number | null
           raw_text?: string | null
-          reseller_id?: string | null
+          partner_id?: string | null
           source?: string
           status?: Database["public"]["Enums"]["refill_request_status"]
         }
@@ -480,7 +483,7 @@ export type Database = {
           phone_number?: string | null
           quantity?: number | null
           raw_text?: string | null
-          reseller_id?: string | null
+          partner_id?: string | null
           source?: string
           status?: Database["public"]["Enums"]["refill_request_status"]
         }
@@ -489,7 +492,7 @@ export type Database = {
             foreignKeyName: "refill_request_cart_item_fk"
             columns: ["cart_item_id"]
             isOneToOne: false
-            referencedRelation: "reseller_cart_items"
+            referencedRelation: "partner_cart_items"
             referencedColumns: ["id"]
           },
           {
@@ -500,15 +503,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "refill_requests_reseller_id_fkey"
-            columns: ["reseller_id"]
+            foreignKeyName: "refill_requests_partner_id_fkey"
+            columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
       }
-      reseller_cart_items: {
+      partner_cart_items: {
         Row: {
           cart_id: string
           created_at: string
@@ -535,21 +538,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "reseller_cart_items_cart_id_fkey"
+            foreignKeyName: "partner_cart_items_cart_id_fkey"
             columns: ["cart_id"]
             isOneToOne: false
-            referencedRelation: "reseller_carts"
+            referencedRelation: "partner_carts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_cart_items_product_id_fkey"
+            foreignKeyName: "partner_cart_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_cart_items_refill_request_id_fkey"
+            foreignKeyName: "partner_cart_items_refill_request_id_fkey"
             columns: ["refill_request_id"]
             isOneToOne: true
             referencedRelation: "refill_requests"
@@ -557,42 +560,51 @@ export type Database = {
           },
         ]
       }
-      reseller_carts: {
+      partner_carts: {
         Row: {
           countdown_started_at: string | null
           created_at: string
           delivered_at: string | null
+          delivered_by: string | null
           id: string
-          reseller_id: string
+          partner_id: string
+          prepared_at: string | null
+          prepared_by: string | null
           status: Database["public"]["Enums"]["cart_status"]
         }
         Insert: {
           countdown_started_at?: string | null
           created_at?: string
           delivered_at?: string | null
+          delivered_by?: string | null
           id?: string
-          reseller_id: string
+          partner_id: string
+          prepared_at?: string | null
+          prepared_by?: string | null
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Update: {
           countdown_started_at?: string | null
           created_at?: string
           delivered_at?: string | null
+          delivered_by?: string | null
           id?: string
-          reseller_id?: string
+          partner_id?: string
+          prepared_at?: string | null
+          prepared_by?: string | null
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Relationships: [
           {
-            foreignKeyName: "reseller_carts_reseller_id_fkey"
-            columns: ["reseller_id"]
+            foreignKeyName: "partner_carts_partner_id_fkey"
+            columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
       }
-      reseller_companies: {
+      partner_companies: {
         Row: {
           company_name: string
           created_at: string
@@ -610,37 +622,37 @@ export type Database = {
         }
         Relationships: []
       }
-      reseller_delivery_groups: {
+      partner_delivery_groups: {
         Row: {
           delivery_group_id: string
-          reseller_id: string
+          partner_id: string
         }
         Insert: {
           delivery_group_id: string
-          reseller_id: string
+          partner_id: string
         }
         Update: {
           delivery_group_id?: string
-          reseller_id?: string
+          partner_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "reseller_delivery_groups_delivery_group_id_fkey"
+            foreignKeyName: "partner_delivery_groups_delivery_group_id_fkey"
             columns: ["delivery_group_id"]
             isOneToOne: false
             referencedRelation: "delivery_groups"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_delivery_groups_reseller_id_fkey"
-            columns: ["reseller_id"]
+            foreignKeyName: "partner_delivery_groups_partner_id_fkey"
+            columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
       }
-      reseller_order_fulfillments: {
+      partner_order_fulfillments: {
         Row: {
           created_at: string
           delivered_at: string | null
@@ -651,7 +663,7 @@ export type Database = {
           invoiced_by: string | null
           ready_confirmed_at: string | null
           ready_confirmed_by: string | null
-          status: Database["public"]["Enums"]["reseller_order_status"]
+          status: Database["public"]["Enums"]["partner_order_status"]
         }
         Insert: {
           created_at?: string
@@ -663,7 +675,7 @@ export type Database = {
           invoiced_by?: string | null
           ready_confirmed_at?: string | null
           ready_confirmed_by?: string | null
-          status?: Database["public"]["Enums"]["reseller_order_status"]
+          status?: Database["public"]["Enums"]["partner_order_status"]
         }
         Update: {
           created_at?: string
@@ -675,25 +687,25 @@ export type Database = {
           invoiced_by?: string | null
           ready_confirmed_at?: string | null
           ready_confirmed_by?: string | null
-          status?: Database["public"]["Enums"]["reseller_order_status"]
+          status?: Database["public"]["Enums"]["partner_order_status"]
         }
         Relationships: [
           {
-            foreignKeyName: "reseller_order_fulfillments_delivery_id_fkey"
+            foreignKeyName: "partner_order_fulfillments_delivery_id_fkey"
             columns: ["delivery_id"]
             isOneToOne: true
             referencedRelation: "deliveries"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_order_fulfillments_invoiced_by_fkey"
+            foreignKeyName: "partner_order_fulfillments_invoiced_by_fkey"
             columns: ["invoiced_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_order_fulfillments_ready_confirmed_by_fkey"
+            foreignKeyName: "partner_order_fulfillments_ready_confirmed_by_fkey"
             columns: ["ready_confirmed_by"]
             isOneToOne: false
             referencedRelation: "app_users"
@@ -701,13 +713,13 @@ export type Database = {
           },
         ]
       }
-      reseller_par_levels: {
+      partner_par_levels: {
         Row: {
           created_at: string
           id: string
           par_level_quantity: number
           product_id: string
-          reseller_id: string
+          partner_id: string
           set_by: string | null
           updated_at: string
         }
@@ -716,7 +728,7 @@ export type Database = {
           id?: string
           par_level_quantity: number
           product_id: string
-          reseller_id: string
+          partner_id: string
           set_by?: string | null
           updated_at?: string
         }
@@ -725,27 +737,27 @@ export type Database = {
           id?: string
           par_level_quantity?: number
           product_id?: string
-          reseller_id?: string
+          partner_id?: string
           set_by?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "reseller_par_levels_product_id_fkey"
+            foreignKeyName: "partner_par_levels_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_par_levels_reseller_id_fkey"
-            columns: ["reseller_id"]
+            foreignKeyName: "partner_par_levels_partner_id_fkey"
+            columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "resellers"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reseller_par_levels_set_by_fkey"
+            foreignKeyName: "partner_par_levels_set_by_fkey"
             columns: ["set_by"]
             isOneToOne: false
             referencedRelation: "app_users"
@@ -753,7 +765,7 @@ export type Database = {
           },
         ]
       }
-      resellers: {
+      partners: {
         Row: {
           active: boolean
           auth_user_id: string | null
@@ -765,6 +777,7 @@ export type Database = {
           id: string
           is_important_client: boolean
           location_name: string
+          type: string
         }
         Insert: {
           active?: boolean
@@ -777,6 +790,7 @@ export type Database = {
           id?: string
           is_important_client?: boolean
           location_name: string
+          type?: string
         }
         Update: {
           active?: boolean
@@ -789,13 +803,14 @@ export type Database = {
           id?: string
           is_important_client?: boolean
           location_name?: string
+          type?: string
         }
         Relationships: [
           {
-            foreignKeyName: "resellers_company_id_fkey"
+            foreignKeyName: "partners_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "reseller_companies"
+            referencedRelation: "partner_companies"
             referencedColumns: ["id"]
           },
         ]
@@ -848,8 +863,8 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: boolean
       }
-      link_reseller_account: {
-        Args: { p_email: string; p_reseller_id: string }
+      link_partner_account: {
+        Args: { p_email: string; p_partner_id: string }
         Returns: string
       }
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number }
@@ -858,9 +873,8 @@ export type Database = {
         Returns: boolean
       }
       remove_cart_item: { Args: { p_item_id: string }; Returns: boolean }
-      run_refill_countdowns: { Args: never; Returns: number }
       staff_add_refill: {
-        Args: { p_items: Json; p_reseller_id: string; p_source: string }
+        Args: { p_items: Json; p_partner_id: string; p_source: string }
         Returns: Json
       }
       submit_refill_counts: { Args: { p_counts: Json }; Returns: Json }
@@ -878,9 +892,17 @@ export type Database = {
         Args: { p_return_id: string }
         Returns: boolean
       }
+      delete_delivery_group: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
       dashboard_summary: {
         Args: { p_from: string; p_to: string }
         Returns: Json
+      }
+      hand_partner_cart_to_billing: {
+        Args: { p_cart_id: string }
+        Returns: boolean
       }
       hand_online_order_to_courier: {
         Args: { p_order_id: string }
@@ -888,6 +910,10 @@ export type Database = {
       }
       mark_fulfillment_invoiced: {
         Args: { p_fulfillment_id: string; p_invoice_number: string }
+        Returns: boolean
+      }
+      mark_partner_cart_prepared: {
+        Args: { p_cart_id: string }
         Returns: boolean
       }
       mark_online_order_ready: {
@@ -911,14 +937,22 @@ export type Database = {
         Args: { p_orders: Json }
         Returns: Json
       }
+      save_delivery_group: {
+        Args: { p_group_id: string | null; p_name: string; p_partner_ids: string[] }
+        Returns: string | null
+      }
       scan_online_order_code: {
         Args: { p_code: string; p_order_id: string }
         Returns: boolean
       }
       search_online_orders: { Args: { p_query: string }; Returns: Json }
+      staff_names: {
+        Args: never
+        Returns: { full_name: string; id: string }[]
+      }
     }
     Enums: {
-      cart_status: "open" | "pending_delivery" | "delivered"
+      cart_status: "open" | "prepared" | "pending_delivery" | "delivered"
       delivery_status:
         | "pending_confirmation"
         | "confirmed"
@@ -939,7 +973,7 @@ export type Database = {
         | "confirmed"
         | "rejected"
         | "flagged_for_review"
-      reseller_order_status:
+      partner_order_status:
         | "preparing"
         | "ready_to_deliver"
         | "invoiced"
@@ -1078,7 +1112,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      cart_status: ["open", "pending_delivery", "delivered"],
+      cart_status: ["open", "prepared", "pending_delivery", "delivered"],
       delivery_status: [
         "pending_confirmation",
         "confirmed",
@@ -1102,7 +1136,7 @@ export const Constants = {
         "rejected",
         "flagged_for_review",
       ],
-      reseller_order_status: [
+      partner_order_status: [
         "preparing",
         "ready_to_deliver",
         "invoiced",

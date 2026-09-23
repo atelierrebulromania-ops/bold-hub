@@ -4,10 +4,10 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type NotificationRow = { message: string; recipient_role: string | null; recipient_user_id: string | null; recipient_reseller_id: string | null };
+type NotificationRow = { message: string; recipient_role: string | null; recipient_user_id: string | null; recipient_partner_id: string | null };
 
 // Refreshes the badge on new notifications and, if the user allowed it, shows a browser notification.
-export function NotificationListener({ role, userId, resellerId }: { role?: string; userId: string; resellerId?: string }) {
+export function NotificationListener({ role, userId, partnerId }: { role?: string; userId: string; partnerId?: string }) {
   const router = useRouter();
   useEffect(() => {
     const supabase = createClient();
@@ -16,7 +16,7 @@ export function NotificationListener({ role, userId, resellerId }: { role?: stri
         const row = payload.new as NotificationRow;
         const mine = row.recipient_user_id === userId
           || (!!role && row.recipient_role === role)
-          || (!!resellerId && row.recipient_reseller_id === resellerId);
+          || (!!partnerId && row.recipient_partner_id === partnerId);
         if (!mine) return;
         router.refresh();
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.visibilityState !== "visible") {
@@ -25,7 +25,7 @@ export function NotificationListener({ role, userId, resellerId }: { role?: stri
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [router, role, userId, resellerId]);
+  }, [router, role, userId, partnerId]);
   return null;
 }
 

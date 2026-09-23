@@ -11,7 +11,7 @@ Aplicație internă pentru operațiunile de depozit. Specificația funcțională
 - Actualizare prin Supabase Realtime, cu reîmprospătare periodică de rezervă.
 - Pagină de administrare `/admin/integrations` cu audit BOCP doar prin `GET`, pe Orders și Invoices. SKU-ul decide eligibilitatea; lipsa EAN-ului este afișată separat ca diagnostic pentru etapa de scanare fizică. Auditul nu salvează datele primite.
 - Retururi (`/returns`), facturare refill (`/billing`), căutare comenzi greșite (`/orders/search`) și dashboard read-only pentru owner (`/dashboard`), toate prin RPC-uri cu verificare de rol. Detalii în `UPDATE.md`.
-- Pagină de administrare `/admin/resellers` pentru firme, locații, Delivery Groups și par levels per SKU. Formularele verifică rolul admin și respectă RLS. Nu creează conturi Auth pentru revânzători și nu importă produse fictive.
+- Pagină de administrare `/admin/partners` pentru firme, locații, Delivery Groups și par levels per SKU. Formularele verifică rolul admin și respectă RLS. Nu creează conturi Auth pentru revânzători și nu importă produse fictive.
 
 Contul administratorului există, dar catalogul și comenzile nu sunt importate încă, așa că board-ul este gol. Importul manual al facturilor online din 1 octombrie 2026 este implementat, dar blocat până la acea dată. Până atunci, fluxul este verificat cu date sintetice într-o tranzacție anulată. Confirmarea după SKU este doar o etapă internă: nu echivalează cu scanarea fizică a EAN-ului. Fluxul de refill (coșuri, rezervare, cele 3 triggere, facturare, predare), contul de revânzător, notificările in-app/browser și trecerea SKU → EAN sunt implementate; botul WhatsApp, emailul, verificarea AWB și stocul BOCP live depind de acces extern (vezi `UPDATE.md`).
 

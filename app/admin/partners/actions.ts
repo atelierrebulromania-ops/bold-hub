@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const page = "/admin/resellers";
+const page = "/admin/partners";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function value(form: FormData, key: string, max: number): string | null {
@@ -38,7 +38,7 @@ export async function createCompany(form: FormData) {
   const { supabase } = await adminContext();
   const companyName = value(form, "company_name", 160);
   if (!companyName) fail("company_invalid");
-  const { error } = await supabase.from("reseller_companies").insert({ company_name: companyName });
+  const { error } = await supabase.from("partner_companies").insert({ company_name: companyName });
   if (error) fail("save_failed");
   done("company_created");
 }
@@ -54,7 +54,7 @@ export async function createDeliveryGroup(form: FormData) {
   done("group_created");
 }
 
-export async function createReseller(form: FormData) {
+export async function createPartner(form: FormData) {
   const { supabase } = await adminContext();
   const companyId = value(form, "company_id", 36);
   const businessName = value(form, "business_name", 160);
@@ -64,9 +64,9 @@ export async function createReseller(form: FormData) {
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
   if (!companyId || !uuid.test(companyId) || !businessName || !locationName || !phone
     || !/^[+0-9 ()-]{7,30}$/.test(phone) || email.length > 254
-    || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("reseller_invalid");
+    || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("partner_invalid");
 
-  const { error } = await supabase.from("resellers").insert({
+  const { error } = await supabase.from("partners").insert({
     company_id: companyId,
     business_name: businessName,
     location_name: locationName,
@@ -76,39 +76,39 @@ export async function createReseller(form: FormData) {
   });
   if (error?.code === "23505") fail("phone_exists");
   if (error) fail("save_failed");
-  done("reseller_created");
+  done("partner_created");
 }
 
 export async function assignDeliveryGroup(form: FormData) {
   const { supabase } = await adminContext();
-  const resellerId = value(form, "reseller_id", 36);
+  const partnerId = value(form, "partner_id", 36);
   const groupId = value(form, "delivery_group_id", 36);
-  if (!resellerId || !groupId || !uuid.test(resellerId) || !uuid.test(groupId)) fail("selection_invalid");
-  const { error } = await supabase.from("reseller_delivery_groups")
-    .upsert({ reseller_id: resellerId, delivery_group_id: groupId },
-      { onConflict: "reseller_id,delivery_group_id", ignoreDuplicates: true });
+  if (!partnerId || !groupId || !uuid.test(partnerId) || !uuid.test(groupId)) fail("selection_invalid");
+  const { error } = await supabase.from("partner_delivery_groups")
+    .upsert({ partner_id: partnerId, delivery_group_id: groupId },
+      { onConflict: "partner_id,delivery_group_id", ignoreDuplicates: true });
   if (error) fail("save_failed");
   done("group_assigned");
 }
 
 export async function removeDeliveryGroup(form: FormData) {
   const { supabase } = await adminContext();
-  const resellerId = value(form, "reseller_id", 36);
+  const partnerId = value(form, "partner_id", 36);
   const groupId = value(form, "delivery_group_id", 36);
-  if (!resellerId || !groupId || !uuid.test(resellerId) || !uuid.test(groupId)) fail("selection_invalid");
-  const { error } = await supabase.from("reseller_delivery_groups").delete()
-    .eq("reseller_id", resellerId).eq("delivery_group_id", groupId);
+  if (!partnerId || !groupId || !uuid.test(partnerId) || !uuid.test(groupId)) fail("selection_invalid");
+  const { error } = await supabase.from("partner_delivery_groups").delete()
+    .eq("partner_id", partnerId).eq("delivery_group_id", groupId);
   if (error) fail("save_failed");
   done("group_removed");
 }
 
 export async function setParLevel(form: FormData) {
   const { supabase, userId } = await adminContext();
-  const resellerId = value(form, "reseller_id", 36);
+  const partnerId = value(form, "partner_id", 36);
   const sku = value(form, "sku", 100);
   const rawQuantity = form.get("par_level_quantity");
   const quantity = typeof rawQuantity === "string" ? Number(rawQuantity) : NaN;
-  if (!resellerId || !uuid.test(resellerId) || !sku || !Number.isSafeInteger(quantity)
+  if (!partnerId || !uuid.test(partnerId) || !sku || !Number.isSafeInteger(quantity)
     || quantity < 0 || quantity > 100000) fail("par_invalid");
 
   const { data: product, error: productError } = await supabase.from("products")
@@ -116,13 +116,13 @@ export async function setParLevel(form: FormData) {
   if (productError) fail("save_failed");
   if (!product) fail("product_missing");
 
-  const { error } = await supabase.from("reseller_par_levels").upsert({
-    reseller_id: resellerId,
+  const { error } = await supabase.from("partner_par_levels").upsert({
+    partner_id: partnerId,
     product_id: product.id,
     par_level_quantity: quantity,
     set_by: userId,
     updated_at: new Date().toISOString(),
-  }, { onConflict: "reseller_id,product_id" });
+  }, { onConflict: "partner_id,product_id" });
   if (error) fail("save_failed");
   done("par_saved");
 }
@@ -137,12 +137,12 @@ const linkResults: Record<string, string> = {
 
 export async function linkAccount(form: FormData) {
   const { supabase } = await adminContext();
-  const resellerId = value(form, "reseller_id", 36);
+  const partnerId = value(form, "partner_id", 36);
   const rawEmail = form.get("email");
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
-  if (!resellerId || !uuid.test(resellerId) || email.length > 254
+  if (!partnerId || !uuid.test(partnerId) || email.length > 254
     || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("account_invalid");
-  const { data, error } = await supabase.rpc("link_reseller_account", { p_reseller_id: resellerId, p_email: email });
+  const { data, error } = await supabase.rpc("link_partner_account", { p_partner_id: partnerId, p_email: email });
   if (error || !data) fail("save_failed");
   const code = linkResults[data];
   if (!code) fail("save_failed");

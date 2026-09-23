@@ -44,7 +44,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       {enabled !== null && <p className="preview-alert success admin-feedback" role="status">{enabled} {enabled === 1 ? "produs a trecut" : "produse au trecut"} pe scanare EAN.</p>}
       {params.error && errors[params.error] && <p className="notice error admin-feedback" role="alert">{errors[params.error]}</p>}
       {error ? <p className="notice error" role="alert">Catalogul nu poate fi încărcat acum.</p> : <>
-        <div className="reseller-summary" aria-label="Rezumat catalog">
+        <div className="partner-summary" aria-label="Rezumat catalog">
           <div><strong>{products.length}</strong><span>produse active</span></div>
           <div><strong>{products.length - withEan}</strong><span>fără EAN</span></div>
           <div><strong>{ready}</strong><span>cu EAN, încă pe SKU</span></div>
@@ -78,7 +78,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 <td><form action={setMode}>
                   <input type="hidden" name="product_id" value={product.id}/><input type="hidden" name="filter" value={filter}/>
                   <input type="hidden" name="mode" value={product.scan_mode === "ean" ? "sku" : "ean"}/>
-                  <span className={product.scan_mode === "ean" ? "reseller-tag linked" : "reseller-tag"}>{product.scan_mode === "ean" ? "EAN" : "SKU"}</span>
+                  <span className={product.scan_mode === "ean" ? "partner-tag linked" : "partner-tag"}>{product.scan_mode === "ean" ? "EAN" : "SKU"}</span>
                   <button className="text-button catalog-toggle" type="submit" disabled={product.scan_mode === "sku" && !product.ean}>{product.scan_mode === "ean" ? "Revino la SKU" : "Treci pe EAN"}</button>
                 </form></td>
               </tr>)}</tbody>

@@ -2,8 +2,7 @@ export type OrderStatus = "pending" | "claimed" | "preparing" | "ready" | "hande
 
 export type OrderItem = {
   id: string;
-  ean: string | null;
-  scan_code: string;
+  // The expected code (EAN/SKU) is never sent to the browser, so it cannot be typed in instead of scanned.
   scan_code_type: "sku" | "ean";
   quantity: number;
   scanned_quantity: number;
@@ -31,7 +30,7 @@ export type ReturnReason = "neridicat" | "refuzat_livrare" | "produs_deteriorat"
 export const statusLabels: Record<OrderStatus, string> = {
   pending: "De preluat",
   claimed: "Preluată",
-  preparing: "În pregătire",
+  preparing: "Preluată",
   ready: "Pregătită",
   handed_to_courier: "Predată curierului",
   returned: "Returnată",
