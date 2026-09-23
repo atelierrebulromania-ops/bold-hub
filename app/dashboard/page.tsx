@@ -10,7 +10,7 @@ type Summary = {
   online: { created: number; handed: number; handed_shopify: number; handed_marketplace: number; open_now: number; waiting_now: number; avg_prep_minutes: number | null; avg_total_hours: number | null };
   operators: { name: string; handed: number }[];
   returns: { registered: number; pending_restock_now: number; by_reason: Partial<Record<ReturnReason, number>> };
-  refill: { open_carts: number; overdue_carts: number; pending_deliveries: number; awaiting_invoice: number; fulfillments_delivered: number; top_resellers: { name: string; location: string; units: number }[] };
+  refill: { open_carts: number; overdue_carts: number; pending_deliveries: number; awaiting_invoice: number; fulfillments_delivered: number; top_partners: { name: string; location: string; units: number }[] };
   stock: { tracked_products: number; bocp_units: number; reserved_units: number; over_reserved_products: number; last_sync: string | null };
   daily: { day: string; created: number; handed: number }[];
 };
@@ -97,10 +97,10 @@ export default async function DashboardPage({
           <Stat label="Stoc rezervat" value={number.format(summary.stock.reserved_units)} hint={`din ${number.format(summary.stock.bocp_units)} buc. în BOCP`}/>
           <Stat label="Discrepanțe stoc" value={number.format(summary.stock.over_reserved_products)} hint={summary.stock.last_sync ? `rezervat > BOCP · sync ${formatDateTime(summary.stock.last_sync)}` : "stocul BOCP nu e sincronizat încă"}/>
         </div>
-        <section className="admin-card reseller-list-section">
+        <section className="admin-card partner-list-section">
           <div className="admin-card-heading"><h2>Top revânzători după volum</h2><p>Bucăți cerute în coș în interval. Livrări finalizate: {summary.refill.fulfillments_delivered}.</p></div>
-          {summary.refill.top_resellers.length === 0 ? <p className="admin-empty-note">Nicio cerere de refill în interval.</p>
-            : <ul className="admin-simple-list dashboard-list">{summary.refill.top_resellers.map(reseller => <li key={`${reseller.name}-${reseller.location}`}><span>{reseller.name}<small>{reseller.location}</small></span><strong>{number.format(reseller.units)} buc.</strong></li>)}</ul>}
+          {summary.refill.top_partners.length === 0 ? <p className="admin-empty-note">Nicio cerere de refill în interval.</p>
+            : <ul className="admin-simple-list dashboard-list">{summary.refill.top_partners.map(partner => <li key={`${partner.name}-${partner.location}`}><span>{partner.name}<small>{partner.location}</small></span><strong>{number.format(partner.units)} buc.</strong></li>)}</ul>}
         </section>
       </>}
     </AppShell>

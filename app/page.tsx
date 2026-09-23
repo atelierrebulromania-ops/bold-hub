@@ -12,7 +12,7 @@ export default async function Home() {
   const { data: profile } = await supabase.from("app_users")
     .select("role,active").eq("id", userId).maybeSingle();
   if (profile?.active) redirect(homeFor(profile.role));
-  const { data: reseller } = await supabase.from("resellers")
+  const { data: partner } = await supabase.from("partners")
     .select("id").eq("auth_user_id", userId).eq("active", true).maybeSingle();
-  redirect(reseller ? "/reseller" : "/access");
+  redirect(partner ? "/partner" : "/access");
 }

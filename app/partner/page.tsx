@@ -1,5 +1,5 @@
 import { signOut } from "@/app/login/actions";
-import { requireReseller } from "@/lib/auth";
+import { requirePartner } from "@/lib/auth";
 import { formatDateTime } from "@/lib/orders";
 import { removeOwnItem, submitCounts } from "./actions";
 
@@ -18,16 +18,16 @@ function productLabel(product: { name: string; variant_label: string | null } | 
   return product ? `${product.name}${product.variant_label ? ` · ${product.variant_label}` : ""}` : "Produs";
 }
 
-export default async function ResellerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string }> }) {
-  const { supabase, reseller } = await requireReseller();
+export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string }> }) {
+  const { supabase, partner } = await requirePartner();
   const params = await searchParams;
   const [parsResult, cartsResult, historyResult] = await Promise.all([
-    supabase.from("reseller_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)")
-      .eq("reseller_id", reseller.id).limit(500),
-    supabase.from("reseller_carts").select("id,status,countdown_started_at,reseller_cart_items(id,quantity_needed,products(name,variant_label))")
-      .eq("reseller_id", reseller.id).in("status", ["open", "pending_delivery"]).order("created_at"),
-    supabase.from("reseller_carts").select("id,delivered_at,reseller_cart_items(id,quantity_needed,products(name,variant_label))")
-      .eq("reseller_id", reseller.id).eq("status", "delivered").order("delivered_at", { ascending: false }).limit(10),
+    supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)")
+      .eq("partner_id", partner.id).limit(500),
+    supabase.from("partner_carts").select("id,status,countdown_started_at,partner_cart_items(id,quantity_needed,products(name,variant_label))")
+      .eq("partner_id", partner.id).in("status", ["open", "pending_delivery"]).order("created_at"),
+    supabase.from("partner_carts").select("id,delivered_at,partner_cart_items(id,quantity_needed,products(name,variant_label))")
+      .eq("partner_id", partner.id).eq("status", "delivered").order("delivered_at", { ascending: false }).limit(10),
   ]);
   const loadError = parsResult.error ?? cartsResult.error ?? historyResult.error;
   const pars = (parsResult.data ?? []).filter(par => par.products?.active)
@@ -36,18 +36,18 @@ export default async function ResellerPage({ searchParams }: { searchParams: Pro
   const onTheWay = (cartsResult.data ?? []).filter(cart => cart.status === "pending_delivery");
   const history = historyResult.data ?? [];
   const inProgress = new Map<string, number>();
-  for (const cart of cartsResult.data ?? []) for (const line of cart.reseller_cart_items as Line[]) {
+  for (const cart of cartsResult.data ?? []) for (const line of cart.partner_cart_items as Line[]) {
     const key = productLabel(line.products);
     inProgress.set(key, (inProgress.get(key) ?? 0) + line.quantity_needed);
   }
 
   return (
-    <main className="reseller-app">
-      <header className="reseller-header">
-        <div className="brand"><div className="brand-icon">B<span>·</span></div><div><strong>{reseller.business_name}</strong><small>{reseller.location_name.toUpperCase()}</small></div></div>
+    <main className="partner-app">
+      <header className="partner-header">
+        <div className="brand"><div className="brand-icon">B<span>·</span></div><div><strong>{partner.business_name}</strong><small>{partner.location_name.toUpperCase()}</small></div></div>
         <form action={signOut}><button type="submit" className="text-button">Ieșire</button></form>
       </header>
-      <div className="reseller-content">
+      <div className="partner-content">
         {params.notice === "added" && <p className="preview-alert success" role="status">Am adăugat {params.units} buc. în coș. Depozitul pregătește produsele.</p>}
         {params.notice === "nothing" && <p className="preview-alert warning" role="status">Nu e nevoie de refill: ai stocul inițial complet (inclusiv ce e deja în coș sau pe drum).</p>}
         {params.notice === "removed" && <p className="preview-alert success" role="status">Produsul a fost scos din coș.</p>}
@@ -65,26 +65,26 @@ export default async function ResellerPage({ searchParams }: { searchParams: Pro
               </form>}
           </section>
 
-          <section className="admin-card reseller-list-section">
+          <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Coșul curent</h2><p>{openCart?.countdown_started_at ? `Început ${formatDateTime(openCart.countdown_started_at)}. Livrarea pleacă cel târziu în 48h.` : "Coșul se umple până la livrare, apoi se golește."}</p></div>
-            {!openCart || openCart.reseller_cart_items.length === 0 ? <p className="admin-empty-note">Coșul este gol.</p>
-              : <ul className="par-list reseller-lines">{(openCart.reseller_cart_items as Line[]).map(line => <li key={line.id}>
+            {!openCart || openCart.partner_cart_items.length === 0 ? <p className="admin-empty-note">Coșul este gol.</p>
+              : <ul className="par-list partner-lines">{(openCart.partner_cart_items as Line[]).map(line => <li key={line.id}>
                 <span>{productLabel(line.products)}</span>
                 <span className="line-end"><strong>{line.quantity_needed} buc.</strong><form action={removeOwnItem}><input type="hidden" name="item_id" value={line.id}/><button className="text-button" type="submit">Scoate</button></form></span>
               </li>)}</ul>}
           </section>
 
-          {onTheWay.length > 0 && <section className="admin-card reseller-list-section">
+          {onTheWay.length > 0 && <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>În pregătire pentru livrare</h2><p>Aceste produse sunt pregătite în depozit și pleacă spre tine.</p></div>
-            <ul className="par-list reseller-lines">{onTheWay.flatMap(cart => cart.reseller_cart_items as Line[]).map(line => <li key={line.id}><span>{productLabel(line.products)}</span><strong>{line.quantity_needed} buc.</strong></li>)}</ul>
+            <ul className="par-list partner-lines">{onTheWay.flatMap(cart => cart.partner_cart_items as Line[]).map(line => <li key={line.id}><span>{productLabel(line.products)}</span><strong>{line.quantity_needed} buc.</strong></li>)}</ul>
           </section>}
 
-          <section className="admin-card reseller-list-section">
+          <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Istoric livrări</h2></div>
-            {history.length === 0 ? <p className="admin-empty-note">Nicio livrare încă.</p> : <div className="reseller-list">
-              {history.map(cart => <article key={cart.id} className="reseller-card">
+            {history.length === 0 ? <p className="admin-empty-note">Nicio livrare încă.</p> : <div className="partner-list">
+              {history.map(cart => <article key={cart.id} className="partner-card">
                 <h3 className="history-title">Livrată {formatDateTime(cart.delivered_at)}</h3>
-                <ul className="par-list">{(cart.reseller_cart_items as Line[]).map(line => <li key={line.id}><span>{productLabel(line.products)}</span><strong>{line.quantity_needed} buc.</strong></li>)}</ul>
+                <ul className="par-list">{(cart.partner_cart_items as Line[]).map(line => <li key={line.id}><span>{productLabel(line.products)}</span><strong>{line.quantity_needed} buc.</strong></li>)}</ul>
               </article>)}
             </div>}
           </section>

@@ -12,16 +12,19 @@ type NavItem = { href: string; label: string; roles: UserRole[]; icon: ReactNode
 const sections: { label: string; items: NavItem[] }[] = [
   { label: "OPERAȚIUNI", items: [
     { href: "/orders", label: "Comenzi online", roles: ["admin", "operator_depozit"], icon: <svg {...svg}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h4"/></svg> },
-    { href: "/refill", label: "Refill revânzători", roles: ["admin", "operator_depozit"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
+    { href: "/partners", label: "Parteneri B2B", roles: ["admin", "operator_depozit"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2a5 5 0 0 1 5 5.8"/></svg> },
     { href: "/orders/search", label: "Căutare comenzi", roles: ["admin", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg> },
     { href: "/returns", label: "Retururi", roles: ["admin", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> },
     { href: "/billing", label: "Facturare refill", roles: ["admin", "operator_facturare"], icon: <svg {...svg}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg> },
+  ] },
+  { label: "ISTORIC", items: [
+    { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "operator_depozit"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },
   { label: "MONITORIZARE", items: [
     { href: "/dashboard", label: "Dashboard", roles: ["admin", "owner"], icon: <svg {...svg}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> },
   ] },
   { label: "ADMINISTRARE", items: [
-    { href: "/admin/resellers", label: "Revânzători", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },
+    { href: "/admin/partners", label: "Revânzători", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },
     { href: "/admin/catalog", label: "Catalog & EAN", roles: ["admin"], icon: <svg {...svg}><path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20 6v12"/></svg> },
     { href: "/admin/integrations", label: "Integrări", roles: ["admin"], icon: <svg {...svg}><path d="M4 7h8M4 17h8M16 4v6M16 14v6"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="12" r="2"/></svg> },
   ] },
@@ -49,7 +52,6 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
     <main className="app-shell">
       <aside className="app-sidebar" aria-label="Navigație principală">
         <div className="brand"><div className="brand-icon">B<span>·</span></div><div><strong>BoldHub</strong><small>ATELIER REBUL</small></div></div>
-        <div className="sidebar-workspace"><span className="workspace-avatar">AR</span><span><strong>Atelier Rebul</strong><small>Spațiu de lucru</small></span></div>
         <nav className="sidebar-nav">
           {visible.map((group, index) => <div className="sidebar-group" key={group.label}>
             <p className={index === 0 ? "sidebar-label" : "sidebar-label admin-sidebar-label"}>{group.label}</p>
@@ -66,7 +68,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
           <div className="topbar-right">{topbarExtra}
             <Link href="/notifications" className={active === "/notifications" ? "bell-link active" : "bell-link"} aria-label={`Notificări${unread ? `, ${unread} necitite` : ""}`}>{bellIcon}{unread ? <span className="bell-count">{unread > 99 ? "99+" : unread}</span> : null}</Link>
             <NotificationListener role={profile.role} userId={profile.id}/>
-            <div className="user-menu"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><form action={signOut}><button type="submit" className="text-button">Ieșire</button></form></div></div>
+            <div className="user-menu"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><form action={signOut}><button type="submit" className="logout-button" aria-label="Ieșire din cont" title="Ieșire din cont"><svg {...svg}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></button></form></div></div>
         </header>
         <div className="page-content">{children}</div>
       </div>

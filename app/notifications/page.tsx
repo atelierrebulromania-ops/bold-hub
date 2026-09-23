@@ -8,8 +8,8 @@ import { markRead } from "./actions";
 export const dynamic = "force-dynamic";
 
 const entityLinks: Record<string, string> = {
-  delivery: "/refill",
-  reseller_cart: "/refill",
+  delivery: "/partners",
+  partner_cart: "/partners",
   order_return: "/returns",
 };
 
@@ -22,7 +22,7 @@ export default async function NotificationsPage() {
   const notifications = data ?? [];
   const unread = notifications.filter(item => !item.read_at).length;
   // Billing reaches deliveries through its own screen.
-  const linkFor = (type: string | null) => type === "delivery" && profile.role === "operator_facturare"
+  const linkFor = (type: string | null) => (type === "delivery" || type === "partner_cart") && profile.role === "operator_facturare"
     ? "/billing" : type ? entityLinks[type] : undefined;
 
   return (

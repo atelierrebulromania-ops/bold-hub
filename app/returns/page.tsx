@@ -112,22 +112,22 @@ export default async function ReturnsPage({
         </div>}
       </section>}
 
-      <section className="admin-card reseller-list-section" aria-labelledby="pending-title">
+      <section className="admin-card partner-list-section" aria-labelledby="pending-title">
         <div className="admin-card-heading"><h2 id="pending-title">De verificat fizic</h2><p>Produsele revin ca disponibile doar după o verificare minimă în depozit.</p></div>
-        {pending.length === 0 ? <p className="admin-empty-note">Nu există retururi care așteaptă verificarea.</p> : <div className="reseller-list">
+        {pending.length === 0 ? <p className="admin-empty-note">Nu există retururi care așteaptă verificarea.</p> : <div className="partner-list">
           {pending.map(item => <ReturnCard key={item.id} item={item} query={query}
             canRestock={canRestock} canMarkShopify={canRegister}/>)}
         </div>}
       </section>
 
-      <section className="admin-card reseller-list-section" aria-labelledby="recent-title">
+      <section className="admin-card partner-list-section" aria-labelledby="recent-title">
         <div className="admin-card-heading"><h2 id="recent-title">Verificate în ultimele 30 de zile</h2><p>Istoric scurt pentru confirmare.</p></div>
-        {recent.length === 0 ? <p className="admin-empty-note">Niciun retur verificat recent.</p> : <div className="reseller-list">
+        {recent.length === 0 ? <p className="admin-empty-note">Niciun retur verificat recent.</p> : <div className="partner-list">
           {recent.map(item => <ReturnCard key={item.id} item={item} query={query} canRestock={false} canMarkShopify={canRegister}/>)}
         </div>}
       </section>
 
-      {isAdmin && <section className="admin-card reseller-list-section" aria-labelledby="report-title">
+      {isAdmin && <section className="admin-card partner-list-section" aria-labelledby="report-title">
         <div className="admin-card-heading"><h2 id="report-title">Raport lunar</h2><p>Retururi înregistrate pe lună, pe motive, raportate la comenzile predate în aceeași lună.</p></div>
         <div className="preview-table-wrap report-table"><table>
           <thead><tr><th>Luna</th>{reasons.map(([value, label]) => <th key={value}>{label}</th>)}<th>Total retururi</th><th>Predate</th><th>Rată retur</th></tr></thead>
@@ -160,16 +160,16 @@ function ReturnCard({ item, query, canRestock, canMarkShopify }: { item: ReturnR
   const order = item.online_orders;
   const needsShopify = order?.source === "shopify" && !item.shopify_marked_manually;
   return (
-    <article className="reseller-card">
-      <div className="reseller-card-heading">
+    <article className="partner-card">
+      <div className="partner-card-heading">
         <div>
           <h3>{order?.invoice_number ?? "Comandă"}</h3>
           <p>{order?.customer_name ?? "—"} · {returnReasonLabels[item.reason]}</p>
           <small>Înregistrat {formatDateTime(item.registered_at)}{item.restocked_at ? ` · verificat ${formatDateTime(item.restocked_at)}` : ""}</small>
         </div>
-        <div className="reseller-tags">
+        <div className="partner-tags">
           {order && <span className={`source-tag ${order.source}`}>{order.source === "shopify" ? "Shopify" : "Marketplace"}</span>}
-          {needsShopify && <span className="reseller-tag important">Nemarcat în Shopify</span>}
+          {needsShopify && <span className="partner-tag important">Nemarcat în Shopify</span>}
         </div>
       </div>
       {order && order.online_order_items.length > 0 && <ul className="par-list return-items">{order.online_order_items.map((line, index) => <li key={index}>

@@ -27,20 +27,20 @@ begin
     raise exception 'ROLE FLOWS: missing one of the staff roles (admin, owner, operator_depozit, operator_facturare)';
   end if;
 
-  -- Fixtures that exist only in this transaction: a second warehouse operator and a reseller login.
+  -- Fixtures that exist only in this transaction: a second warehouse operator and a partner login.
   insert into auth.users (id, email, aud, role, instance_id) values
     (u_dep2, 'zz-flow-depozit2@test.invalid', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-    (u_res, 'zz-flow-reseller@test.invalid', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
+    (u_res, 'zz-flow-partner@test.invalid', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
   insert into public.app_users (id, full_name, role) values (u_dep2, 'ZZ Operator 2', 'operator_depozit');
-  insert into public.reseller_companies (company_name) values ('ZZ Flow SRL') returning id into co;
+  insert into public.partner_companies (company_name) values ('ZZ Flow SRL') returning id into co;
   insert into public.delivery_groups (name) values ('ZZ Traseu') returning id into g;
-  insert into public.resellers (company_id, business_name, location_name, contact_phone)
+  insert into public.partners (company_id, business_name, location_name, contact_phone)
     values (co, 'ZZ Hotel', 'Centru', '+40700999001') returning id into r1;
-  insert into public.resellers (company_id, business_name, location_name, contact_phone, is_important_client)
+  insert into public.partners (company_id, business_name, location_name, contact_phone, is_important_client)
     values (co, 'ZZ Restaurant', 'Nord', '+40700999002', true) returning id into r2;
-  insert into public.resellers (company_id, business_name, location_name, contact_phone)
+  insert into public.partners (company_id, business_name, location_name, contact_phone)
     values (co, 'ZZ Magazin', 'Sud', '+40700999003') returning id into r3;
-  insert into public.reseller_delivery_groups values (r1, g), (r2, g);
+  insert into public.partner_delivery_groups values (r1, g), (r2, g);
 
   ---------------------------------------------------------------- ADMIN: setup
   perform set_config('request.jwt.claims', json_build_object('sub', u_admin, 'role', 'authenticated')::text, true);
@@ -63,10 +63,10 @@ begin
     (select ean from public.products where sku = 'ZZ-T-A') = '2990000000011');
   v := public.sync_bocp_catalog('[{"sku":"ZZ-T-C","name":"Difuzor","ean":"2990000000028","stock":20},{"sku":"ZZ-T-A","name":"Lotiune 250ml","stock":50}]'::jsonb);
   insert into t_results (role, label, ok) values ('admin', 'sincronizare catalog BOCP', (v->>'created')::int = 1 and (v->>'stockSet')::int = 2);
-  insert into t_results (role, label, ok) values ('admin', 'asociază contul revânzătorului', public.link_reseller_account(r1, 'zz-flow-reseller@test.invalid') = 'linked');
-  insert into public.reseller_par_levels (reseller_id, product_id, par_level_quantity, set_by)
+  insert into t_results (role, label, ok) values ('admin', 'asociază contul revânzătorului', public.link_partner_account(r1, 'zz-flow-partner@test.invalid') = 'linked');
+  insert into public.partner_par_levels (partner_id, product_id, par_level_quantity, set_by)
     select r1, id, case sku when 'ZZ-T-A' then 10 else 4 end, u_admin from public.products where sku in ('ZZ-T-A', 'ZZ-T-B');
-  insert into t_results (role, label, ok) values ('admin', 'setează stoc inițial (par level)', (select count(*) from public.reseller_par_levels where reseller_id = r1) = 2);
+  insert into t_results (role, label, ok) values ('admin', 'setează stoc inițial (par level)', (select count(*) from public.partner_par_levels where partner_id = r1) = 2);
   insert into t_results (role, label, ok) values ('admin', 'trece produsul pe scanare EAN',
     public.set_product_scan_mode((select id from public.products where sku = 'ZZ-T-A'), 'ean') = 'saved');
   insert into t_results (role, label, ok) values ('admin', 'comenzile nepreluate primesc codul EAN',
@@ -146,13 +146,13 @@ begin
   ---------------------------------------------------------------- REVÂNZĂTOR: refill from the app
   perform set_config('request.jwt.claims', json_build_object('sub', u_res, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  insert into t_results (role, label, ok) values ('revânzător', 'vede doar propria locație', (select count(*) from public.resellers) = 1);
+  insert into t_results (role, label, ok) values ('revânzător', 'vede doar propria locație', (select count(*) from public.partners) = 1);
   insert into t_results (role, label, ok) values ('revânzător', 'NU vede comenzile online', (select count(*) from public.online_orders) = 0);
-  insert into t_results (role, label, ok) values ('revânzător', 'vede stocul inițial propriu', (select count(*) from public.reseller_par_levels) = 2);
+  insert into t_results (role, label, ok) values ('revânzător', 'vede stocul inițial propriu', (select count(*) from public.partner_par_levels) = 2);
   v := public.submit_refill_counts((select jsonb_agg(jsonb_build_object('product_id', product_id,
-    'remaining', case when par_level_quantity = 10 then '3' else '4' end)) from public.reseller_par_levels));
+    'remaining', case when par_level_quantity = 10 then '3' else '4' end)) from public.partner_par_levels));
   insert into t_results (role, label, ok) values ('revânzător', 'cerere refill: calculează necesarul (10−3=7, 4−4=0)', (v->>'units')::int = 7 and (v->>'items')::int = 1);
-  v := public.submit_refill_counts((select jsonb_agg(jsonb_build_object('product_id', product_id, 'remaining', '3')) from public.reseller_par_levels where par_level_quantity = 10));
+  v := public.submit_refill_counts((select jsonb_agg(jsonb_build_object('product_id', product_id, 'remaining', '3')) from public.partner_par_levels where par_level_quantity = 10));
   insert into t_results (role, label, ok) values ('revânzător', 'nu comandă de două ori ce e deja în coș', (v->>'units')::int = 0);
   begin perform public.staff_add_refill(r1, '[]'::jsonb, 'app'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   insert into t_results (role, label, ok) values ('revânzător', 'NU poate folosi funcțiile depozitului', v_ok);
@@ -165,11 +165,13 @@ begin
   set local role authenticated;
   insert into t_results (role, label, ok) values ('depozit', 'primește notificarea „refill nou”', exists (select 1 from public.notifications where type = 'refill_nou'));
   perform public.staff_add_refill(r2, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 2)) from public.products where sku = 'ZZ-T-B'), 'whatsapp');
-  select id into d_imp from public.deliveries where trigger_type = 'important_client' and delivery_group_id = g;
-  insert into t_results (role, label, ok) values ('depozit', 'trigger client important: propune livrare cu traseul',
-    (select count(*) from public.delivery_carts where delivery_id = d_imp) = 2);
+  insert into t_results (role, label, ok) values ('depozit', 'client prioritar: notificare „livrare imediată”, fără livrare automată',
+    exists (select 1 from public.notifications where type = 'client_prioritar')
+    and not exists (select 1 from public.deliveries where delivery_group_id = g)
+    and (select status from public.partner_carts where partner_id = r2 and status <> 'delivered') = 'open');
+  d_imp := public.create_manual_delivery(array(select id from public.partner_carts where partner_id in (r1, r2) and status = 'open'), g);
   perform public.staff_add_refill(r3, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 1)) from public.products where sku = 'ZZ-T-C'), 'telefon');
-  d_man := public.create_manual_delivery(array[(select id from public.reseller_carts where reseller_id = r3 and status = 'open')], null);
+  d_man := public.create_manual_delivery(array[(select id from public.partner_carts where partner_id = r3 and status = 'open')], null);
   insert into t_results (role, label, ok) values ('depozit', 'trigger manual: creează livrare', d_man is not null);
   insert into t_results (role, label, ok) values ('depozit', 'confirmă pregătirea livrării', public.confirm_delivery_ready(d_imp));
   insert into t_results (role, label, ok) values ('depozit', 'nu poate preda livrarea nefacturată', not public.hand_delivery_to_driver(d_imp));
@@ -178,9 +180,9 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', u_fac, 'role', 'authenticated')::text, true);
   set local role authenticated;
   insert into t_results (role, label, ok) values ('facturare', 'primește notificarea „refill de facturat”', exists (select 1 from public.notifications where type = 'refill_de_facturat'));
-  select f.id into ful from public.reseller_order_fulfillments f where f.delivery_id = d_imp and f.status = 'ready_to_deliver';
+  select f.id into ful from public.partner_order_fulfillments f where f.delivery_id = d_imp and f.status = 'ready_to_deliver';
   insert into t_results (role, label, ok) values ('facturare', 'vede livrarea cu produsele pe ecranul de facturare',
-    ful is not null and (select count(*) from public.delivery_carts dc join public.reseller_cart_items i on i.cart_id = dc.cart_id where dc.delivery_id = d_imp) = 2);
+    ful is not null and (select count(*) from public.delivery_carts dc join public.partner_cart_items i on i.cart_id = dc.cart_id where dc.delivery_id = d_imp) = 2);
   insert into t_results (role, label, ok) values ('facturare', 'NU poate confirma pregătirea în depozit', not public.confirm_delivery_ready(d_man));
   insert into t_results (role, label, ok) values ('facturare', 'înregistrează factura refill', public.mark_fulfillment_invoiced(ful, 'ZZ-F-1'));
   reset role;
@@ -193,16 +195,12 @@ begin
   reset role;
   insert into t_results (role, label, ok) values ('depozit', 'stocul rezervat se eliberează la predare',
     (select quantity_reserved from public.warehouse_stock w join public.products p on p.id = w.product_id where p.sku = 'ZZ-T-A') = 0);
-  update public.reseller_carts set countdown_started_at = now() - interval '49 hours' where reseller_id = r3 and status = 'open';
-  perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
-  set local role authenticated;
-  insert into t_results (role, label, ok) values ('depozit', 'trigger countdown 48h: propune livrare', public.run_refill_countdowns() = 1);
-  insert into t_results (role, label, ok) values ('depozit', 'primește alerta de 48h', exists (select 1 from public.notifications where type = 'countdown_48h'));
-  reset role;
+  insert into t_results (role, label, ok) values ('depozit', 'nu mai există job automat de 48h',
+    not exists (select 1 from cron.job where jobname = 'refill-countdown-48h'));
 
   perform set_config('request.jwt.claims', json_build_object('sub', u_res, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  insert into t_results (role, label, ok) values ('revânzător', 'vede livrarea în istoric', (select count(*) from public.reseller_carts where status = 'delivered') = 1);
+  insert into t_results (role, label, ok) values ('revânzător', 'vede livrarea în istoric', (select count(*) from public.partner_carts where status = 'delivered') = 1);
   reset role;
 
   ---------------------------------------------------------------- OWNER: read-only dashboard
@@ -213,7 +211,7 @@ begin
   insert into t_results (role, label, ok) values ('owner', 'dashboard: retururi', (v->'returns'->>'registered')::int >= 1);
   insert into t_results (role, label, ok) values ('owner', 'dashboard: volum per operator', jsonb_array_length(v->'operators') >= 1);
   insert into t_results (role, label, ok) values ('owner', 'NU vede date de client (comenzi)', (select count(*) from public.online_orders) = 0);
-  insert into t_results (role, label, ok) values ('owner', 'NU vede revânzătorii', (select count(*) from public.resellers) = 0);
+  insert into t_results (role, label, ok) values ('owner', 'NU vede revânzătorii', (select count(*) from public.partners) = 0);
   insert into t_results (role, label, ok) values ('owner', 'NU poate prelua comenzi', not public.claim_online_order(o2));
   begin perform public.search_online_orders('ZZFLOW'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   insert into t_results (role, label, ok) values ('owner', 'NU poate căuta comenzi', v_ok);

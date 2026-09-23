@@ -1,12 +1,12 @@
 # BoldHub — stadiul implementării
 
-Ultima actualizare: **23 septembrie 2026**. Referința funcțională este documentul intern `proiect-aplicatie-depozit-atelier-rebul.md` (păstrat doar local).
+Ultima actualizare: **24 septembrie 2026**. Referința funcțională este documentul intern `proiect-aplicatie-depozit-atelier-rebul.md` (păstrat doar local).
 
 ## Pe scurt
 
 Toate fluxurile din document sunt implementate cap-coadă pentru toate rolurile:
 - comenzi online: board, preluare, scanare SKU/EAN, predare;
-- refill revânzători: coș, rezervare, cele 3 triggere de livrare, facturare, predare;
+- parteneri B2B (revânzători, HoReCa, altul): coș, pregătire pe raftul rezervat, grupuri de livrare, clienți prioritari, predare la facturare;
 - retururi;
 - dashboard pentru owner;
 - notificări in-app și în browser;
@@ -17,24 +17,24 @@ Ce lipsește depinde de acces extern: IP fix pentru BOCP, contul WhatsApp Busine
 
 **Verificat:**
 - `npm test` (14/14), `npm run typecheck` și `npm run build` trec;
-- testul de flow per rol [`supabase/tests/role_flows.sql`](supabase/tests/role_flows.sql) trece complet: **74/74** (admin 11, depozit 34, facturare 13, revânzător 8, owner 8);
+- testul de flow per rol [`supabase/tests/role_flows.sql`](supabase/tests/role_flows.sql) trece complet: **73/73** (admin 11, depozit 33, facturare 13, partener 8, owner 8), rulat pe 24.09 după redenumirea în „partners”;
 - fiecare migrație a fost rulată întâi cu date sintetice într-o tranzacție anulată, apoi aplicată pe baza live;
 - ecranele au fost încărcate cu contul de admin.
 
-**Starea bazei live:** 523 de produse sincronizate din BOCP, dintre care 231 au EAN. Nu există încă nicio comandă, revânzător sau retur. Importul comenzilor este blocat până la 1 octombrie 2026.
+**Starea bazei live:** 523 de produse sincronizate din BOCP, dintre care 231 au EAN. Nu există încă nicio comandă reală sau retur. Există date de test pentru parteneri (tot ce începe cu „TEST”), de șters înainte de producție. Importul comenzilor este blocat până la 1 octombrie 2026.
 
 ## Acoperire față de documentul de proiect
 
 | Secțiune | Stare | Unde |
 |---|---|---|
 | §2 Roluri | ✅ admin, owner, operator_depozit, operator_facturare, revânzător (rolul `account` e nedecis) | [lib/auth.ts](lib/auth.ts), [components/app-shell.tsx](components/app-shell.tsx) |
-| §3.1 Stoc inițial per revânzător/produs | ✅ | `/admin/resellers` |
-| §3.2 Cerere refill din aplicație, calcul automat al necesarului | ✅ | `/reseller` |
-| §3.3 Automatizare WhatsApp | ⏳ cererile se introduc manual în `/refill` (sursa WhatsApp/telefon este păstrată) | — |
-| §3.4 Rezervare stoc | ✅ `quantity_reserved`, eliberat la predare | `/refill` |
-| §3.5 Delivery Groups + cele 3 triggere (manual, client important, countdown 48h) | ✅ countdown prin pg_cron la 15 minute | `/refill` |
-| §3.6 Flux invers spre facturare, până la „predat șoferului/curierului” | ✅ | `/refill`, `/billing` |
-| §3.7 Cont revânzător: istoric | ✅ · „comandă din nou” / „frecvent comandate” ⏳ | `/reseller` |
+| §3.1 Stoc inițial per revânzător/produs | ✅ | `/admin/partners` |
+| §3.2 Cerere refill din aplicație, calcul automat al necesarului | ✅ | `/partner` |
+| §3.3 Automatizare WhatsApp | ⏳ cererile se introduc manual cu „+ Adaugă cerere” în `/partners` (sursa WhatsApp/telefon este păstrată) | — |
+| §3.4 Rezervare stoc | ✅ `quantity_reserved`, eliberat la predarea la facturare | `/partners` (tab Produse) |
+| §3.5 Grupuri de livrare + clienți prioritari | ✅ decizie manuală pe grup; clientul prioritar = livrare imediată; timer 48h doar afișat (automatizările vechi oprite) | `/partners` |
+| §3.6 Flux invers spre facturare | ✅ „Predare - Facturare” notifică facturarea per partener, cu produsele · ecranul de facturare pentru coșurile predate ⏳ (de discutat) | `/partners`, `/billing` |
+| §3.7 Cont revânzător: istoric | ✅ · „comandă din nou” / „frecvent comandate” ⏳ | `/partner` |
 | §4 Board comenzi online, preluare exclusivă, eliberare, predare | ✅ | `/orders` |
 | §4.3 Comenzi greșite (căutare la cerere) | ✅ | `/orders/search` |
 | §5 Retururi (înregistrare, verificare fizică, notificare, raport lunar, marcare Shopify) | ✅ | `/returns` |
@@ -49,12 +49,12 @@ Ce lipsește depinde de acces extern: IP fix pentru BOCP, contul WhatsApp Busine
 | Rol | Ecran la login | Acces |
 |---|---|---|
 | admin | `/orders` | tot, plus Revânzători, Catalog & EAN, Integrări |
-| operator_depozit (`contact@atelierrebul.ro`) | `/orders` | Comenzi online, Refill revânzători, Căutare comenzi, Retururi (verificare fizică), Notificări |
+| operator_depozit (`contact@atelierrebul.ro`) | `/orders` | Comenzi online, Parteneri B2B, Căutare comenzi, Retururi (verificare fizică), Predate curierului, Notificări |
 | operator_facturare (`marketing@chicchic.ro`) | `/returns` | Retururi (înregistrare), Facturare refill, Căutare comenzi, Notificări |
 | owner (`admin@atelierrebul.ro`) | `/dashboard` | doar dashboard (cifre agregate, fără date de client) |
-| revânzător | `/reseller` | cererea proprie de refill, coșul, livrările, istoricul |
+| revânzător | `/partner` | cererea proprie de refill, coșul, livrările, istoricul |
 
-Contul de admin este `atelierrebulromania@gmail.com`. Conturile de revânzător se creează în Supabase → Authentication → Users (Invite user), apoi se asociază locației din `/admin/resellers`.
+Contul de admin este `atelierrebulromania@gmail.com`. Conturile de revânzător se creează în Supabase → Authentication → Users (Invite user), apoi se asociază locației din `/admin/partners`.
 
 ## Migrații
 
@@ -68,6 +68,10 @@ Toate sunt aplicate pe proiectul BoldHub, cu excepția celei marcate.
 | [`20260923122608_refill_flow_notifications`](supabase/migrations/20260923122608_refill_flow_notifications.sql) | coșuri, rezervare, cele 3 triggere, flux invers, conturi revânzător, notificări + Realtime, job pg_cron |
 | [`20260923123114_ean_scan_mode`](supabase/migrations/20260923123114_ean_scan_mode.sql) | `products.scan_mode` per produs; trigger care preia EAN-ul din factură și aplică modul EAN |
 | [`20260923124056_bocp_catalog_sync`](supabase/migrations/20260923124056_bocp_catalog_sync.sql) | sincronizare catalog BOCP: produse, EAN, stoc |
+| `20260923202935_staff_names`, `20260923211131_order_ready_at` | numele operatorilor pe board; ora „pregătită” la comenzile online |
+| `20260923213224_partner_type` … `20260923214059_rename_notification_partner_column` | **resellers → partners peste tot** (tabele, coloane, funcții, politici); `partners.type` = reseller / horeca / altul |
+| `20260923215555_partner_cart_prepared` … `20260923222635_billing_notification_products` | coș „prepared”, „Predare - Facturare” cu notificare per partener, grupuri de livrare editabile din depozit |
+| `20260923224254_stop_refill_automations` | oprește jobul pg_cron de 48h și propunerea automată pentru clientul important; notificare „Client prioritar — livrare imediată” |
 
 Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pentru citire, pe rol.
 
@@ -93,7 +97,7 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
   - coșuri deschise grupate pe traseu, cu contor 48h;
   - introducere manuală a cererilor venite pe WhatsApp sau telefon;
   - stocul rezervat, actualizat în timp real.
-- **`/reseller`** (mobil): revânzătorul scrie câte bucăți mai are pe raft. Necesarul se calculează ca stocul inițial minus ce a rămas, minus ce e deja în coș sau pe drum, deci nu apar comenzi duble. Vede și coșul (poate scoate produse), livrările și istoricul.
+- **`/partner`** (mobil): revânzătorul scrie câte bucăți mai are pe raft. Necesarul se calculează ca stocul inițial minus ce a rămas, minus ce e deja în coș sau pe drum, deci nu apar comenzi duble. Vede și coșul (poate scoate produse), livrările și istoricul.
 - **Client important**: la cerere se propune automat livrarea, împreună cu coșurile din același Delivery Group, cu confirmarea operatorului.
 - **Countdown 48h**: coșurile vechi de 48h devin automat propuneri de livrare, cu alertă. Rulează la 15 minute prin pg_cron, chiar dacă nimeni nu are aplicația deschisă.
 
@@ -113,6 +117,21 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
   - EAN-ul se poate completa manual, cu filtrele „fără EAN” / „încă pe SKU”;
   - trecerea pe EAN se face per produs sau pentru toate produsele care au EAN. Schimbarea afectează doar comenzile nepreluate.
 
+## Iterația 5 (24 septembrie 2026)
+
+### Comenzi online
+- **Board:** cele 4 carduri de status sunt filtrele board-ului; „În pregătire” e unit cu „Preluate” (progresul scanării apare pe card); coloana „Predate” s-a mutat în **`/orders/handed`** (meniu → Istoric → Predate curierului), cu filtre de perioadă, coloană AWB („—” până la Cargus) și detalii doar pentru citire, inclusiv ora „Pregătită”.
+- **Operatori:** pe card apare numele celui care a preluat comanda; comenzile altui operator se văd, dar nu se pot deschide.
+- **Scanare:** EAN-ul așteptat nu mai ajunge în browser (sub produs apare SKU-ul), ca să nu poată fi tastat în loc de scanat. Blocul se numește „Scanare etichetă”; butonul de factură (cu iconiță de download) e sub el.
+- **Scanner:** Winson WNI-6380g funcționează pe Windows (tastează codul + Enter). Pe Mac nu scrie nimic; nu e o țintă.
+
+### Parteneri B2B (`/partners`, înlocuiește „Refill revânzători”, care a fost șters)
+- **Tab Parteneri:** board cu „Necesită produse” / „Pregătite de livrare” (sus) și „Complete” (pe toată lățimea); filtre de tip, căutare, timer live de la cerere, semnal de refill, clienți prioritari primii (chip „⚡ Prioritar”, margine roșie).
+- **Detalii partener:** produse pe raft (estimat / inițial), coș, coș pregătit, contact; butoanele **„Produsele sunt pe raft · gata de livrare”** (coș → `prepared`, fără facturare) și **„Predare - Facturare”** (coș livrat, stoc eliberat, notificare la facturare cu produsele). Panoul se închide după succes.
+- **„+ Adaugă cerere”:** partener, produse (din stocul inițial sau din catalog), cantități, sursă WhatsApp/telefon → coșul deschis, stoc rezervat.
+- **Tab Grupuri de livrare:** creare/editare/ștergere de către admin și depozit (un partener poate fi în mai multe grupuri), carduri cu progres, grupurile cu client prioritar primele, **„Predare - Facturare” în bloc** pentru toți pregătiții din grup (câte o notificare per partener).
+- **Tab Produse:** totaluri pe produs „De pregătit” (cu stocul BOCP, roșu dacă nu ajunge) și „Pe raft · pregătite de livrare”.
+
 ## Ce rămâne
 
 **Depinde de acces sau decizii externe:**
@@ -121,11 +140,17 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
 3. **Notificări pe email:** furnizor (de ex. Resend) cu domeniu de expeditor verificat și cheie API.
 4. **Verificarea AWB Ecolet/Shopify** (§9): token Shopify Admin API (custom app) și răspunsuri la cele 6 întrebări deschise.
 5. **Scanare EAN în producție:** completarea „Cod bare” în BOCP pentru produsele care se scanează, corectarea duplicatelor, test pe Zebra TC26/DataWedge, apoi „Activează EAN”. Mai trebuie decis dacă un dispozitiv e al unei persoane sau comun.
-6. **Suport BOCP:** ce face ruta `delegatedresellerorderfeedback` (§10.5) și limitarea cheii API doar la `GET`.
+6. **AWB în „Predate curierului”** (`/orders/handed`): așteptăm răspunsul Cargus despre un API REST, ca să aducem AWB-ul direct de la ei. Are legătură cu verificarea AWB de la punctul 4.
+7. **Suport BOCP:** ce face ruta `delegatedresellerorderfeedback` (§10.5) și limitarea cheii API doar la `GET`.
+
+**De discutat cu utilizatorul:**
+- **Facturare pentru coșurile partenerilor:** ce face facturarea după notificarea „Predare spre facturare” (număr factură? marcare ca terminat?). `/billing` arată încă doar livrările din vechiul flux; funcțiile vechi de livrare rămân până atunci.
+- Rolul **`account`**: să poată crea grupuri de livrare, ca depozitul.
 
 **Se poate face fără input extern:**
-- aplicație instalabilă pe telefon („Add to Home Screen”, pe tot ecranul) pentru Zebra și revânzători;
-- „Comandă din nou” și „produse comandate frecvent” pentru revânzători (§3.7);
+- aplicație instalabilă pe telefon („Add to Home Screen”, pe tot ecranul) pentru Zebra și parteneri;
+- „Comandă din nou” și „produse comandate frecvent” pentru parteneri (§3.7);
+- câmpul „Tip partener” (reseller / horeca / altul) în formularul din `/admin/partners` (acum se setează doar din baza de date);
 - notificarea „comandă nouă” pentru depozit la import;
 - alegerea „șofer propriu” / „curier extern” la predare (coloana există, dar nu se completează).
 
@@ -144,5 +169,5 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
   - RPC-ul atomic `import_bocp_online_orders` lucrează în loturi de maximum 25 și e idempotent pe numărul facturii;
   - butonul de import din `/admin/integrations` e blocat până la 1 octombrie 2026.
 - **Job automat de import** ([app/api/cron/bocp-import/route.ts](app/api/cron/bocp-import/route.ts)): pregătit, dar dezactivat (`BOCP_AUTO_IMPORT_ENABLED=false`, fără programare).
-- **`/admin/resellers`:** firme, Delivery Groups, locații, stoc inițial per SKU.
+- **`/admin/partners`:** firme, Delivery Groups, locații, stoc inițial per SKU.
 - **Conturi Supabase Auth** legate de `app_users` pentru owner, facturare și depozit.
