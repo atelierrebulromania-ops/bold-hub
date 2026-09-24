@@ -23,6 +23,11 @@ export function NotificationListener({ role, userId, partnerId }: { role?: strin
           new Notification("BoldHub", { body: row.message, icon: "/favicon.svg" });
         }
       })
+      // A teammate marking a role notification read clears it here too.
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications" }, payload => {
+        const row = payload.new as NotificationRow;
+        if (row.recipient_user_id === userId || (!!role && row.recipient_role === role)) router.refresh();
+      })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [router, role, userId, partnerId]);

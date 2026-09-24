@@ -1,15 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { loginIdentifier } from "@/lib/accounts";
 import { createClient } from "@/lib/supabase/server";
 
 export async function signIn(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) redirect("/login?error=missing");
+  if (!username || !password) redirect("/login?error=missing");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email: loginIdentifier(username), password });
   if (error) redirect("/login?error=invalid");
   redirect("/");
 }

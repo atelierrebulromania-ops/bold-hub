@@ -129,7 +129,7 @@ begin
   insert into t_results (role, label, ok) values ('facturare', 'înregistrează retur', public.register_order_return(o1, 'refuzat_livrare', false));
   insert into t_results (role, label, ok) values ('facturare', 'NU poate înregistra returul de două ori', not public.register_order_return(o1, 'neridicat', false));
   select id into ret from public.order_returns where online_order_id = o1;
-  insert into t_results (role, label, ok) values ('facturare', 'marchează returul în Shopify', public.mark_return_in_shopify(ret));
+  insert into t_results (role, label, ok) values ('facturare', 'NU poate marca returul în Shopify (doar admin)', not public.mark_return_in_shopify(ret));
   insert into t_results (role, label, ok) values ('facturare', 'NU poate confirma verificarea fizică', not public.confirm_return_restock(ret));
   begin insert into public.order_returns (online_order_id, registered_by) values (o2, u_fac); v_ok := false;
   exception when insufficient_privilege then v_ok := true; end;
@@ -140,8 +140,13 @@ begin
   set local role authenticated;
   insert into t_results (role, label, ok) values ('depozit', 'primește notificarea de retur de verificat',
     exists (select 1 from public.notifications where type = 'retur_de_verificat' and related_entity_id = ret));
-  insert into t_results (role, label, ok) values ('depozit', 'confirmă verificarea fizică a returului', public.confirm_return_restock(ret));
+  insert into t_results (role, label, ok) values ('depozit', 'procesează returul cu mențiuni', public.confirm_return_restock(ret, '  lipsește un produs  ', true));
+  insert into t_results (role, label, ok) values ('depozit', 'nu poate procesa returul de două ori', not public.confirm_return_restock(ret));
   reset role;
+  insert into t_results (role, label, ok) values ('facturare', 'primește nota returului procesat cu mențiuni',
+    (select restock_note = 'lipsește un produs' and restocked_with_remarks from public.order_returns where id = ret)
+    and exists (select 1 from public.notifications where type = 'retur_cu_mentiuni' and recipient_role = 'operator_facturare'
+      and related_entity_id = ret and message like '%ZZFLOW-1 — lipsește un produs'));
 
   ---------------------------------------------------------------- REVÂNZĂTOR: refill from the app
   perform set_config('request.jwt.claims', json_build_object('sub', u_res, 'role', 'authenticated')::text, true);
@@ -203,6 +208,19 @@ begin
   insert into t_results (role, label, ok) values ('revânzător', 'vede livrarea în istoric', (select count(*) from public.partner_carts where status = 'delivered') = 1);
   reset role;
 
+  ---------------------------------------------------------------- DEPOZIT → FACTURARE: shelf reservation
+  perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  perform public.staff_add_refill(r1, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 3)) from public.products where sku = 'ZZ-T-A'), 'telefon');
+  insert into t_results (role, label, ok) values ('depozit', 'rezervă produsele pe raft',
+    public.mark_partner_cart_prepared((select id from public.partner_carts where partner_id = r1 and status = 'open')));
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', u_fac, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into t_results (role, label, ok) values ('facturare', 'primește „mută în gestiunea Rezervat” cu produsele',
+    exists (select 1 from public.notifications where type = 'rezervare_stoc' and message like '%ZZ-T-A%×3%Rezervat%'));
+  reset role;
+
   ---------------------------------------------------------------- OWNER: read-only dashboard
   perform set_config('request.jwt.claims', json_build_object('sub', u_owner, 'role', 'authenticated')::text, true);
   set local role authenticated;
@@ -223,6 +241,7 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', u_admin, 'role', 'authenticated')::text, true);
   set local role authenticated;
   insert into t_results (role, label, ok) values ('admin', 'primește notificarea de retur', exists (select 1 from public.notifications where type = 'retur_inregistrat' and related_entity_id = ret));
+  insert into t_results (role, label, ok) values ('admin', 'marchează returul în Shopify', public.mark_return_in_shopify(ret));
   insert into t_results (role, label, ok) values ('admin', 'marchează notificările ca citite', public.mark_notifications_read(null) >= 1);
   insert into t_results (role, label, ok) values ('admin', 'vede dashboard-ul', public.dashboard_summary(now() - interval '1 day', now() + interval '1 minute') ? 'online');
   reset role;

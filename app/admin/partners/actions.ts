@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { accountErrorMessages, createLogin, deleteLogin, setLoginPassword, type AccountError } from "@/lib/account-admin";
 import { createClient } from "@/lib/supabase/server";
 
 const page = "/admin/partners";
@@ -127,25 +128,48 @@ export async function setParLevel(form: FormData) {
   done("par_saved");
 }
 
-const linkResults: Record<string, string> = {
-  linked: "account_linked",
-  unlinked: "account_unlinked",
-  no_user: "account_no_user",
-  staff_account: "account_staff",
-  already_linked: "account_taken",
-};
+function accountFail(error: AccountError): never {
+  fail(`account_${error}`);
+}
 
-export async function linkAccount(form: FormData) {
+async function partnerForAccount(form: FormData) {
   const { supabase } = await adminContext();
   const partnerId = value(form, "partner_id", 36);
-  const rawEmail = form.get("email");
-  const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
-  if (!partnerId || !uuid.test(partnerId) || email.length > 254
-    || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("account_invalid");
-  const { data, error } = await supabase.rpc("link_partner_account", { p_partner_id: partnerId, p_email: email });
-  if (error || !data) fail("save_failed");
-  const code = linkResults[data];
-  if (!code) fail("save_failed");
-  if (data === "linked" || data === "unlinked") done(code);
-  fail(code);
+  if (!partnerId || !uuid.test(partnerId)) fail("selection_invalid");
+  const { data: partner } = await supabase.from("partners").select("id,auth_user_id").eq("id", partnerId).maybeSingle();
+  if (!partner) fail("selection_invalid");
+  return { supabase, partner };
+}
+
+// Partner logins use a username and password, like staff accounts.
+export async function createPartnerAccount(form: FormData) {
+  const { supabase, partner } = await partnerForAccount(form);
+  if (partner.auth_user_id) fail("account_taken");
+  const login = await createLogin(String(form.get("username") ?? ""), String(form.get("password") ?? ""));
+  if ("error" in login) accountFail(login.error);
+  const { error } = await supabase.from("partners")
+    .update({ auth_user_id: login.id, account_username: login.username }).eq("id", partner.id).is("auth_user_id", null);
+  if (error) {
+    await deleteLogin(login.id);
+    fail(error.code === "23505" ? "account_username_taken" : "save_failed");
+  }
+  done("account_linked");
+}
+
+export async function setPartnerPassword(form: FormData) {
+  const { partner } = await partnerForAccount(form);
+  if (!partner.auth_user_id) fail("selection_invalid");
+  const error = await setLoginPassword(partner.auth_user_id, String(form.get("password") ?? ""));
+  if (error) accountFail(error);
+  done("account_password");
+}
+
+export async function removePartnerAccount(form: FormData) {
+  const { supabase, partner } = await partnerForAccount(form);
+  if (!partner.auth_user_id) fail("selection_invalid");
+  const { error } = await supabase.from("partners").update({ auth_user_id: null, account_username: null }).eq("id", partner.id);
+  if (error) fail("save_failed");
+  const removed = await deleteLogin(partner.auth_user_id);
+  if (removed) accountFail(removed);
+  done("account_unlinked");
 }

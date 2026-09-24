@@ -5,6 +5,7 @@ import { formatDateTime } from "@/lib/orders";
 
 export type HandedOrder = {
   id: string;
+  status: string;
   invoice_number: string;
   bocp_order_id: string | null;
   source: "shopify" | "marketplace";
@@ -62,7 +63,7 @@ export function HandedTable({ orders, operatorNames }: { orders: HandedOrder[]; 
         <aside className="detail-panel" aria-label={`Detalii comandă ${selected.invoice_number}`}>
           <div className="detail-header"><div><p className="eyebrow">Factură #{selected.invoice_number}</p><h2>Detalii comandă</h2></div><button className="close-button" aria-label="Închide detaliile" onClick={() => setSelectedId(null)}>×</button></div>
           <div className="detail-scroll">
-            <div className="detail-meta"><span className="status-badge handed">Predată curierului</span><span>{selected.source === "shopify" ? "Shopify" : "Marketplace"}</span></div>
+            <div className="detail-meta"><span className="status-badge handed">{selected.status === "returned" ? "Returnată" : "Predată curierului"}</span><span>{selected.source === "shopify" ? "Shopify" : "Marketplace"}</span></div>
             {selected.bocp_order_id && <p className="detail-ref">Comandă BOCP: {selected.bocp_order_id}</p>}
             <section className="detail-section"><h3>Livrare</h3>
               <dl className="detail-facts">

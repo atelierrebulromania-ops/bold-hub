@@ -17,3 +17,11 @@ export async function markRead(form: FormData) {
   revalidatePath("/", "layout");
   redirect(back);
 }
+
+// Used by the always-visible notification rail: no redirect, the layout refreshes in place.
+export async function markNotificationsRead(ids: string[] | null) {
+  if (ids && (ids.length === 0 || ids.length > 100 || !ids.every((id) => uuid.test(id)))) return;
+  const supabase = await createClient();
+  await supabase.rpc("mark_notifications_read", { p_ids: ids });
+  revalidatePath("/", "layout");
+}

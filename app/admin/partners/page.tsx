@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/app-shell";
+import { accountErrorMessages } from "@/lib/account-admin";
+import { minPasswordLength } from "@/lib/accounts";
 import { requireRole } from "@/lib/auth";
 import {
-  assignDeliveryGroup, createCompany, createDeliveryGroup, createPartner, linkAccount,
-  removeDeliveryGroup, setParLevel,
+  assignDeliveryGroup, createCompany, createDeliveryGroup, createPartner, createPartnerAccount,
+  removeDeliveryGroup, removePartnerAccount, setParLevel, setPartnerPassword,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +16,9 @@ const notices: Record<string, string> = {
   group_assigned: "Revânzătorul a fost adăugat în grup.",
   group_removed: "Revânzătorul a fost scos din grup.",
   par_saved: "Stocul inițial pentru produs a fost salvat.",
-  account_linked: "Contul de autentificare a fost asociat locației. Revânzătorul poate intra în aplicație.",
-  account_unlinked: "Contul a fost dezasociat de la locație.",
+  account_linked: "Contul a fost creat. Partenerul poate intra în aplicație cu username-ul și parola.",
+  account_unlinked: "Contul partenerului a fost șters.",
+  account_password: "Parola partenerului a fost schimbată.",
 };
 
 const errors: Record<string, string> = {
@@ -27,10 +30,8 @@ const errors: Record<string, string> = {
   par_invalid: "Introdu un SKU și o cantitate între 0 și 100.000.",
   product_missing: "SKU-ul nu există în catalogul activ. Sincronizează mai întâi produsul din BOCP.",
   save_failed: "Nu am putut salva. Reîncarcă pagina și încearcă din nou.",
-  account_invalid: "Introdu o adresă de email validă sau lasă câmpul gol pentru dezasociere.",
-  account_no_user: "Nu există un cont cu acest email. Creează-l întâi în Supabase → Authentication → Users (Invite user).",
-  account_staff: "Emailul aparține unui cont intern (staff). Folosește altă adresă pentru revânzător.",
-  account_taken: "Contul este deja asociat altei locații.",
+  account_taken: "Locația are deja un cont.",
+  ...Object.fromEntries(Object.entries(accountErrorMessages).map(([code, message]) => [`account_${code}`, message])),
 };
 
 export default async function PartnersPage({
@@ -43,7 +44,7 @@ export default async function PartnersPage({
   const [companiesResult, groupsResult, partnersResult, membershipsResult, parsResult, productsResult] = await Promise.all([
     supabase.from("partner_companies").select("id,company_name").order("company_name").limit(500),
     supabase.from("delivery_groups").select("id,name,description").order("name").limit(500),
-    supabase.from("partners").select("id,company_id,business_name,location_name,contact_phone,contact_email,is_important_client,active,auth_user_id")
+    supabase.from("partners").select("id,company_id,business_name,location_name,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username")
       .order("business_name").limit(500),
     supabase.from("partner_delivery_groups").select("partner_id,delivery_group_id").limit(2000),
     supabase.from("partner_par_levels").select("partner_id,product_id,par_level_quantity,products(name,sku)").limit(2000),
@@ -127,11 +128,23 @@ export default async function PartnersPage({
                   const levels = levelsByPartner.get(partner.id) ?? [];
                   return <article className="partner-card" key={partner.id}>
                     <div className="partner-card-heading"><div><h3>{partner.business_name}</h3><p>{companyNames.get(partner.company_id ?? "") ?? "Firmă neasociată"} · {partner.location_name}</p><small>{partner.contact_phone}{partner.contact_email ? ` · ${partner.contact_email}` : ""}</small></div><div className="partner-tags">{partner.is_important_client && <span className="partner-tag important">Important</span>}{!partner.active && <span className="partner-tag">Inactiv</span>}<span className={partner.auth_user_id ? "partner-tag linked" : "partner-tag"}>{partner.auth_user_id ? "Cont activ" : "Fără cont"}</span></div></div>
-                    <form action={linkAccount} className="admin-inline admin-mini-form account-link-form">
+                    {partner.auth_user_id ? <div className="account-link-form account-row">
+                      <span className="account-name">Cont: <strong>{partner.account_username ?? "vechi (email)"}</strong></span>
+                      <form action={setPartnerPassword} className="admin-inline admin-mini-form">
+                        <input type="hidden" name="partner_id" value={partner.id}/>
+                        <input name="password" type="text" minLength={minPasswordLength} required autoComplete="new-password" placeholder="Parolă nouă" aria-label={`Parolă nouă pentru ${partner.business_name}`}/>
+                        <button className="button button-outline" type="submit">Schimbă parola</button>
+                      </form>
+                      <form action={removePartnerAccount}>
+                        <input type="hidden" name="partner_id" value={partner.id}/>
+                        <button className="button button-quiet" type="submit">Șterge contul</button>
+                      </form>
+                    </div> : <form action={createPartnerAccount} className="admin-inline admin-mini-form account-link-form">
                       <input type="hidden" name="partner_id" value={partner.id}/>
-                      <input name="email" type="email" maxLength={254} placeholder={partner.auth_user_id ? "Email nou (gol = dezasociere)" : "Email cont revânzător"} aria-label={`Cont de autentificare pentru ${partner.business_name}`}/>
-                      <button className="button button-outline" type="submit">{partner.auth_user_id ? "Schimbă contul" : "Asociază contul"}</button>
-                    </form>
+                      <input name="username" maxLength={32} required autoCapitalize="none" spellCheck={false} autoComplete="off" placeholder="Username" aria-label={`Username pentru ${partner.business_name}`}/>
+                      <input name="password" type="text" minLength={minPasswordLength} required autoComplete="new-password" placeholder={`Parolă (min. ${minPasswordLength})`} aria-label={`Parolă pentru ${partner.business_name}`}/>
+                      <button className="button button-outline" type="submit">Creează cont</button>
+                    </form>}
                     <div className="partner-card-grid">
                       <div><h4>Delivery Groups</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><button type="submit" className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></button></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
                         {groups.length > 0 && <form action={assignDeliveryGroup} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><select name="delivery_group_id" aria-label={`Adaugă ${partner.business_name} în Delivery Group`} required defaultValue=""><option value="" disabled>Alege un grup</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button button-outline" type="submit">Adaugă</button></form>}

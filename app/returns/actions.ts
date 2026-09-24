@@ -42,20 +42,29 @@ export async function registerReturn(form: FormData) {
   finish(form, data === true, "registered", "not_returnable");
 }
 
-export async function confirmRestock(form: FormData) {
+type Result = { ok: boolean; message: string };
+
+export async function confirmReturn(returnId: string, note: string | null, withRemarks: boolean): Promise<Result> {
+  if (!uuid.test(returnId)) return { ok: false, message: "Returul nu este valid." };
+  const text = note?.trim() || null;
+  if (text && text.length > 1000) return { ok: false, message: "Nota poate avea cel mult 1000 de caractere." };
+  if (withRemarks && !text) return { ok: false, message: "Scrie mai întâi o notă." };
   const { supabase } = await requireRole(["admin", "operator_depozit"]);
-  const returnId = id(form, "return_id");
-  if (!returnId) redirect(target(form, "error", "invalid"));
-  const { data, error } = await supabase.rpc("confirm_return_restock", { p_return_id: returnId });
-  if (error) redirect(target(form, "error", "save_failed"));
-  finish(form, data === true, "restocked", "already_done");
+  const { data, error } = await supabase.rpc("confirm_return_restock", { p_return_id: returnId, p_with_remarks: withRemarks, ...(text ? { p_note: text } : {}) });
+  if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
+  revalidatePath(page);
+  return data === true
+    ? { ok: true, message: withRemarks ? "Returul a fost procesat cu mențiuni. Facturarea a fost anunțată." : "Returul a fost procesat." }
+    : { ok: false, message: "Returul a fost deja procesat. Reîncarcă pagina." };
 }
 
-export async function markShopify(form: FormData) {
-  const { supabase } = await requireRole(["admin", "operator_facturare"]);
-  const returnId = id(form, "return_id");
-  if (!returnId) redirect(target(form, "error", "invalid"));
+export async function markReturnInShopify(returnId: string): Promise<Result> {
+  if (!uuid.test(returnId)) return { ok: false, message: "Returul nu este valid." };
+  const { supabase } = await requireRole(["admin"]);
   const { data, error } = await supabase.rpc("mark_return_in_shopify", { p_return_id: returnId });
-  if (error) redirect(target(form, "error", "save_failed"));
-  finish(form, data === true, "shopify_marked", "already_done");
+  if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
+  revalidatePath(page);
+  return data === true
+    ? { ok: true, message: "Returul a fost marcat ca actualizat în Shopify." }
+    : { ok: false, message: "Operațiunea a fost deja făcută." };
 }

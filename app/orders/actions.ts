@@ -53,3 +53,11 @@ export async function scanItem(orderId: string, enteredCode: string): Promise<Re
   if (error) return { ok: false, message: "Scanarea nu a putut fi salvată. Încearcă din nou." };
   return { ok: data === true, message: data === true ? "Produs confirmat." : "Codul nu corespunde unui produs rămas de confirmat în această comandă." };
 }
+
+export async function confirmItemWithoutEan(orderId: string, itemId: string): Promise<Result> {
+  const supabase = await warehouseClient();
+  if (!supabase) return { ok: false, message: "Sesiunea sau accesul nu mai este valid." };
+  const { data, error } = await supabase.rpc("confirm_online_order_item", { p_order_id: orderId, p_item_id: itemId });
+  if (error) return { ok: false, message: "Confirmarea nu a putut fi salvată. Încearcă din nou." };
+  return { ok: data === true, message: data === true ? "Produs confirmat." : "Produsul nu mai poate fi confirmat. Reîncarcă pagina." };
+}
