@@ -13,7 +13,7 @@ export async function markCartPrepared(cartId: string): Promise<{ ok: boolean; m
   if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
   revalidatePath("/partners");
   return data === true
-    ? { ok: true, message: "Coșul este pregătit de livrare." }
+    ? { ok: true, message: "Produsele sunt rezervate pe raft. Facturarea a fost anunțată." }
     : { ok: false, message: "Coșul s-a schimbat între timp. Reîncarcă pagina." };
 }
 

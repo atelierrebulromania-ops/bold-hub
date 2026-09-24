@@ -24,7 +24,7 @@ export default async function PartnersPage() {
   const catalog: CatalogProduct[] = productsResult.data ?? [];
 
   return (
-    <AppShell profile={profile} active="/partners" section="Operațiuni" title="Parteneri B2B"
+    <AppShell profile={profile} active="/partners" section="Operațiuni" title="Comenzi B2B"
       note={{ title: "Stoc pe raft", text: "Stocul estimat este stocul inițial minus ce e în coș sau pe drum." }}>
       {error ? <p className="notice error" role="alert">Partenerii nu pot fi încărcați acum. Reîncarcă pagina.</p>
         : <PartnersBoard partners={partners} groups={groups} catalog={catalog} />}

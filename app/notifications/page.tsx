@@ -28,7 +28,7 @@ export default async function NotificationsPage() {
   return (
     <AppShell profile={profile} active="/notifications" section="Cont" title="Notificări"
       note={{ title: "Notificări pe rol", text: "Un mesaj marcat ca citit dispare pentru toată echipa rolului." }}>
-      <div className="page-heading"><div><p className="eyebrow">NOTIFICĂRI</p><h1>Notificări</h1><p className="muted">Evenimentele care cer atenția ta. Cele trimise rolului tău sunt comune pentru toată echipa.</p></div>
+      <div className="page-heading"><div><h1>Notificări</h1><p className="muted">Evenimentele care cer atenția ta. Cele trimise rolului tău sunt comune pentru toată echipa.</p></div>
         <div className="heading-actions"><EnableBrowserNotifications/>{unread > 0 && <form action={markRead}><button className="button button-primary" type="submit">Marchează toate ca citite</button></form>}</div>
       </div>
       <section className="admin-card">

@@ -438,7 +438,7 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
           </div>
           {(summary.needsRefill || summary.prepared.length > 0) && <div className="detail-actions">
-            {summary.needsRefill && <button className="button button-primary" disabled={pending} onClick={() => run(() => markCartPrepared(summary.openCart!.id))}>Produsele sunt pe raft · gata de livrare</button>}
+            {summary.needsRefill && <button className="button button-primary" disabled={pending} onClick={() => run(() => markCartPrepared(summary.openCart!.id))}>Produsele rezervate pe raft</button>}
             {summary.prepared.length > 0 && <button className={`button ${summary.needsRefill ? "button-outline" : "button-primary"}`} disabled={pending} onClick={() => handOver(selected)}>Predare - Facturare</button>}
           </div>}
         </aside>

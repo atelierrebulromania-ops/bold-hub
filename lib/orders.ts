@@ -5,6 +5,10 @@ export type OrderItem = {
   // The expected code (EAN/SKU) is never sent to the browser, so it cannot be typed in instead of scanned.
   scan_code_type: "sku" | "ean";
   quantity: number;
+  // Free product from an offer: the invoice lists it with a full discount, it is still picked once.
+  is_gift: boolean;
+  // No EAN to scan: the operator ticks the line instead (the EAN itself never reaches the browser).
+  no_ean: boolean;
   scanned_quantity: number;
   products: { name: string; sku: string; variant_label: string | null } | null;
 };
@@ -72,6 +76,6 @@ export type OrderSearchResult = {
 export function formatDateTime(value: string | null) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("ro-RO", {
-    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest",
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Bucharest",
   }).format(new Date(value));
 }

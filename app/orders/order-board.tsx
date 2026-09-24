@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Order, OrderStatus } from "@/lib/orders";
-import { claimOrder, handToCourier, markReady, releaseOrder, scanItem } from "./actions";
+import { claimOrder, confirmItemWithoutEan, handToCourier, markReady, releaseOrder, scanItem } from "./actions";
 
 const columns: { status: OrderStatus; label: string; hint: string }[] = [
   { status: "pending", label: "De preluat", hint: "Așteaptă un operator" },
@@ -13,7 +13,7 @@ const columns: { status: OrderStatus; label: string; hint: string }[] = [
 ];
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Bucharest" }).format(new Date(value));
 }
 
 // "preparing" is set by the database on the first scan; on the board it is simply a claimed order.
@@ -155,7 +155,24 @@ export function OrderBoard({ orders, userId, operatorNames }: { orders: Order[];
             {selected.bocp_order_id && <p className="detail-ref">Comandă BOCP: {selected.bocp_order_id}</p>}
             <section className="detail-section"><h3>Client și livrare</h3><p className="detail-primary">{selected.customer_name ?? "Client neprecizat"}</p>{selected.shipping_address && <p>{selected.shipping_address}</p>}{selected.customer_phone && <p>{selected.customer_phone}</p>}{selected.customer_email && <p>{selected.customer_email}</p>}</section>
             <section className="detail-section"><div className="section-line"><h3>Produse</h3><span>{scanned}/{total} scanate</span></div><div className="progress-track"><div style={{ width: `${total ? (scanned / total) * 100 : 0}%` }} /></div>
-              {selected.online_order_items.length ? <div className="item-list">{selected.online_order_items.map((item) => <div className="order-item" key={item.id}><span className={`item-check ${item.scanned_quantity === item.quantity ? "complete" : ""}`}>{item.scanned_quantity === item.quantity ? "✓" : "·"}</span><div><strong>{item.products?.name ?? "Produs"}</strong><small>{item.products?.variant_label ? `${item.products.variant_label} · ` : ""}SKU {item.products?.sku ?? "—"}</small></div><b>{item.scanned_quantity}/{item.quantity}</b></div>)}</div> : <p className="muted">Produsele vor apărea după sincronizarea cu BOCP.</p>}
+              {selected.online_order_items.length ? <div className="item-list">{selected.online_order_items.map((item) => {
+                const done = item.scanned_quantity === item.quantity;
+                const canTick = item.no_ean && !done && mine && ["claimed", "preparing"].includes(selected.status);
+                return <div className="order-item" key={item.id}>
+                  {canTick
+                    ? <button type="button" className="item-check tickable" disabled={pending} aria-label={`Confirmă ${item.products?.name ?? "produsul"} fără scanare`} title="Bifează după ce ai pus produsul în colet"
+                      onClick={() => run(() => confirmItemWithoutEan(selected.id, item.id))} />
+                    : <span className={`item-check ${done ? "complete" : ""}`}>{done ? "✓" : "·"}</span>}
+                  <div><strong>{item.products?.name ?? "Produs"}</strong>
+                    <small>{item.products?.variant_label ? `${item.products.variant_label} · ` : ""}SKU {item.products?.sku ?? "—"}</small>
+                    {(item.is_gift || item.no_ean) && <span className="item-flags">
+                      {item.is_gift && <span className="item-flag gift" title="Produs gratuit din ofertă. Pe factură apare cu preț și cu un discount egal; se pune o singură dată.">Cadou</span>}
+                      {item.no_ean && <span className="item-flag no-ean" title="Produsul nu are EAN. Nu se scanează, se bifează.">Fără EAN · se bifează</span>}
+                    </span>}
+                  </div>
+                  <b>{item.scanned_quantity}/{item.quantity}</b>
+                </div>;
+              })}</div> : <p className="muted">Produsele vor apărea după sincronizarea cu BOCP.</p>}
             </section>
             {mine && ["claimed", "preparing"].includes(selected.status) && <section className="detail-section scan-section"><h3>{scanMode === "ean" ? "Scanare etichetă" : scanMode === "sku" ? "Confirmare după SKU" : "Confirmare cod produs"}</h3>{scanMode !== "ean" && <p>{scanMode === "sku" ? "Introdu SKU-ul afișat la produs și apasă Enter. Este o verificare temporară, nu scanarea fizică a produsului." : "Scanează eticheta sau, unde nu există EAN, introdu SKU-ul afișat."}</p>}<form onSubmit={handleScan} className="scan-form"><input ref={scanRef} value={scanCode} onChange={(event) => setScanCode(event.target.value)} aria-label="Cod produs" placeholder={scanMode === "ean" ? "Scanează EAN" : scanMode === "sku" ? "Introdu SKU" : "Introdu codul produsului"} autoComplete="off" inputMode={scanMode === "ean" ? "numeric" : "text"} disabled={pending} /><button className="button button-primary" disabled={pending || !scanCode.trim()}>Confirmă</button></form></section>}
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const { supabase, userId, profile } = await requireRole(["admin", "operator_depozit"]);
 
-  const fields = "id,invoice_number,bocp_order_id,source,customer_name,customer_phone,customer_email,shipping_address,status,claimed_by,invoice_pdf_url,created_at,online_order_items(id,scan_code_type,quantity,scanned_quantity,products(name,sku,variant_label))" as const;
+  const fields = "id,invoice_number,bocp_order_id,source,customer_name,customer_phone,customer_email,shipping_address,status,claimed_by,invoice_pdf_url,created_at,online_order_items(id,scan_code_type,quantity,scanned_quantity,is_gift,ean,products(name,sku,variant_label,ean))" as const;
   const [openResult, staffResult] = await Promise.all([
     supabase.from("online_orders").select(fields)
       .in("status", ["pending", "claimed", "preparing", "ready"])
@@ -17,7 +17,15 @@ export default async function OrdersPage() {
   ]);
   const operatorNames = Object.fromEntries((staffResult.data ?? []).map((user) => [user.id, user.full_name]));
   const error = openResult.error;
-  const orders: Order[] = openResult.data ?? [];
+  // Reduce each EAN to a yes/no here, so the code itself is never sent to the browser.
+  const orders: Order[] = (openResult.data ?? []).map(({ online_order_items, ...order }) => ({
+    ...order,
+    online_order_items: online_order_items.map(({ ean, products, ...item }) => ({
+      ...item,
+      no_ean: !ean?.trim() && !products?.ean?.trim(),
+      products: products && { name: products.name, sku: products.sku, variant_label: products.variant_label },
+    })),
+  }));
   return (
     <AppShell profile={profile} active="/orders" section="Depozit" title="Comenzi online"
       note={{ title: "Flux operațional", text: "Comenzile sunt actualizate automat." }}

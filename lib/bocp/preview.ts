@@ -20,7 +20,9 @@ export type BocpImportCandidate = {
   shippingAddress: string | null;
   invoicePdfUrl: string | null;
   invoiceDate: string;
-  items: { bocpProductId: string; sku: string; name: string; ean: string | null; quantity: number }[];
+  /** BOCP record time of the invoice, Bucharest wall clock ("YYYY-MM-DD HH:MM:SS"). */
+  invoiceIssuedAt: string | null;
+  items: { bocpProductId: string; sku: string; name: string; ean: string | null; quantity: number; gift: boolean }[];
 };
 
 export type BocpImportPreview = {
@@ -108,6 +110,31 @@ function pdfUrl(value: unknown): string | null {
     const url = new URL(string(value));
     return url.protocol === "https:" && url.hostname === "secure.bocp.eu" ? url.toString() : null;
   } catch { return null; }
+}
+
+// "Discount Gel de duș Lemongrass & Honey - 250ml" and "Gel de duș - Lemongrass & Honey - 250ml"
+// name the same product, so compare letters and digits only.
+function nameKey(value: string): string {
+  return value.toLocaleLowerCase("ro").replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function lineValue(item: DataRecord): number {
+  const value = Number(string(item.value_with_vat));
+  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
+// Shopify offers arrive as the product at full price plus a "Discount <product>" line that
+// cancels it. The product is still picked once; it is only flagged as a gift.
+function giftDiscounts(items: DataRecord[]): { key: string; value: number }[] {
+  return items
+    .filter(item => !positiveId(item.product_variant_id) && nonzeroId(item.service_id))
+    .map(item => ({ name: string(item.item_name_plain || item.item_name), value: lineValue(item) }))
+    .filter(line => /^discount\s/i.test(line.name) && line.value < 0)
+    .map(line => ({ key: nameKey(line.name.replace(/^discount\s+/i, "")), value: -line.value }));
+}
+
+function productName(item: DataRecord): string {
+  return string(item.product_current_name) || string(item.item_name_plain || item.item_name);
 }
 
 function shippingAddress(invoice: DataRecord): string | null {
@@ -201,6 +228,7 @@ export function analyzeBocpImport(ordersInput: unknown[], invoicesInput: unknown
       let products = 0;
       let blocked = false;
       const candidateItems: BocpImportCandidate["items"] = [];
+      const discounts = giftDiscounts(records(invoice.items));
       for (const item of records(invoice.items)) {
         if (positiveId(item.product_variant_id)) {
           const rawQuantity = string(item.qty_mu1);
@@ -219,7 +247,7 @@ export function analyzeBocpImport(ordersInput: unknown[], invoicesInput: unknown
             const product = {
               bocpProductId,
               sku: string(item.item_code).slice(0, 80),
-              name: string(item.item_name_plain || item.item_name).slice(0, 120),
+              name: productName(item).slice(0, 120),
               lines: 1,
             };
             if (!isEan(item.barcode)) {
@@ -236,12 +264,16 @@ export function analyzeBocpImport(ordersInput: unknown[], invoicesInput: unknown
               blocked = true;
             } else {
               report.scannableLines++;
+              const key = nameKey(productName(item));
+              const discount = discounts.findIndex(line => line.value === lineValue(item) && line.value > 0 && key.includes(line.key));
+              if (discount >= 0) discounts.splice(discount, 1);
               candidateItems.push({
                 bocpProductId,
                 sku: string(item.item_code),
-                name: string(item.item_name_plain || item.item_name) || string(item.item_code),
+                name: productName(item) || string(item.item_code),
                 ean: isEan(item.barcode) ? string(item.barcode) : null,
                 quantity,
+                gift: discount >= 0,
               });
             }
           }
@@ -272,6 +304,7 @@ export function analyzeBocpImport(ordersInput: unknown[], invoicesInput: unknown
           shippingAddress: shippingAddress(invoice),
           invoicePdfUrl: pdfUrl(invoice.pdf_invoice_url),
           invoiceDate: string(invoice.doc_date).slice(0, 10),
+          invoiceIssuedAt: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(string(invoice.record_ts)) ? string(invoice.record_ts) : null,
           items: candidateItems,
         });
       }

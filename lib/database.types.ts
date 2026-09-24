@@ -19,15 +19,19 @@ export type Database = {
           active: boolean
           created_at: string
           full_name: string
+          notification_email: string | null
           id: string
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          username: string | null
         }
         Insert: {
           active?: boolean
           created_at?: string
           full_name: string
           id: string
+          notification_email?: string | null
+          username?: string | null
           phone?: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
@@ -35,6 +39,8 @@ export type Database = {
           active?: boolean
           created_at?: string
           full_name?: string
+          notification_email?: string | null
+          username?: string | null
           id?: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -218,6 +224,7 @@ export type Database = {
           created_at: string
           ean: string | null
           id: string
+          is_gift: boolean
           order_id: string
           product_id: string
           quantity: number
@@ -229,6 +236,7 @@ export type Database = {
           created_at?: string
           ean?: string | null
           id?: string
+          is_gift?: boolean
           order_id: string
           product_id: string
           quantity: number
@@ -240,6 +248,7 @@ export type Database = {
           created_at?: string
           ean?: string | null
           id?: string
+          is_gift?: boolean
           order_id?: string
           product_id?: string
           quantity?: number
@@ -344,6 +353,8 @@ export type Database = {
           registered_by: string | null
           restocked_at: string | null
           restocked_by: string | null
+          restock_note: string | null
+          restocked_with_remarks: boolean
           shopify_marked_manually: boolean
           status: Database["public"]["Enums"]["return_status"]
         }
@@ -355,6 +366,8 @@ export type Database = {
           registered_by?: string | null
           restocked_at?: string | null
           restocked_by?: string | null
+          restock_note?: string | null
+          restocked_with_remarks?: boolean
           shopify_marked_manually?: boolean
           status?: Database["public"]["Enums"]["return_status"]
         }
@@ -366,6 +379,8 @@ export type Database = {
           registered_by?: string | null
           restocked_at?: string | null
           restocked_by?: string | null
+          restock_note?: string | null
+          restocked_with_remarks?: boolean
           shopify_marked_manually?: boolean
           status?: Database["public"]["Enums"]["return_status"]
         }
@@ -768,6 +783,7 @@ export type Database = {
       partners: {
         Row: {
           active: boolean
+          account_username: string | null
           auth_user_id: string | null
           business_name: string
           company_id: string | null
@@ -781,6 +797,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          account_username?: string | null
           auth_user_id?: string | null
           business_name: string
           company_id?: string | null
@@ -794,6 +811,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          account_username?: string | null
           auth_user_id?: string | null
           business_name?: string
           company_id?: string | null
@@ -888,8 +906,12 @@ export type Database = {
         Args: { p_mode: string; p_product_id: string }
         Returns: string
       }
+      confirm_online_order_item: {
+        Args: { p_item_id: string; p_order_id: string }
+        Returns: boolean
+      }
       confirm_return_restock: {
-        Args: { p_return_id: string }
+        Args: { p_note?: string; p_return_id: string; p_with_remarks?: boolean }
         Returns: boolean
       }
       delete_delivery_group: {
