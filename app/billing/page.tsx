@@ -1,114 +1,95 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
-import { formatDateTime } from "@/lib/orders";
-import { markInvoiced } from "./actions";
+import { bocpProductStock } from "@/lib/b2b-bocp";
+import { BillingBoard, type BillingCart, type BillingView, type BocpReserved } from "./billing-board";
+import { DocumentRequests, type BillingDocument } from "./document-requests";
 
 export const dynamic = "force-dynamic";
 
-const notices: Record<string, string> = {
-  invoiced: "Factura a fost înregistrată. Livrarea poate pleca spre revânzători.",
-};
+const fields = "id,prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,partners(business_name,location_name,type,is_important_client,contact_phone,contact_email,partner_discounts(category,percent)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,products(name,sku,variant_label,category))" as const;
 
-const errors: Record<string, string> = {
-  invalid: "Introdu numărul facturii emise în BOCP (maximum 60 caractere).",
-  already_done: "Livrarea a fost deja facturată sau nu mai așteaptă factura.",
-  save_failed: "Nu am putut salva. Reîncarcă pagina și încearcă din nou.",
-};
+const documentFields = "id,number,client_name,client_vat_id,discount_percent,account_id,bocp_order_id,bocp_proforma_total,invoice_requested_at,invoiced_at,invoiced_by,invoice_number,bocp_invoice_id,cancel_requested_at,cancel_reason,status,sales_document_items(sku,name,quantity,unit_price,vat_percent,discount_percent,position)" as const;
 
-const triggerLabels: Record<string, string> = {
-  manual: "Declanșare manuală",
-  important_client: "Client important",
-  countdown_48h: "Countdown 48h",
-};
+const tabs: { view: BillingView; label: string; title: string }[] = [
+  { view: "reserve", label: "Rezervare", title: "Rezervare în BOCP" },
+  { view: "invoice", label: "Facturare", title: "Facturare" },
+  { view: "products", label: "Status", title: "Status rezervări BOCP" },
+  { view: "history", label: "Istoric", title: "Istoric" },
+];
 
-const fields = "id,status,created_at,ready_confirmed_at,invoice_number,invoiced_at,deliveries(trigger_type,delivery_groups(name),delivery_carts(partner_carts(partners(business_name,location_name),partner_cart_items(quantity_needed,products(name,sku,variant_label)))))" as const;
-
-export default async function BillingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ notice?: string; error?: string }>;
-}) {
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { supabase, profile } = await requireRole(["admin", "operator_facturare"]);
-  const params = await searchParams;
-  const recentStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const [waitingResult, invoicedResult] = await Promise.all([
-    supabase.from("partner_order_fulfillments").select(fields).eq("status", "ready_to_deliver")
-      .order("ready_confirmed_at", { ascending: true }).limit(200),
-    supabase.from("partner_order_fulfillments").select(fields).in("status", ["invoiced", "delivered"])
-      .gte("invoiced_at", recentStart).order("invoiced_at", { ascending: false }).limit(50),
+  const requested = (await searchParams).tab;
+  const view: BillingView = tabs.some((tab) => tab.view === requested) ? requested as BillingView : "reserve";
+
+  const [reserveResult, invoiceResult, productsResult, historyResult, staffResult, docInvoiceResult, docCancelResult, docHistoryResult] = await Promise.all([
+    // On the shelf, but the BOCP order that reserves the stock is not in place yet.
+    supabase.from("partner_carts").select(fields).in("status", ["prepared", "delivered"])
+      .not("prepared_at", "is", null).is("reserved_in_bocp_at", null).order("prepared_at", { ascending: true }).limit(300),
+    // Sent with "Predare - Facturare", not yet invoiced.
+    supabase.from("partner_carts").select(fields).eq("status", "delivered").is("invoiced_at", null)
+      .order("delivered_at", { ascending: true }).limit(300),
+    // Reserved in BOCP and not yet invoiced.
+    view === "products"
+      ? supabase.from("partner_carts").select(fields).not("reserved_in_bocp_at", "is", null).is("invoiced_at", null).limit(500)
+      : Promise.resolve(null),
+    view === "history"
+      ? supabase.from("partner_carts").select(fields).eq("status", "delivered").not("invoiced_at", "is", null)
+        .order("invoiced_at", { ascending: false }).limit(200)
+      : Promise.resolve(null),
+    supabase.rpc("staff_names"),
+    // Proformas billed without the warehouse, and proformas to cancel in BOCP.
+    supabase.from("sales_documents").select(documentFields).eq("status", "issued").not("invoice_requested_at", "is", null)
+      .is("invoiced_at", null).order("invoice_requested_at", { ascending: true }).limit(200),
+    supabase.from("sales_documents").select(documentFields).eq("status", "cancel_requested").order("cancel_requested_at", { ascending: true }).limit(200),
+    view === "history"
+      ? supabase.from("sales_documents").select(documentFields).not("invoiced_at", "is", null).order("invoiced_at", { ascending: false }).limit(200)
+      : Promise.resolve(null),
   ]);
-  const loadError = waitingResult.error ?? invoicedResult.error;
-  const waiting = waitingResult.data ?? [];
-  const invoiced = invoicedResult.data ?? [];
+  const docsToInvoice: BillingDocument[] = docInvoiceResult.data ?? [];
+  const docsToCancel: BillingDocument[] = docCancelResult.data ?? [];
+  const docsHistory: BillingDocument[] = docHistoryResult?.data ?? [];
+  const toReserve: BillingCart[] = reserveResult.data ?? [];
+  const toInvoice: BillingCart[] = invoiceResult.data ?? [];
+  const carts: BillingCart[] = view === "reserve" ? toReserve : view === "invoice" ? toInvoice
+    : view === "products" ? productsResult?.data ?? [] : historyResult?.data ?? [];
+  const names = Object.fromEntries((staffResult.data ?? []).map((user) => [user.id, user.full_name]));
+  const error = reserveResult.error ?? invoiceResult.error ?? productsResult?.error ?? historyResult?.error;
+  const counts: Partial<Record<BillingView, number>> = { reserve: toReserve.length, invoice: toInvoice.length + docsToInvoice.length + docsToCancel.length };
+
+  // "Status" shows BOCP's own reserved stock next to what the B2B carts hold.
+  let bocpReserved: BocpReserved | null = null;
+  let bocpError: string | null = null;
+  if (view === "products" && carts.length) {
+    const codes = new Set(carts.flatMap((cart) => cart.partner_cart_items.map((item) => item.products?.sku).filter((sku): sku is string => !!sku)));
+    try {
+      const stock = await bocpProductStock(codes);
+      bocpReserved = Object.fromEntries([...stock.entries()].map(([code, row]) => [code, { reserved: row.reserved, available: row.available }]));
+    } catch {
+      bocpError = "Stocul din BOCP nu poate fi citit acum (funcționează doar de pe rețeaua permisă în BOCP).";
+    }
+  }
 
   return (
-    <AppShell profile={profile} active="/billing" section="Operațiuni" title="Facturare refill"
-      note={{ title: "Fluxul invers", text: "Factura se emite abia după ce depozitul confirmă pregătirea." }}>
-      <div className="page-heading"><div><p className="eyebrow">FACTURARE</p><h1>Facturare refill</h1><p className="muted">Livrările către revânzători confirmate ca pregătite de depozit. Emite factura în BOCP, apoi înregistreaz-o aici.</p></div><span className="page-heading-chip preview-chip">{waiting.length} de facturat</span></div>
-      {params.notice && notices[params.notice] && <p className="preview-alert success admin-feedback" role="status">{notices[params.notice]}</p>}
-      {params.error && errors[params.error] && <p className="notice error admin-feedback" role="alert">{errors[params.error]}</p>}
-      {loadError ? <p className="notice error" role="alert">Livrările nu pot fi încărcate acum.</p> : <>
-        <section className="admin-card" aria-labelledby="waiting-title">
-          <div className="admin-card-heading"><h2 id="waiting-title">Așteaptă factura</h2><p>Produsele sunt deja pregătite fizic în depozit.</p></div>
-          {waiting.length === 0 ? <p className="admin-empty-note">Nicio livrare nu așteaptă factura. Livrările apar aici după confirmarea „ready to deliver” din depozit.</p> : <div className="partner-list">
-            {waiting.map(item => <FulfillmentCard key={item.id} item={item}>
-              <form action={markInvoiced} className="admin-inline admin-mini-form">
-                <input type="hidden" name="fulfillment_id" value={item.id}/>
-                <input name="invoice_number" maxLength={60} required placeholder="Nr. factură BOCP" aria-label="Număr factură"/>
-                <button className="button button-primary" type="submit">Înregistrează factura</button>
-              </form>
-            </FulfillmentCard>)}
-          </div>}
-        </section>
-        <section className="admin-card partner-list-section" aria-labelledby="invoiced-title">
-          <div className="admin-card-heading"><h2 id="invoiced-title">Facturate în ultimele 30 de zile</h2></div>
-          {invoiced.length === 0 ? <p className="admin-empty-note">Nicio factură de refill înregistrată recent.</p> : <div className="partner-list">
-            {invoiced.map(item => <FulfillmentCard key={item.id} item={item}/>)}
-          </div>}
-        </section>
-      </>}
-    </AppShell>
-  );
-}
-
-type Fulfillment = {
-  id: string;
-  status: string;
-  created_at: string;
-  ready_confirmed_at: string | null;
-  invoice_number: string | null;
-  invoiced_at: string | null;
-  deliveries: {
-    trigger_type: string;
-    delivery_groups: { name: string } | null;
-    delivery_carts: { partner_carts: {
-      partners: { business_name: string; location_name: string } | null;
-      partner_cart_items: { quantity_needed: number; products: { name: string; sku: string; variant_label: string | null } | null }[];
-    } | null }[];
-  } | null;
-};
-
-function FulfillmentCard({ item, children }: { item: Fulfillment; children?: React.ReactNode }) {
-  const carts = (item.deliveries?.delivery_carts ?? []).map(link => link.partner_carts).filter(cart => cart !== null);
-  return (
-    <article className="partner-card">
-      <div className="partner-card-heading">
-        <div>
-          <h3>{item.deliveries?.delivery_groups?.name ?? "Livrare fără grup"}</h3>
-          <p>{triggerLabels[item.deliveries?.trigger_type ?? ""] ?? "Livrare"} · {carts.length} {carts.length === 1 ? "locație" : "locații"}</p>
-          <small>Pregătită {formatDateTime(item.ready_confirmed_at ?? item.created_at)}{item.invoice_number ? ` · factura ${item.invoice_number} din ${formatDateTime(item.invoiced_at)}` : ""}</small>
+    <AppShell profile={profile} active="/billing" section="Operațiuni" title="Facturare B2B"
+      note={{ title: "Facturare B2B", text: "La punerea pe raft, aplicația creează comanda în BOCP și rezervă stocul. Factura se emite în BOCP din comanda respectivă." }}>
+      {error && <p className="notice error admin-feedback" role="alert">Comenzile nu pot fi încărcate acum. Reîncarcă pagina.</p>}
+      <section className="board-panel" aria-label="Facturare B2B">
+        <div className="panel-tabs-row">
+          <h2 className="panel-tabs-title">{tabs.find((tab) => tab.view === view)?.title}</h2>
+          <nav className="board-tabs panel-tabs" aria-label="Vedere">
+            {tabs.map((tab) => <Link key={tab.view} href={tab.view === "reserve" ? "/billing" : `/billing?tab=${tab.view}`}
+              className={view === tab.view ? "active" : ""} aria-current={view === tab.view ? "page" : undefined}>
+              {tab.label}{counts[tab.view] !== undefined && <span>{counts[tab.view]}</span>}</Link>)}
+          </nav>
+          <span aria-hidden="true" />
         </div>
-      </div>
-      <div className="partner-card-grid">
-        {carts.map((cart, index) => <div key={index}>
-          <h4>{cart.partners?.business_name ?? "Revânzător"}<small className="fulfillment-location"> · {cart.partners?.location_name}</small></h4>
-          <ul className="par-list">{cart.partner_cart_items.map((line, lineIndex) => <li key={lineIndex}>
-            <span>{line.products?.name ?? "Produs"}{line.products?.variant_label ? ` · ${line.products.variant_label}` : ""}<small>SKU {line.products?.sku ?? "—"}</small></span>
-            <strong>{line.quantity_needed} buc.</strong>
-          </li>)}</ul>
-        </div>)}
-      </div>
-      {children}
-    </article>
+        {(view === "invoice" || view === "history") && <DocumentRequests toInvoice={docsToInvoice} toCancel={docsToCancel} history={docsHistory} view={view}
+          canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} names={names} />}
+        {view === "invoice" && docsToInvoice.length + docsToCancel.length > 0 && toInvoice.length > 0 && <h3 className="board-subtitle panel-subtitle">Comenzi B2B predate de depozit</h3>}
+        <BillingBoard hideEmpty={(view === "invoice" && docsToInvoice.length + docsToCancel.length > 0) || (view === "history" && docsHistory.length > 0)} carts={carts} view={view} canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} operatorNames={names} bocpReserved={bocpReserved} bocpError={bocpError} />
+      </section>
+    </AppShell>
   );
 }

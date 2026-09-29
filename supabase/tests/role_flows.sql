@@ -3,7 +3,8 @@
 -- (the final RAISE aborts it), so no test data is ever kept.
 -- Run with the Supabase SQL editor or MCP execute_sql; the result is the error message:
 --   "ROLE FLOWS: <passed>/<total> passed" followed by one line per failed check.
--- Needs one active app_user each for admin, owner, operator_depozit and operator_facturare.
+-- Needs one active app_user each for admin, owner, operator_depozit and operator_facturare, and two
+-- catalog products with a BOCP price (the sales agents are created by the test).
 -- Test EANs use the 299 prefix (in-store numbering), so they never collide with the real catalog.
 
 create temp table t_results (seq serial, role text, label text, ok boolean);
@@ -18,8 +19,16 @@ declare
   u_fac uuid := (select id from public.app_users where role = 'operator_facturare' and active order by created_at limit 1);
   u_dep2 uuid := gen_random_uuid();
   u_res uuid := gen_random_uuid();
+  u_acc uuid := gen_random_uuid();
+  u_acc2 uuid := gen_random_uuid();
+  -- Offer numbers come from a sequence, which a rollback does not undo: restored at the end. A run
+  -- that stops on an error before that point leaves a gap; fix it with
+  --   select setval('public.sales_offer_number_seq', <last issued OF number>, true);
+  v_offer_seq bigint := (select last_value from public.sales_offer_number_seq);
+  v_offer_called boolean := (select is_called from public.sales_offer_number_seq);
+  ra uuid; offer uuid; pf uuid; pf2 uuid; pf3 uuid; coll uuid; acart uuid; p1 uuid; p2 uuid;
   g uuid; co uuid; r1 uuid; r2 uuid; r3 uuid;
-  o1 uuid; o2 uuid; ret uuid; d_imp uuid; d_man uuid; ful uuid;
+  o1 uuid; o2 uuid; ret uuid; cart1 uuid;
   v jsonb; v_text text; v_ok boolean;
   v_total integer; v_passed integer; v_failures text;
 begin
@@ -165,38 +174,38 @@ begin
   insert into t_results (role, label, ok) values ('revânzător', 'stocul se rezervă imediat',
     (select quantity_reserved from public.warehouse_stock w join public.products p on p.id = w.product_id where p.sku = 'ZZ-T-A') = 7);
 
-  ---------------------------------------------------------------- DEPOZIT: refill deliveries (3 triggers)
+  ---------------------------------------------------------------- DEPOZIT → FACTURARE: B2B cart flow
   perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
   set local role authenticated;
   insert into t_results (role, label, ok) values ('depozit', 'primește notificarea „refill nou”', exists (select 1 from public.notifications where type = 'refill_nou'));
   perform public.staff_add_refill(r2, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 2)) from public.products where sku = 'ZZ-T-B'), 'whatsapp');
-  insert into t_results (role, label, ok) values ('depozit', 'client prioritar: notificare „livrare imediată”, fără livrare automată',
+  insert into t_results (role, label, ok) values ('depozit', 'client prioritar: notificare „livrare imediată”',
     exists (select 1 from public.notifications where type = 'client_prioritar')
-    and not exists (select 1 from public.deliveries where delivery_group_id = g)
     and (select status from public.partner_carts where partner_id = r2 and status <> 'delivered') = 'open');
-  d_imp := public.create_manual_delivery(array(select id from public.partner_carts where partner_id in (r1, r2) and status = 'open'), g);
-  perform public.staff_add_refill(r3, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 1)) from public.products where sku = 'ZZ-T-C'), 'telefon');
-  d_man := public.create_manual_delivery(array[(select id from public.partner_carts where partner_id = r3 and status = 'open')], null);
-  insert into t_results (role, label, ok) values ('depozit', 'trigger manual: creează livrare', d_man is not null);
-  insert into t_results (role, label, ok) values ('depozit', 'confirmă pregătirea livrării', public.confirm_delivery_ready(d_imp));
-  insert into t_results (role, label, ok) values ('depozit', 'nu poate preda livrarea nefacturată', not public.hand_delivery_to_driver(d_imp));
+  select id into cart1 from public.partner_carts where partner_id = r1 and status = 'open';
+  insert into t_results (role, label, ok) values ('depozit', 'nu poate preda la facturare înainte de raft', not public.hand_partner_cart_to_billing(cart1));
+  insert into t_results (role, label, ok) values ('depozit', 'rezervă coșul pe raft', public.mark_partner_cart_prepared(cart1));
+  insert into t_results (role, label, ok) values ('depozit', 'predă coșul la facturare', public.hand_partner_cart_to_billing(cart1));
+  insert into t_results (role, label, ok) values ('depozit', 'înregistrează comanda BOCP care rezervă stocul',
+    public.record_partner_cart_bocp_order(cart1, '999002', null));
+  insert into t_results (role, label, ok) values ('depozit', 'NU poate marca factura', not public.mark_partner_cart_invoiced(cart1, 'ZZ-F-1', '999001', current_date, null));
   reset role;
 
   perform set_config('request.jwt.claims', json_build_object('sub', u_fac, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  insert into t_results (role, label, ok) values ('facturare', 'primește notificarea „refill de facturat”', exists (select 1 from public.notifications where type = 'refill_de_facturat'));
-  select f.id into ful from public.partner_order_fulfillments f where f.delivery_id = d_imp and f.status = 'ready_to_deliver';
-  insert into t_results (role, label, ok) values ('facturare', 'vede livrarea cu produsele pe ecranul de facturare',
-    ful is not null and (select count(*) from public.delivery_carts dc join public.partner_cart_items i on i.cart_id = dc.cart_id where dc.delivery_id = d_imp) = 2);
-  insert into t_results (role, label, ok) values ('facturare', 'NU poate confirma pregătirea în depozit', not public.confirm_delivery_ready(d_man));
-  insert into t_results (role, label, ok) values ('facturare', 'înregistrează factura refill', public.mark_fulfillment_invoiced(ful, 'ZZ-F-1'));
-  reset role;
-
-  perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
-  set local role authenticated;
-  insert into t_results (role, label, ok) values ('depozit', 'primește notificarea „facturat, poate pleca”', exists (select 1 from public.notifications where type = 'refill_facturat'));
-  insert into t_results (role, label, ok) values ('depozit', 'predă livrarea șoferului', public.hand_delivery_to_driver(d_imp));
-  insert into t_results (role, label, ok) values ('depozit', 'anulează propunerea manuală', public.cancel_delivery(d_man));
+  insert into t_results (role, label, ok) values ('facturare', 'primește „emite factura” la predare',
+    exists (select 1 from public.notifications where type = 'predare_facturare'));
+  insert into t_results (role, label, ok) values ('facturare', 'vede coșul de facturat cu produsele',
+    (select count(*) from public.partner_carts c join public.partner_cart_items i on i.cart_id = c.id where c.id = cart1 and c.status = 'delivered') = 1);
+  insert into t_results (role, label, ok) values ('facturare', 'vede coșul rezervat în BOCP',
+    (select bocp_order_id = '999002' and reserved_in_bocp_at is not null from public.partner_carts where id = cart1));
+  insert into t_results (role, label, ok) values ('facturare', 'nu poate marca facturat fără factură', not public.mark_partner_cart_invoiced(cart1, ' ', '999001', current_date, null));
+  -- Call first, check after: in one expression Postgres may read the row before the update.
+  v_ok := public.mark_partner_cart_invoiced(cart1, 'ZZ-F-1', '999001', current_date, 'https://secure.bocp.eu/test.pdf');
+  insert into t_results (role, label, ok) values ('facturare', 'marchează facturat cu factura din BOCP',
+    v_ok and (select invoice_number = 'ZZ-F-1' and invoiced_by = u_fac from public.partner_carts where id = cart1));
+  insert into t_results (role, label, ok) values ('facturare', 'NU poate rezerva pe raft (depozit)',
+    not public.mark_partner_cart_prepared((select id from public.partner_carts where partner_id = r2 and status = 'open')));
   reset role;
   insert into t_results (role, label, ok) values ('depozit', 'stocul rezervat se eliberează la predare',
     (select quantity_reserved from public.warehouse_stock w join public.products p on p.id = w.product_id where p.sku = 'ZZ-T-A') = 0);
@@ -212,13 +221,18 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
   set local role authenticated;
   perform public.staff_add_refill(r1, (select jsonb_agg(jsonb_build_object('product_id', id, 'quantity', 3)) from public.products where sku = 'ZZ-T-A'), 'telefon');
-  insert into t_results (role, label, ok) values ('depozit', 'rezervă produsele pe raft',
-    public.mark_partner_cart_prepared((select id from public.partner_carts where partner_id = r1 and status = 'open')));
+  select id into cart1 from public.partner_carts where partner_id = r1 and status = 'open';
+  insert into t_results (role, label, ok) values ('depozit', 'rezervă produsele pe raft', public.mark_partner_cart_prepared(cart1));
+  v_ok := public.record_partner_cart_bocp_order(cart1, null, 'date lipsă');
+  insert into t_results (role, label, ok) values ('depozit', 'rezervarea BOCP eșuată rămâne de reîncercat',
+    v_ok and (select reserved_in_bocp_at is null and bocp_order_error = 'date lipsă' from public.partner_carts where id = cart1));
   reset role;
   perform set_config('request.jwt.claims', json_build_object('sub', u_fac, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  insert into t_results (role, label, ok) values ('facturare', 'primește „mută în gestiunea Rezervat” cu produsele',
-    exists (select 1 from public.notifications where type = 'rezervare_stoc' and message like '%ZZ-T-A%×3%Rezervat%'));
+  insert into t_results (role, label, ok) values ('facturare', 'e anunțată când rezervarea în BOCP eșuează',
+    exists (select 1 from public.notifications where type = 'rezervare_bocp_esuata' and related_entity_id = cart1));
+  insert into t_results (role, label, ok) values ('facturare', 'reîncercarea reușită rezervă coșul',
+    public.record_partner_cart_bocp_order(cart1, '999003', null));
   reset role;
 
   ---------------------------------------------------------------- OWNER: read-only dashboard
@@ -235,7 +249,88 @@ begin
   insert into t_results (role, label, ok) values ('owner', 'NU poate căuta comenzi', v_ok);
   begin perform public.staff_add_refill(r1, '[]'::jsonb, 'app'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   insert into t_results (role, label, ok) values ('owner', 'NU poate adăuga refill', v_ok);
+  insert into t_results (role, label, ok) values ('owner', 'NU poate înregistra rezervări BOCP', not public.record_partner_cart_bocp_order(cart1, '999004', null));
   reset role;
+
+  ---------------------------------------------------------------- ACCOUNT: clients, offers, proformas, collections
+  insert into auth.users (id, email, aud, role, instance_id) values
+    (u_acc, 'zz-flow-agent@test.invalid', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+    (u_acc2, 'zz-flow-agent2@test.invalid', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
+  insert into public.app_users (id, full_name, role) values (u_acc, 'ZZ Agent', 'account'), (u_acc2, 'ZZ Agent 2', 'account');
+  select id into p1 from public.products where active and list_price > 0 order by sku limit 1;
+  select id into p2 from public.products where active and list_price > 0 order by sku offset 1 limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', u_acc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  ra := public.save_partner_profile(null, jsonb_build_object('business_name', 'ZZ Client Agent', 'location_name', 'Centru', 'contact_phone', '+40700999201',
+    'type', 'horeca', 'billing_name', 'ZZ Agent SRL', 'vat_id', 'RO42910222', 'billing_street', 'Str. Test 1', 'billing_city', 'București',
+    'billing_county', 'București', 'account_id', u_acc::text));
+  insert into t_results (role, label, ok) values ('account', 'își adaugă clientul', ra is not null and (select account_id = u_acc from public.partners where id = ra));
+  insert into t_results (role, label, ok) values ('account', 'NU vede clienții colegilor în detaliu', (select count(*) from public.partners where id in (r1, r2, r3)) = 0);
+  insert into t_results (role, label, ok) values ('account', 'NU setează discounturi la alți clienți', (select public.save_partner_discounts(r1, '[]'::jsonb)) is not true);
+  coll := public.save_product_collection(null, 'ZZ Colecție', array[p1, p2]);
+  insert into t_results (role, label, ok) values ('account', 'își creează o colecție', coll is not null);
+  offer := public.save_sales_document(null, jsonb_build_object('kind', 'offer', 'partner_id', ra, 'client_name', 'ZZ Agent SRL', 'discount_percent', '15'),
+    jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', '2', 'discount_percent', '20'), jsonb_build_object('product_id', p2, 'quantity', '1')));
+  insert into t_results (role, label, ok) values ('account', 'discount propriu pe produs', (select discount_percent = 20 from public.sales_document_items where document_id = offer and product_id = p1)
+    and (select discount_percent is null from public.sales_document_items where document_id = offer and product_id = p2));
+  v_text := public.issue_sales_document(offer);
+  insert into t_results (role, label, ok) values ('account', 'emite oferta', v_text like 'OF-%');
+  v_ok := public.save_sales_document(offer, jsonb_build_object('kind', 'offer', 'partner_id', ra, 'client_name', 'ZZ Agent SRL', 'discount_percent', '10',
+    'client_vat_id', 'RO42910222', 'client_street', 'Str. Test 1', 'client_city', 'București', 'client_county', 'București'),
+    jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', '3'))) = offer;
+  insert into t_results (role, label, ok) values ('account', 'editează oferta emisă (același număr)', v_ok and (select number = v_text and discount_percent = 10 from public.sales_documents where id = offer));
+  insert into t_results (role, label, ok) values ('account', 'oferta NU pleacă la depozit', public.send_sales_document(offer) is null);
+  pf := public.offer_to_proforma(offer);
+  v_ok := public.start_proforma_issue(pf) and public.record_proforma_order(pf, '999101', null) and public.record_proforma_number(pf, '999999101', 'ZZ PROF 1', current_date, 1);
+  insert into t_results (role, label, ok) values ('account', 'proformă din ofertă, emisă în BOCP', v_ok and (select status = 'issued' and source_document_id = offer from public.sales_documents where id = pf));
+  insert into t_results (role, label, ok) values ('account', 'proforma emisă NU se editează', public.save_sales_document(pf, jsonb_build_object('kind', 'proforma', 'client_name', 'x'),
+    jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', '1'))) is null);
+  acart := public.send_sales_document(pf);
+  insert into t_results (role, label, ok) values ('account', 'Rezervă comanda → depozit', acart is not null and (select source_document_id = pf from public.partner_carts where id = acart));
+  pf2 := public.save_sales_document(null, jsonb_build_object('kind', 'proforma', 'partner_id', ra, 'client_name', 'ZZ Agent SRL', 'client_vat_id', 'RO42910222',
+    'client_street', 'Str. Test 1', 'client_city', 'București', 'client_county', 'București'), jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', '1')));
+  v_ok := public.start_proforma_issue(pf2) and public.record_proforma_order(pf2, '999102', null) and public.record_proforma_number(pf2, '999999102', 'ZZ PROF 2', current_date, 1);
+  insert into t_results (role, label, ok) values ('account', 'Cere factura (fără depozit)', v_ok and public.request_document_invoice(pf2));
+  pf3 := public.save_sales_document(null, jsonb_build_object('kind', 'proforma', 'partner_id', ra, 'client_name', 'ZZ Agent SRL', 'client_vat_id', 'RO42910222',
+    'client_street', 'Str. Test 1', 'client_city', 'București', 'client_county', 'București'), jsonb_build_array(jsonb_build_object('product_id', p2, 'quantity', '1')));
+  v_ok := public.start_proforma_issue(pf3) and public.record_proforma_order(pf3, '999103', null) and public.record_proforma_number(pf3, '999999103', 'ZZ PROF 3', current_date, 1);
+  insert into t_results (role, label, ok) values ('account', 'cere anularea proformei', v_ok and public.request_proforma_cancel(pf3, 'test'));
+  insert into t_results (role, label, ok) values ('account', 'NU marchează singur facturat', not public.mark_document_invoiced(pf2, 'X-1', '1', current_date, null));
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', u_acc2, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into t_results (role, label, ok) values ('account', 'colegul NU vede documentele', (select count(*) from public.sales_documents where id in (offer, pf, pf2, pf3)) = 0);
+  insert into t_results (role, label, ok) values ('account', 'colegul NU vede colecția', not exists (select 1 from public.product_collections where id = coll));
+  insert into t_results (role, label, ok) values ('account', 'colegul NU editează oferta', public.save_sales_document(offer, jsonb_build_object('kind', 'offer', 'client_name', 'x'),
+    jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', '1'))) is null);
+  insert into t_results (role, label, ok) values ('account', 'colegul vede clientul doar în listă', exists (select 1 from public.partner_directory() where id = ra)
+    and not exists (select 1 from public.partners where id = ra));
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', u_dep, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into t_results (role, label, ok) values ('depozit', 'vede proforma coșului (nu rezervă dublu în BOCP)',
+    (select d.bocp_order_id from public.partner_carts c join public.sales_documents d on d.id = c.source_document_id where c.id = acart) = '999101');
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', u_fac, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into t_results (role, label, ok) values ('facturare', 'primește cererea de factură din proformă', exists (select 1 from public.notifications where type = 'cerere_factura' and related_entity_id = pf2));
+  insert into t_results (role, label, ok) values ('facturare', 'primește cererea de anulare a proformei', exists (select 1 from public.notifications where type = 'anulare_proforma' and related_entity_id = pf3));
+  insert into t_results (role, label, ok) values ('facturare', 'facturează proforma', public.mark_document_invoiced(pf2, 'ZZFAC-1', '999999201', current_date, null));
+  insert into t_results (role, label, ok) values ('facturare', 'confirmă anularea proformei', public.confirm_proforma_cancelled(pf3));
+  insert into t_results (role, label, ok) values ('facturare', 'NU vede colecțiile agenților', (select count(*) from public.product_collections) = 0);
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', u_acc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into t_results (role, label, ok) values ('account', 'e anunțat de factură și de anulare',
+    exists (select 1 from public.notifications where type = 'client_facturat' and related_entity_id = pf2 and recipient_user_id = u_acc)
+    and exists (select 1 from public.notifications where type = 'proforma_anulata' and related_entity_id = pf3 and recipient_user_id = u_acc));
+  reset role;
+  perform setval('public.sales_offer_number_seq', v_offer_seq, v_offer_called);
 
   ---------------------------------------------------------------- ADMIN: oversight
   perform set_config('request.jwt.claims', json_build_object('sub', u_admin, 'role', 'authenticated')::text, true);

@@ -1,5 +1,8 @@
+import Image from "next/image";
 import { signOut } from "@/app/login/actions";
+import { RoleSwitcher } from "@/components/role-switcher";
 import { requirePartner } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/orders";
 import { removeOwnItem, submitCounts } from "./actions";
 
@@ -19,13 +22,13 @@ function productLabel(product: { name: string; variant_label: string | null } | 
 }
 
 export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string }> }) {
-  const { supabase, partner } = await requirePartner();
+  const { supabase, partner, preview } = await requirePartner();
   const params = await searchParams;
   const [parsResult, cartsResult, historyResult] = await Promise.all([
     supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)")
       .eq("partner_id", partner.id).limit(500),
     supabase.from("partner_carts").select("id,status,countdown_started_at,partner_cart_items(id,quantity_needed,products(name,variant_label))")
-      .eq("partner_id", partner.id).in("status", ["open", "pending_delivery"]).order("created_at"),
+      .eq("partner_id", partner.id).in("status", ["open", "prepared"]).order("created_at"),
     supabase.from("partner_carts").select("id,delivered_at,partner_cart_items(id,quantity_needed,products(name,variant_label))")
       .eq("partner_id", partner.id).eq("status", "delivered").order("delivered_at", { ascending: false }).limit(10),
   ]);
@@ -33,7 +36,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const pars = (parsResult.data ?? []).filter(par => par.products?.active)
     .sort((a, b) => productLabel(a.products).localeCompare(productLabel(b.products), "ro"));
   const openCart = (cartsResult.data ?? []).find(cart => cart.status === "open");
-  const onTheWay = (cartsResult.data ?? []).filter(cart => cart.status === "pending_delivery");
+  const onTheWay = (cartsResult.data ?? []).filter(cart => cart.status === "prepared");
   const history = historyResult.data ?? [];
   const inProgress = new Map<string, number>();
   for (const cart of cartsResult.data ?? []) for (const line of cart.partner_cart_items as Line[]) {
@@ -44,7 +47,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   return (
     <main className="partner-app">
       <header className="partner-header">
-        <div className="brand"><div className="brand-icon">B<span>·</span></div><div><strong>{partner.business_name}</strong><small>{partner.location_name.toUpperCase()}</small></div></div>
+        <div className="brand"><Image src="/icon.png" alt="" width={300} height={300} className="brand-icon-image" /><div><strong>{partner.business_name}</strong><small>{partner.location_name.toUpperCase()}</small></div></div>
+        {preview && <PreviewSwitcher partnerId={partner.id} />}
         <form action={signOut}><button type="submit" className="text-button">Ieșire</button></form>
       </header>
       <div className="partner-content">
@@ -92,4 +96,11 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
       </div>
     </main>
   );
+}
+
+// Dev mode: the admin previewing this location can switch back from here.
+async function PreviewSwitcher({ partnerId }: { partnerId: string }) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("partners").select("id,business_name").eq("active", true).order("business_name").limit(200);
+  return <RoleSwitcher current={`partner:${partnerId}`} partners={data ?? []} />;
 }

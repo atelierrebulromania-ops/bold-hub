@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ElapsedTimer } from "@/components/elapsed-timer";
+import type { Database } from "@/lib/database.types";
 import { formatDateTime } from "@/lib/orders";
 import { addPartnerRequest, deleteDeliveryGroup, handCartsToBilling, markCartPrepared, saveDeliveryGroup } from "./actions";
 
@@ -18,9 +19,12 @@ export type Partner = {
   partner_par_levels: { id: string; product_id: string; par_level_quantity: number; products: Product }[];
   partner_carts: {
     id: string;
-    status: "open" | "prepared" | "pending_delivery" | "delivered";
+    status: Database["public"]["Enums"]["cart_status"];
     countdown_started_at: string | null;
     prepared_at: string | null;
+    reserved_in_bocp_at: string | null;
+    bocp_order_id: string | null;
+    bocp_order_error: string | null;
     partner_cart_items: { id: string; product_id: string; quantity_needed: number; products: Product }[];
   }[];
 };
@@ -58,15 +62,12 @@ function summarize(partner: Partner) {
   }).sort((a, b) => b.missing - a.missing || productLabel(a.products).localeCompare(productLabel(b.products)));
   const openCart = partner.partner_carts.find((cart) => cart.status === "open") ?? null;
   const prepared = partner.partner_carts.filter((cart) => cart.status === "prepared");
-  const inDelivery = partner.partner_carts.filter((cart) => cart.status === "pending_delivery");
   const units = (items: { quantity_needed: number }[]) => items.reduce((sum, item) => sum + item.quantity_needed, 0);
   return {
     levels,
     openCart,
     prepared,
-    inDelivery,
     openUnits: openCart ? units(openCart.partner_cart_items) : 0,
-    deliveryUnits: inDelivery.reduce((sum, cart) => sum + units(cart.partner_cart_items), 0),
     // Something still has to be picked for the partner's open cart.
     needsRefill: (openCart?.partner_cart_items.length ?? 0) > 0,
   };
@@ -89,11 +90,13 @@ const columns: { stage: Stage; label: string; hint: string }[] = [
 
 function stageOf(info: ReturnType<typeof summarize>): Stage {
   if (info.needsRefill) return "needs";
-  if (info.prepared.length > 0 || info.inDelivery.length > 0) return "prepared";
+  if (info.prepared.length > 0) return "prepared";
   return "complete";
 }
 
-export function PartnersBoard({ partners, groups, catalog }: { partners: Partner[]; groups: DeliveryGroup[]; catalog: CatalogProduct[] }) {
+// `warehouse` is false for sales agents: they follow their clients' orders and add requests, while
+// putting products on the shelf and handing carts to billing stays with the warehouse.
+export function PartnersBoard({ partners, groups, catalog, warehouse = true }: { partners: Partner[]; groups: DeliveryGroup[]; catalog: CatalogProduct[]; warehouse?: boolean }) {
   const [query, setQuery] = useState("");
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -310,8 +313,8 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
                 })}
               </ul>}
               {urgent.length > 0 && <p className="group-urgent">⚡ {urgent.map((partner) => partner.business_name).join(", ")} — livrare imediată</p>}
-              <button type="button" className="button button-primary group-handover" disabled={pending || ready === 0}
-                onClick={() => handOverGroup(group, members)}>Predare - Facturare · {ready} {ready === 1 ? "partener" : "parteneri"}</button>
+              {warehouse && <button type="button" className="button button-primary group-handover" disabled={pending || ready === 0}
+                onClick={() => handOverGroup(group, members)}>Predare - Facturare · {ready} {ready === 1 ? "partener" : "parteneri"}</button>}
             </article>
           );
         })}
@@ -418,7 +421,6 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
                     <b>×{item.quantity_needed}</b>
                   </div>
                 ))}</div>}
-              {summary.deliveryUnits > 0 && <p className="partner-note">În livrare: {summary.deliveryUnits} buc. din {summary.inDelivery.length === 1 ? "coșul trimis" : `${summary.inDelivery.length} coșuri trimise`} spre livrare.</p>}
             </section>
 
             {summary.prepared.map((cart) => (
@@ -429,6 +431,9 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
                     <b className="stock-full">×{item.quantity_needed}</b>
                   </div>
                 ))}</div>
+                {cart.reserved_in_bocp_at
+                  ? <p className="bocp-status ok">✓ Stoc rezervat în BOCP{cart.bocp_order_id ? ` · comanda #${cart.bocp_order_id}` : ""}</p>
+                  : <p className="bocp-status error">{cart.bocp_order_error ? `Nerezervat în BOCP: ${cart.bocp_order_error}` : "Se rezervă în BOCP…"} Facturarea reîncearcă din Facturare B2B.</p>}
               </section>
             ))}
 
@@ -437,7 +442,7 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
             </section>
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
           </div>
-          {(summary.needsRefill || summary.prepared.length > 0) && <div className="detail-actions">
+          {warehouse && (summary.needsRefill || summary.prepared.length > 0) && <div className="detail-actions">
             {summary.needsRefill && <button className="button button-primary" disabled={pending} onClick={() => run(() => markCartPrepared(summary.openCart!.id))}>Produsele rezervate pe raft</button>}
             {summary.prepared.length > 0 && <button className={`button ${summary.needsRefill ? "button-outline" : "button-primary"}`} disabled={pending} onClick={() => handOver(selected)}>Predare - Facturare</button>}
           </div>}
@@ -467,7 +472,7 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
           </div>
           <div className="detail-actions">
             <button className="button button-primary" disabled={pending || !draft.name.trim()} onClick={saveGroup}>{draft.id ? "Salvează modificările" : "Creează grupul"}</button>
-            {draft.id && <button className="button button-quiet" disabled={pending} onClick={removeGroup}>Șterge grupul</button>}
+            {warehouse && draft.id && <button className="button button-quiet" disabled={pending} onClick={removeGroup}>Șterge grupul</button>}
           </div>
         </aside>
       )}
@@ -509,7 +514,7 @@ export function PartnersBoard({ partners, groups, catalog }: { partners: Partner
                       <div><strong>{product ? productLabel(product) : "Produs"}</strong><small>SKU {product?.sku ?? "—"}</small></div>
                       <input className="request-qty" inputMode="numeric" value={line.quantity} aria-label={`Cantitate ${product?.name ?? ""}`}
                         onChange={(event) => setRequest({ ...request, lines: request.lines.map((item, i) => i === index ? { ...item, quantity: event.target.value.replace(/\D/g, "") } : item) })} />
-                      <button type="button" className="text-button" aria-label="Scoate produsul" onClick={() => setRequest({ ...request, lines: request.lines.filter((_, i) => i !== index) })}>×</button>
+                      <button type="button" className="remove-button" title="Scoate" aria-label="Scoate produsul" onClick={() => setRequest({ ...request, lines: request.lines.filter((_, i) => i !== index) })}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
                     </div>
                   );
                 })}</div>}

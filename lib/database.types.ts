@@ -47,97 +47,6 @@ export type Database = {
         }
         Relationships: []
       }
-      deliveries: {
-        Row: {
-          completed_at: string | null
-          confirmed_at: string | null
-          confirmed_by: string | null
-          created_at: string
-          delivery_group_id: string | null
-          id: string
-          route_order: Json | null
-          status: Database["public"]["Enums"]["delivery_status"]
-          trigger_type: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_partner_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          created_at?: string
-          delivery_group_id?: string | null
-          id?: string
-          route_order?: Json | null
-          status?: Database["public"]["Enums"]["delivery_status"]
-          trigger_type: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_partner_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          created_at?: string
-          delivery_group_id?: string | null
-          id?: string
-          route_order?: Json | null
-          status?: Database["public"]["Enums"]["delivery_status"]
-          trigger_type?: Database["public"]["Enums"]["delivery_trigger_type"]
-          triggered_by_partner_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "deliveries_confirmed_by_fkey"
-            columns: ["confirmed_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "deliveries_delivery_group_id_fkey"
-            columns: ["delivery_group_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "deliveries_triggered_by_partner_id_fkey"
-            columns: ["triggered_by_partner_id"]
-            isOneToOne: false
-            referencedRelation: "partners"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_carts: {
-        Row: {
-          cart_id: string
-          delivery_id: string
-        }
-        Insert: {
-          cart_id: string
-          delivery_id: string
-        }
-        Update: {
-          cart_id?: string
-          delivery_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_carts_cart_id_fkey"
-            columns: ["cart_id"]
-            isOneToOne: true
-            referencedRelation: "partner_carts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_carts_delivery_id_fkey"
-            columns: ["delivery_id"]
-            isOneToOne: false
-            referencedRelation: "deliveries"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       delivery_groups: {
         Row: {
           created_at: string
@@ -408,8 +317,28 @@ export type Database = {
           },
         ]
       }
+      product_collection_items: {
+        Row: { collection_id: string; position: number; product_id: string }
+        Insert: { collection_id: string; position?: number; product_id: string }
+        Update: { collection_id?: string; position?: number; product_id?: string }
+        Relationships: [
+          { foreignKeyName: "product_collection_items_collection_id_fkey"; columns: ["collection_id"]; isOneToOne: false; referencedRelation: "product_collections"; referencedColumns: ["id"] },
+          { foreignKeyName: "product_collection_items_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
+      product_collections: {
+        Row: { created_at: string; created_by: string; id: string; name: string; updated_at: string }
+        Insert: { created_at?: string; created_by: string; id?: string; name: string; updated_at?: string }
+        Update: { created_at?: string; created_by?: string; id?: string; name?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "product_collections_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+        ]
+      }
       products: {
         Row: {
+          list_price: number | null
+          list_price_with_vat: number | null
+          vat_percent: number | null
           active: boolean
           bocp_product_id: string | null
           category: string | null
@@ -424,6 +353,9 @@ export type Database = {
           variant_label: string | null
         }
         Insert: {
+          list_price?: number | null
+          list_price_with_vat?: number | null
+          vat_percent?: number | null
           active?: boolean
           bocp_product_id?: string | null
           category?: string | null
@@ -438,6 +370,9 @@ export type Database = {
           variant_label?: string | null
         }
         Update: {
+          list_price?: number | null
+          list_price_with_vat?: number | null
+          vat_percent?: number | null
           active?: boolean
           bocp_product_id?: string | null
           category?: string | null
@@ -577,39 +512,82 @@ export type Database = {
       }
       partner_carts: {
         Row: {
+          source_document_id: string | null
+          bocp_order_id: string | null
+          bocp_order_error: string | null
+          bocp_order_attempted_at: string | null
           countdown_started_at: string | null
           created_at: string
           delivered_at: string | null
           delivered_by: string | null
+          bocp_invoice_id: string | null
           id: string
+          invoice_date: string | null
+          invoice_pdf_url: string | null
+          invoice_number: string | null
+          invoiced_at: string | null
+          invoiced_by: string | null
           partner_id: string
           prepared_at: string | null
           prepared_by: string | null
+          reserved_in_bocp_at: string | null
+          reserved_in_bocp_by: string | null
           status: Database["public"]["Enums"]["cart_status"]
         }
         Insert: {
+          source_document_id?: string | null
+          bocp_order_id?: string | null
+          bocp_order_error?: string | null
+          bocp_order_attempted_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
           delivered_at?: string | null
           delivered_by?: string | null
+          bocp_invoice_id?: string | null
           id?: string
+          invoice_date?: string | null
+          invoice_pdf_url?: string | null
+          invoice_number?: string | null
+          invoiced_at?: string | null
+          invoiced_by?: string | null
           partner_id: string
           prepared_at?: string | null
           prepared_by?: string | null
+          reserved_in_bocp_at?: string | null
+          reserved_in_bocp_by?: string | null
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Update: {
+          source_document_id?: string | null
+          bocp_order_id?: string | null
+          bocp_order_error?: string | null
+          bocp_order_attempted_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
           delivered_at?: string | null
           delivered_by?: string | null
+          bocp_invoice_id?: string | null
           id?: string
+          invoice_date?: string | null
+          invoice_pdf_url?: string | null
+          invoice_number?: string | null
+          invoiced_at?: string | null
+          invoiced_by?: string | null
           partner_id?: string
           prepared_at?: string | null
           prepared_by?: string | null
+          reserved_in_bocp_at?: string | null
+          reserved_in_bocp_by?: string | null
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "partner_carts_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "sales_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "partner_carts_partner_id_fkey"
             columns: ["partner_id"]
@@ -663,67 +641,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      partner_order_fulfillments: {
-        Row: {
-          created_at: string
-          delivered_at: string | null
-          delivery_id: string
-          id: string
-          invoice_number: string | null
-          invoiced_at: string | null
-          invoiced_by: string | null
-          ready_confirmed_at: string | null
-          ready_confirmed_by: string | null
-          status: Database["public"]["Enums"]["partner_order_status"]
-        }
-        Insert: {
-          created_at?: string
-          delivered_at?: string | null
-          delivery_id: string
-          id?: string
-          invoice_number?: string | null
-          invoiced_at?: string | null
-          invoiced_by?: string | null
-          ready_confirmed_at?: string | null
-          ready_confirmed_by?: string | null
-          status?: Database["public"]["Enums"]["partner_order_status"]
-        }
-        Update: {
-          created_at?: string
-          delivered_at?: string | null
-          delivery_id?: string
-          id?: string
-          invoice_number?: string | null
-          invoiced_at?: string | null
-          invoiced_by?: string | null
-          ready_confirmed_at?: string | null
-          ready_confirmed_by?: string | null
-          status?: Database["public"]["Enums"]["partner_order_status"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "partner_order_fulfillments_delivery_id_fkey"
-            columns: ["delivery_id"]
-            isOneToOne: true
-            referencedRelation: "deliveries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "partner_order_fulfillments_invoiced_by_fkey"
-            columns: ["invoiced_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "partner_order_fulfillments_ready_confirmed_by_fkey"
-            columns: ["ready_confirmed_by"]
-            isOneToOne: false
-            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
         ]
@@ -782,6 +699,16 @@ export type Database = {
       }
       partners: {
         Row: {
+          account_id: string | null
+          bocp_contact_id: string | null
+          billing_name: string | null
+          vat_id: string | null
+          registration_number: string | null
+          billing_street: string | null
+          billing_city: string | null
+          billing_county: string | null
+          billing_zip: string | null
+          billing_country: string
           active: boolean
           account_username: string | null
           auth_user_id: string | null
@@ -796,6 +723,16 @@ export type Database = {
           type: string
         }
         Insert: {
+          account_id?: string | null
+          bocp_contact_id?: string | null
+          billing_name?: string | null
+          vat_id?: string | null
+          registration_number?: string | null
+          billing_street?: string | null
+          billing_city?: string | null
+          billing_county?: string | null
+          billing_zip?: string | null
+          billing_country?: string
           active?: boolean
           account_username?: string | null
           auth_user_id?: string | null
@@ -810,6 +747,16 @@ export type Database = {
           type?: string
         }
         Update: {
+          account_id?: string | null
+          bocp_contact_id?: string | null
+          billing_name?: string | null
+          vat_id?: string | null
+          registration_number?: string | null
+          billing_street?: string | null
+          billing_city?: string | null
+          billing_county?: string | null
+          billing_zip?: string | null
+          billing_country?: string
           active?: boolean
           account_username?: string | null
           auth_user_id?: string | null
@@ -825,12 +772,77 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "partners_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "partners_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "partner_companies"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      partner_discounts: {
+        Row: { category: string | null; created_at: string; id: string; partner_id: string; percent: number }
+        Insert: { category?: string | null; created_at?: string; id?: string; partner_id: string; percent: number }
+        Update: { category?: string | null; created_at?: string; id?: string; partner_id?: string; percent?: number }
+        Relationships: [
+          { foreignKeyName: "partner_discounts_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+        ]
+      }
+      sales_document_items: {
+        Row: {
+          discount_percent: number | null; document_id: string; id: string; name: string; position: number; product_id: string; quantity: number; sku: string; unit_price: number; vat_percent: number }
+        Insert: {
+          discount_percent?: number | null; document_id: string; id?: string; name: string; position?: number; product_id: string; quantity: number; sku: string; unit_price: number; vat_percent: number }
+        Update: {
+          discount_percent?: number | null; document_id?: string; id?: string; name?: string; position?: number; product_id?: string; quantity?: number; sku?: string; unit_price?: number; vat_percent?: number }
+        Relationships: [
+          { foreignKeyName: "sales_document_items_document_id_fkey"; columns: ["document_id"]; isOneToOne: false; referencedRelation: "sales_documents"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_document_items_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
+      sales_documents: {
+        Row: {
+          account_id: string; cart_id: string | null; client_city: string | null; client_county: string | null; client_name: string
+          client_registration: string | null; client_street: string | null; client_vat_id: string | null; client_zip: string | null
+          contact_email: string | null; contact_name: string | null; contact_phone: string | null; created_at: string; discount_percent: number
+          id: string; issued_at: string | null; kind: string; notes: string | null; number: string | null; partner_id: string | null
+          save_as_partner: boolean; sent_at: string | null; status: string; updated_at: string; validity_days: number
+          source_document_id: string | null; bocp_order_id: string | null; bocp_error: string | null; bocp_proforma_id: string | null; bocp_proforma_date: string | null; bocp_proforma_total: number | null; invoice_requested_at: string | null; invoice_requested_by: string | null; invoiced_at: string | null
+          invoiced_by: string | null; invoice_number: string | null; bocp_invoice_id: string | null; invoice_date: string | null; invoice_pdf_url: string | null; cancel_requested_at: string | null; cancel_reason: string | null; cancelled_at: string | null; cancelled_by: string | null
+        }
+        Insert: {
+          account_id: string; cart_id?: string | null; client_city?: string | null; client_county?: string | null; client_name: string
+          client_registration?: string | null; client_street?: string | null; client_vat_id?: string | null; client_zip?: string | null
+          contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null; created_at?: string; discount_percent?: number
+          id?: string; issued_at?: string | null; kind: string; notes?: string | null; number?: string | null; partner_id?: string | null
+          save_as_partner?: boolean; sent_at?: string | null; status?: string; updated_at?: string; validity_days?: number
+          source_document_id?: string | null; bocp_order_id?: string | null; bocp_error?: string | null; bocp_proforma_id?: string | null; bocp_proforma_date?: string | null; bocp_proforma_total?: number | null; invoice_requested_at?: string | null; invoice_requested_by?: string | null; invoiced_at?: string | null
+          invoiced_by?: string | null; invoice_number?: string | null; bocp_invoice_id?: string | null; invoice_date?: string | null; invoice_pdf_url?: string | null; cancel_requested_at?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null
+        }
+        Update: {
+          account_id?: string; cart_id?: string | null; client_city?: string | null; client_county?: string | null; client_name?: string
+          client_registration?: string | null; client_street?: string | null; client_vat_id?: string | null; client_zip?: string | null
+          contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null; created_at?: string; discount_percent?: number
+          id?: string; issued_at?: string | null; kind?: string; notes?: string | null; number?: string | null; partner_id?: string | null
+          save_as_partner?: boolean; sent_at?: string | null; status?: string; updated_at?: string; validity_days?: number
+          source_document_id?: string | null; bocp_order_id?: string | null; bocp_error?: string | null; bocp_proforma_id?: string | null; bocp_proforma_date?: string | null; bocp_proforma_total?: number | null; invoice_requested_at?: string | null; invoice_requested_by?: string | null; invoiced_at?: string | null
+          invoiced_by?: string | null; invoice_number?: string | null; bocp_invoice_id?: string | null; invoice_date?: string | null; invoice_pdf_url?: string | null; cancel_requested_at?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: "sales_documents_account_id_fkey"; columns: ["account_id"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_cart_id_fkey"; columns: ["cart_id"]; isOneToOne: false; referencedRelation: "partner_carts"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_source_document_id_fkey"; columns: ["source_document_id"]; isOneToOne: false; referencedRelation: "sales_documents"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_invoice_requested_by_fkey"; columns: ["invoice_requested_by"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_invoiced_by_fkey"; columns: ["invoiced_by"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+          { foreignKeyName: "sales_documents_cancelled_by_fkey"; columns: ["cancelled_by"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
         ]
       }
       warehouse_stock: {
@@ -867,29 +879,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cancel_delivery: { Args: { p_delivery_id: string }; Returns: boolean }
+      delete_product_collection: { Args: { p_id: string }; Returns: boolean }
+      save_product_collection: { Args: { p_id: string | null; p_name: string; p_product_ids: string[] }; Returns: string | null }
+      confirm_proforma_cancelled: { Args: { p_id: string }; Returns: boolean }
+      mark_document_invoiced: {
+        Args: { p_bocp_invoice_id: string; p_id: string; p_invoice_date: string; p_invoice_number: string; p_invoice_pdf_url: string | null }
+        Returns: boolean
+      }
+      offer_to_proforma: { Args: { p_id: string }; Returns: string | null }
+      record_proforma_number: {
+        Args: { p_bocp_proforma_id: string; p_date: string; p_id: string; p_number: string; p_total: number | null }
+        Returns: boolean
+      }
+      record_proforma_order: { Args: { p_bocp_order_id: string | null; p_error: string | null; p_id: string }; Returns: boolean }
+      request_document_invoice: { Args: { p_id: string }; Returns: boolean }
+      request_proforma_cancel: { Args: { p_id: string; p_reason: string | null }; Returns: boolean }
+      start_proforma_issue: { Args: { p_id: string }; Returns: boolean }
       claim_online_order: { Args: { p_order_id: string }; Returns: boolean }
-      confirm_delivery_ready: {
-        Args: { p_delivery_id: string }
-        Returns: boolean
+      issue_sales_document: { Args: { p_id: string }; Returns: string | null }
+      partner_directory: {
+        Args: never
+        Returns: { account_id: string | null; account_name: string | null; active: boolean; business_name: string; id: string; location_name: string; type: string }[]
       }
-      create_manual_delivery: {
-        Args: { p_cart_ids: string[]; p_group: string | null }
-        Returns: string | null
-      }
-      hand_delivery_to_driver: {
-        Args: { p_delivery_id: string }
-        Returns: boolean
-      }
+      save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json }; Returns: boolean }
+      save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }
+      save_sales_document: { Args: { p_doc: Json; p_id: string | null; p_items: Json }; Returns: string | null }
+      send_sales_document: { Args: { p_id: string }; Returns: string | null }
+      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number }; Returns: boolean }
       link_partner_account: {
         Args: { p_email: string; p_partner_id: string }
         Returns: string
       }
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number }
-      release_cart_from_delivery: {
-        Args: { p_cart_id: string; p_delivery_id: string }
-        Returns: boolean
-      }
       remove_cart_item: { Args: { p_item_id: string }; Returns: boolean }
       staff_add_refill: {
         Args: { p_items: Json; p_partner_id: string; p_source: string }
@@ -930,8 +951,8 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: boolean
       }
-      mark_fulfillment_invoiced: {
-        Args: { p_fulfillment_id: string; p_invoice_number: string }
+      mark_partner_cart_invoiced: {
+        Args: { p_bocp_invoice_id: string; p_cart_id: string; p_invoice_date: string; p_invoice_number: string; p_invoice_pdf_url: string | null }
         Returns: boolean
       }
       mark_partner_cart_prepared: {
@@ -944,6 +965,10 @@ export type Database = {
       }
       mark_return_in_shopify: {
         Args: { p_return_id: string }
+        Returns: boolean
+      }
+      record_partner_cart_bocp_order: {
+        Args: { p_bocp_order_id: string | null; p_cart_id: string; p_error: string | null }
         Returns: boolean
       }
       register_order_return: {
@@ -975,12 +1000,6 @@ export type Database = {
     }
     Enums: {
       cart_status: "open" | "prepared" | "pending_delivery" | "delivered"
-      delivery_status:
-        | "pending_confirmation"
-        | "confirmed"
-        | "in_transit"
-        | "completed"
-      delivery_trigger_type: "manual" | "important_client" | "countdown_48h"
       notification_channel: "in_app" | "email" | "browser" | "whatsapp"
       online_order_status:
         | "pending"
@@ -995,18 +1014,13 @@ export type Database = {
         | "confirmed"
         | "rejected"
         | "flagged_for_review"
-      partner_order_status:
-        | "preparing"
-        | "ready_to_deliver"
-        | "invoiced"
-        | "delivered"
       return_reason:
         | "neridicat"
         | "refuzat_livrare"
         | "produs_deteriorat"
         | "altul"
       return_status: "pending_restock" | "restocked"
-      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare"
+      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1135,13 +1149,6 @@ export const Constants = {
   public: {
     Enums: {
       cart_status: ["open", "prepared", "pending_delivery", "delivered"],
-      delivery_status: [
-        "pending_confirmation",
-        "confirmed",
-        "in_transit",
-        "completed",
-      ],
-      delivery_trigger_type: ["manual", "important_client", "countdown_48h"],
       notification_channel: ["in_app", "email", "browser", "whatsapp"],
       online_order_status: [
         "pending",
@@ -1158,12 +1165,6 @@ export const Constants = {
         "rejected",
         "flagged_for_review",
       ],
-      partner_order_status: [
-        "preparing",
-        "ready_to_deliver",
-        "invoiced",
-        "delivered",
-      ],
       return_reason: [
         "neridicat",
         "refuzat_livrare",
@@ -1171,7 +1172,7 @@ export const Constants = {
         "altul",
       ],
       return_status: ["pending_restock", "restocked"],
-      user_role: ["admin", "owner", "operator_depozit", "operator_facturare"],
+      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account"],
     },
   },
 } as const

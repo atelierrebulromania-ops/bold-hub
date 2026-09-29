@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { signOut } from "@/app/login/actions";
@@ -5,21 +6,27 @@ import { NavCountsListener } from "@/components/nav-counts-listener";
 import { NotificationListener } from "@/components/notification-listener";
 import { NotificationRail } from "@/components/notification-rail";
 import { NotificationToggle } from "@/components/notification-toggle";
+import { RoleSwitcher } from "@/components/role-switcher";
 import type { Profile, UserRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const svg = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
 type NavItem = { href: string; label: string; roles: UserRole[]; icon: ReactNode; counter?: Counter };
-type Counter = "orders" | "partners" | "returns";
-const counterTables: Record<Counter, string> = { orders: "online_orders", partners: "partner_carts", returns: "order_returns" };
+type Counter = "orders" | "partners" | "returns" | "billing";
+const counterTables: Record<Counter, string[]> = { orders: ["online_orders"], partners: ["partner_carts"], returns: ["order_returns"], billing: ["partner_carts", "sales_documents"] };
 
 const sections: { label: string; items: NavItem[] }[] = [
   { label: "OPERAȚIUNI", items: [
     { href: "/orders", label: "Comenzi online", roles: ["admin", "operator_depozit"], counter: "orders", icon: <svg {...svg}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h4"/></svg> },
-    { href: "/partners", label: "Comenzi B2B", roles: ["admin", "operator_depozit"], counter: "partners", icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2a5 5 0 0 1 5 5.8"/></svg> },
+    { href: "/partners", label: "Comenzi B2B", roles: ["admin", "operator_depozit", "account"], counter: "partners", icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2a5 5 0 0 1 5 5.8"/></svg> },
+    { href: "/billing", label: "Facturare B2B", roles: ["admin", "operator_facturare"], counter: "billing", icon: <svg {...svg}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg> },
     { href: "/returns", label: "Retururi", roles: ["admin", "operator_depozit", "operator_facturare"], counter: "returns", icon: <svg {...svg}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> },
-    { href: "/billing", label: "Facturare refill", roles: ["admin", "operator_facturare"], icon: <svg {...svg}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg> },
+  ] },
+  { label: "VÂNZĂRI", items: [
+    { href: "/account", label: "Clienții mei", roles: ["account"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11h6M19 8v6"/></svg> },
+    { href: "/account/offers", label: "Oferte și proforme", roles: ["account"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
+    { href: "/account/catalog", label: "Catalog și prețuri", roles: ["account"], icon: <svg {...svg}><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg> },
   ] },
   { label: "ISTORIC", items: [
     { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
@@ -55,7 +62,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   const shown = new Set(visible.flatMap(group => group.items.flatMap(item => item.counter ? [item.counter] : [])));
   const countOf = (enabled: boolean, query: () => PromiseLike<{ count: number | null }>) =>
     enabled ? Promise.resolve(query()).then(result => result.count ?? 0) : Promise.resolve(0);
-  const [{ count: unread }, { data: recent }, orders, partners, returns] = await Promise.all([
+  const [{ count: unread }, { data: recent }, orders, partners, returns, billing, switcherPartners] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null).or(addressed),
     supabase.from("notifications").select("id,message,related_entity_type,read_at,created_at")
       .or(addressed).order("created_at", { ascending: false }).limit(30),
@@ -65,14 +72,26 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
       .eq("status", "open")),
     countOf(shown.has("returns"), () => supabase.from("order_returns").select("id", { count: "exact", head: true })
       .eq("status", "pending_restock")),
+    // Billing: carts whose BOCP reservation failed, handed carts to invoice, and proformas to invoice or cancel.
+    Promise.all([
+      countOf(shown.has("billing"), () => supabase.from("partner_carts").select("id", { count: "exact", head: true })
+        .in("status", ["prepared", "delivered"]).not("prepared_at", "is", null).is("reserved_in_bocp_at", null)),
+      countOf(shown.has("billing"), () => supabase.from("partner_carts").select("id", { count: "exact", head: true })
+        .eq("status", "delivered").is("invoiced_at", null)),
+      countOf(shown.has("billing"), () => supabase.from("sales_documents").select("id", { count: "exact", head: true })
+        .or("and(status.eq.issued,invoice_requested_at.not.is.null,invoiced_at.is.null),status.eq.cancel_requested")),
+    ]).then(([toReserve, toInvoice, documents]) => toReserve + toInvoice + documents),
+    profile.realRole === "admin"
+      ? supabase.from("partners").select("id,business_name").eq("active", true).order("business_name").limit(200).then((result) => result.data ?? [])
+      : Promise.resolve([]),
   ]);
-  const counts: Record<Counter, number> = { orders, partners, returns };
+  const counts: Record<Counter, number> = { orders, partners, returns, billing };
   const badge = (item: NavItem) => item.counter && counts[item.counter] > 0
     ? <span className="nav-count" aria-label={`${counts[item.counter]} de procesat`}>{counts[item.counter]}</span> : null;
   return (
     <main className="app-shell" data-rail="open">
       <aside className="app-sidebar" aria-label="Navigație principală">
-        <div className="brand"><div className="brand-icon">B<span>·</span></div><div><strong>BoldHub</strong><small>ATELIER REBUL</small></div></div>
+        <div className="brand brand-wordmark"><Image src="/logo.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /><small>ATELIER REBUL</small></div>
         <nav className="sidebar-nav">
           {visible.map((group, index) => <div className="sidebar-group" key={group.label}>
             <p className={index === 0 ? "sidebar-label" : "sidebar-label admin-sidebar-label"}>{group.label}</p>
@@ -87,10 +106,10 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
       <div className="app-main">
         <header className="topbar">
           <div className="breadcrumb"><span>{section}</span><span aria-hidden="true">/</span><strong>{title}</strong></div>
-          <div className="topbar-right">{topbarExtra}
+          <div className="topbar-right">{profile.realRole === "admin" && <RoleSwitcher current={profile.role} partners={switcherPartners} />}{topbarExtra}
             <NotificationToggle unread={unread ?? 0} icon={bellIcon} />
             <NotificationListener role={profile.role} userId={profile.id}/>
-            {shown.size > 0 && <NavCountsListener tables={[...shown].map(counter => counterTables[counter])} />}</div>
+            {shown.size > 0 && <NavCountsListener tables={[...new Set([...shown].flatMap(counter => counterTables[counter]))]} />}</div>
         </header>
         <div className="page-content">{children}</div>
       </div>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { homeFor } from "@/lib/auth";
+import { homeFor, viewAs } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,10 @@ export default async function Home() {
   if (!userId) redirect("/login");
   const { data: profile } = await supabase.from("app_users")
     .select("role,active").eq("id", userId).maybeSingle();
-  if (profile?.active) redirect(homeFor(profile.role));
+  if (profile?.active) {
+    const view = await viewAs(profile.role);
+    redirect(view && "partnerId" in view ? "/partner" : homeFor(view?.role ?? profile.role));
+  }
   const { data: partner } = await supabase.from("partners")
     .select("id").eq("auth_user_id", userId).eq("active", true).maybeSingle();
   redirect(partner ? "/partner" : "/access");

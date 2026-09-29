@@ -1,6 +1,6 @@
 /** Fixed, read-only BOCP endpoints. Keep credentials on the server. */
 
-type BocpListEndpoint = "invoices/list" | "marketplace/orders/list" | "marketplace/connectors/list" | "product/list";
+type BocpListEndpoint = "invoices/list" | "proformas/list" | "marketplace/orders/list" | "marketplace/connectors/list" | "product/list" | "contacts/list/include:address,pricelist";
 
 type BocpListEnvelope = {
   is_error?: boolean | number;
@@ -20,6 +20,7 @@ type BocpListOptions = {
   page?: number;
   modifiedAfter?: string;
   dateFrom?: string;
+  id?: string;
 };
 
 function validIsoDate(value: string): boolean {
@@ -61,6 +62,11 @@ export async function bocpGetList(endpoint: BocpListEndpoint, options: BocpListO
   if (options.dateFrom) {
     if (!validIsoDate(options.dateFrom)) throw new Error("BOCP dateFrom must use a valid YYYY-MM-DD date.");
     segments.push(`datefrom:${options.dateFrom}`);
+  }
+
+  if (options.id !== undefined) {
+    if (!/^[1-9][0-9]{0,18}$/.test(options.id)) throw new Error("Invalid BOCP id.");
+    segments.push(`id:${options.id}`);
   }
 
   if (options.modifiedAfter) {

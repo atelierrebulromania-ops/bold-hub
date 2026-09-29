@@ -8,7 +8,7 @@ type Result = { ok: boolean; message: string };
 
 const page = "/admin/users";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const roles: UserRole[] = ["admin", "owner", "operator_depozit", "operator_facturare"];
+const roles: UserRole[] = ["admin", "owner", "operator_depozit", "operator_facturare", "account"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function cleanProfile(input: { fullName: string; email: string; role: string }) {
