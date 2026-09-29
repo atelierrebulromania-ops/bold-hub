@@ -4,7 +4,10 @@ import { isEan } from "./preview.ts";
 
 type DataRecord = Record<string, unknown>;
 
-export type BocpCatalogProduct = { sku: string; name: string; ean: string | null; stock: number | null };
+export type BocpCatalogProduct = {
+  sku: string; name: string; ean: string | null; stock: number | null;
+  category: string | null; price: number | null; priceWithVat: number | null; vatPercent: number | null;
+};
 
 export type BocpCatalogSummary = {
   activeProducts: number;
@@ -43,11 +46,16 @@ export function parseBocpCatalog(rows: unknown[]): { products: BocpCatalogProduc
   const products = active.map(row => {
     const code = text(row.custom_barcode);
     const stock = Number(text(row.stoc_global));
+    const amount = (value: unknown) => { const parsed = Number(text(value)); return text(value) !== "" && Number.isFinite(parsed) && parsed >= 0 ? parsed : null; };
     return {
       sku: text(row.cod_produs),
       name: (text(row.product_name) || text(row.cod_produs)).slice(0, 300),
       ean: isEan(code) && !ambiguous.has(code) ? code : null,
       stock: text(row.stoc_global) !== "" && Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : null,
+      category: text(row.category_name).slice(0, 120) || null,
+      price: amount(row.pret_vanzare),
+      priceWithVat: amount(row.pret_vanzare_cu_tva),
+      vatPercent: amount(row.cota_tva_vanzare),
     };
   });
 

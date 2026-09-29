@@ -193,8 +193,11 @@ export function analyzeBocpImport(ordersInput: unknown[], invoicesInput: unknown
   }
 
   const seen = new Set<string>();
+  // Orders the app itself sent through the B2B connector are partner orders, not online orders.
+  const b2bConnectorId = process.env.BOCP_B2B_CONNECTOR_ID ?? "";
   for (const order of orders) {
     if (isFlagged(order.deleted) || string(order.status).startsWith("VOIDED")) continue;
+    if (b2bConnectorId && string(record(order.connector)?.connector_id) === b2bConnectorId) continue;
     for (const link of records(order.invoices)) {
       report.linkedInvoices++;
       const key = invoiceKey(link.seria, link.nr);

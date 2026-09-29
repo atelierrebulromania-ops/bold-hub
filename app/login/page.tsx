@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { signIn } from "./actions";
 
 export default async function LoginPage({
@@ -8,7 +9,7 @@ export default async function LoginPage({
   const { error } = await searchParams;
   return (
     <main className="login-screen">
-      <div className="login-mark">B<span>·</span></div>
+      <Image src="/logo.png" alt="BoldHub" width={1446} height={440} priority className="login-logo" />
       <section className="login-card">
         <p className="eyebrow">Atelier Rebul · operațiuni</p>
         <h1>Bine ai venit în BoldHub.</h1>

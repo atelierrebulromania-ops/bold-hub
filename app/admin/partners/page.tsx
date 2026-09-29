@@ -1,10 +1,11 @@
 import { AppShell } from "@/components/app-shell";
 import { accountErrorMessages } from "@/lib/account-admin";
+import { PartnerBillingEditor } from "./partner-billing";
 import { minPasswordLength } from "@/lib/accounts";
 import { requireRole } from "@/lib/auth";
 import {
   assignDeliveryGroup, createCompany, createDeliveryGroup, createPartner, createPartnerAccount,
-  removeDeliveryGroup, removePartnerAccount, setParLevel, setPartnerPassword,
+  removeDeliveryGroup, removePartnerAccount, setParLevel, setPartnerAgent, setPartnerPassword,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ const notices: Record<string, string> = {
   account_linked: "Contul a fost creat. Partenerul poate intra în aplicație cu username-ul și parola.",
   account_unlinked: "Contul partenerului a fost șters.",
   account_password: "Parola partenerului a fost schimbată.",
+  agent_saved: "Agentul partenerului a fost salvat.",
 };
 
 const errors: Record<string, string> = {
@@ -41,15 +43,17 @@ export default async function PartnersPage({
 }) {
   const { supabase, profile } = await requireRole(["admin"]);
 
-  const [companiesResult, groupsResult, partnersResult, membershipsResult, parsResult, productsResult] = await Promise.all([
+  const [companiesResult, groupsResult, partnersResult, membershipsResult, parsResult, productsResult, agentsResult] = await Promise.all([
     supabase.from("partner_companies").select("id,company_name").order("company_name").limit(500),
     supabase.from("delivery_groups").select("id,name,description").order("name").limit(500),
-    supabase.from("partners").select("id,company_id,business_name,location_name,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username")
+    supabase.from("partners").select("id,company_id,business_name,location_name,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username,account_id,bocp_contact_id,billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip")
       .order("business_name").limit(500),
     supabase.from("partner_delivery_groups").select("partner_id,delivery_group_id").limit(2000),
     supabase.from("partner_par_levels").select("partner_id,product_id,par_level_quantity,products(name,sku)").limit(2000),
     supabase.from("products").select("id", { count: "exact", head: true }).eq("active", true),
+    supabase.from("app_users").select("id,full_name").eq("role", "account").eq("active", true).order("full_name"),
   ]);
+  const agents = agentsResult.data ?? [];
   const loadError = [companiesResult, groupsResult, partnersResult, membershipsResult, parsResult, productsResult]
     .some(result => result.error);
   const companies = companiesResult.data ?? [];
@@ -145,6 +149,18 @@ export default async function PartnersPage({
                       <input name="password" type="text" minLength={minPasswordLength} required autoComplete="new-password" placeholder={`Parolă (min. ${minPasswordLength})`} aria-label={`Parolă pentru ${partner.business_name}`}/>
                       <button className="button button-outline" type="submit">Creează cont</button>
                     </form>}
+                    <form action={setPartnerAgent} className="admin-inline admin-mini-form account-link-form">
+                      <input type="hidden" name="partner_id" value={partner.id}/>
+                      <select name="account_id" defaultValue={partner.account_id ?? ""} aria-label={`Agentul pentru ${partner.business_name}`}>
+                        <option value="">Fără agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.full_name}</option>)}
+                      </select>
+                      <button className="button button-outline" type="submit">Salvează agentul</button>
+                    </form>
+                    <PartnerBillingEditor partnerId={partner.id} initial={{
+                      bocpContactId: partner.bocp_contact_id, billingName: partner.billing_name ?? "", vatId: partner.vat_id ?? "",
+                      registrationNumber: partner.registration_number ?? "", street: partner.billing_street ?? "", city: partner.billing_city ?? "",
+                      county: partner.billing_county ?? "", zip: partner.billing_zip ?? "",
+                    }} />
                     <div className="partner-card-grid">
                       <div><h4>Delivery Groups</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><button type="submit" className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></button></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
                         {groups.length > 0 && <form action={assignDeliveryGroup} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><select name="delivery_group_id" aria-label={`Adaugă ${partner.business_name} în Delivery Group`} required defaultValue=""><option value="" disabled>Alege un grup</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button button-outline" type="submit">Adaugă</button></form>}

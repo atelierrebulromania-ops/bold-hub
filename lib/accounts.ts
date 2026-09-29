@@ -22,4 +22,5 @@ export const roleLabels = {
   owner: "Owner",
   operator_depozit: "Operator depozit",
   operator_facturare: "Operator facturare",
+  account: "Account",
 } as const;
