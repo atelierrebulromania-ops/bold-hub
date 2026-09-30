@@ -6,7 +6,7 @@ import { discountFor, formatMoney, type DiscountRule } from "@/lib/pricing";
 import { saveCollection } from "./actions";
 
 export type CatalogProduct = {
-  id: string; name: string; sku: string; category: string | null;
+  id: string; name: string; sku: string; category: string | null; image_url: string | null; delisted: boolean;
   list_price: number | null; list_price_with_vat: number | null; vat_percent: number | null;
   warehouse_stock: { quantity_bocp_global: number } | null;
 };
@@ -18,6 +18,7 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [clientId, setClientId] = useState("");
+  const [hideEmpty, setHideEmpty] = useState(false);
   // Products ticked to go into a collection.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
@@ -28,6 +29,7 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
   const client = clients.find((item) => item.id === clientId) ?? null;
   const needle = search.trim().toLocaleLowerCase("ro");
   const rows = products.filter((product) => (!category || product.category === category)
+    && (!hideEmpty || (product.warehouse_stock?.quantity_bocp_global ?? 0) > 0)
     && (!needle || `${product.name} ${product.sku}`.toLocaleLowerCase("ro").includes(needle)));
   const allShown = rows.length > 0 && rows.every((product) => selected.has(product.id));
 
@@ -56,16 +58,31 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
 
   return (
     <>
-      <div className="catalog-toolbar">
-        <p>{rows.length} din {products.length} produse cu preț în BOCP.</p>
-        <div className="agent-heading-actions">
-          <input className="group-member-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută produs sau SKU" aria-label="Caută produs" />
-          <select className="catalog-select" value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Categorie">
+      <div className="filter-bar">
+        <label className="filter-field filter-search">
+          <span>Caută</span>
+          <span className="search-input">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nume produs sau SKU" />
+          </span>
+        </label>
+        <label className="filter-field">
+          <span>Categorie</span>
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="">Toate categoriile</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-          <select className="catalog-select" value={clientId} onChange={(event) => setClientId(event.target.value)} aria-label="Prețuri pentru client">
-            <option value="">Preț de listă</option>{clients.map((item) => <option key={item.id} value={item.id}>Preț pentru {item.business_name}</option>)}</select>
-        </div>
+        </label>
+        <label className="filter-field">
+          <span>Prețuri pentru</span>
+          <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
+            <option value="">Preț de listă (toți)</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.business_name}</option>)}</select>
+        </label>
+        <label className={`filter-toggle ${hideEmpty ? "on" : ""}`}>
+          <input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} />
+          <span className="toggle-track" aria-hidden="true"><span /></span>
+          Ascunde stoc 0
+        </label>
       </div>
+      <p className="filter-count">{rows.length === products.length ? `${products.length} produse cu preț în BOCP` : `${rows.length} din ${products.length} produse`}</p>
 
       {selected.size > 0 && <div className="selection-bar" role="region" aria-label="Produse selectate">
         <strong>{selected.size} {selected.size === 1 ? "produs selectat" : "produse selectate"}</strong>
@@ -82,10 +99,10 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
       </div>}
       {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"} catalog-feedback`} role="status">{feedback.message}</p>}
 
-      <div className="handed-table-wrap"><table className="handed-table">
+      <div className="handed-table-wrap"><table className="handed-table catalog-table">
         <thead><tr>
           <th className="check-cell"><input type="checkbox" checked={allShown} onChange={toggleShown} aria-label="Selectează produsele afișate" /></th>
-          <th>Produs</th><th>SKU</th><th>Categorie</th><th>Preț listă (fără TVA)</th><th>Cu TVA</th>{client && <th>Discount</th>}{client && <th>Preț client (fără TVA)</th>}<th>Stoc BOCP</th>
+          <th><span className="sr-only">Poză</span></th><th>Produs</th><th>SKU</th><th>Categorie</th><th>Preț listă (fără TVA)</th><th>Cu TVA</th>{client && <th>Discount</th>}{client && <th>Preț client (fără TVA)</th>}<th>Stoc BOCP</th>
         </tr></thead>
         <tbody>{rows.map((product) => {
           const discount = client ? discountFor(client.partner_discounts, product.category) : 0;
@@ -93,7 +110,11 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
           return (
             <tr key={product.id} className={selected.has(product.id) ? "selected" : ""} onClick={() => toggle(product.id)}>
               <td className="check-cell"><input type="checkbox" checked={selected.has(product.id)} onChange={() => toggle(product.id)} onClick={(event) => event.stopPropagation()} aria-label={`Selectează ${product.name}`} /></td>
-              <td className="strong">{product.name}</td>
+              <td className="thumb-cell">{product.image_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img className="product-thumb" src={product.image_url} alt="" loading="lazy" />
+                : <span className="product-thumb empty" aria-hidden="true" />}</td>
+              <td className="strong">{product.name}{product.delisted && <span className="delisted-chip" title="Marcat „delistat” în BOCP: nu mai vine de la furnizor">Delistat</span>}</td>
               <td className="nowrap">{product.sku}</td>
               <td>{product.category ?? "—"}</td>
               <td className="nowrap">{formatMoney(price)} lei</td>

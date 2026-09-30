@@ -242,11 +242,11 @@ begin
   insert into t_results (role, label, ok) values ('owner', 'dashboard: comenzi predate', (v->'online'->>'handed')::int >= 1);
   insert into t_results (role, label, ok) values ('owner', 'dashboard: retururi', (v->'returns'->>'registered')::int >= 1);
   insert into t_results (role, label, ok) values ('owner', 'dashboard: volum per operator', jsonb_array_length(v->'operators') >= 1);
-  insert into t_results (role, label, ok) values ('owner', 'NU vede date de client (comenzi)', (select count(*) from public.online_orders) = 0);
+  insert into t_results (role, label, ok) values ('owner', 'vede istoricul predate curierului, nu comenzile în lucru',
+    exists (select 1 from public.online_orders where id = o1) and not exists (select 1 from public.online_orders where id = o2));
   insert into t_results (role, label, ok) values ('owner', 'NU vede revânzătorii', (select count(*) from public.partners) = 0);
   insert into t_results (role, label, ok) values ('owner', 'NU poate prelua comenzi', not public.claim_online_order(o2));
-  begin perform public.search_online_orders('ZZFLOW'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
-  insert into t_results (role, label, ok) values ('owner', 'NU poate căuta comenzi', v_ok);
+  insert into t_results (role, label, ok) values ('owner', 'caută în comenzi', jsonb_array_length(public.search_online_orders('ZZFLOW')) >= 1);
   begin perform public.staff_add_refill(r1, '[]'::jsonb, 'app'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   insert into t_results (role, label, ok) values ('owner', 'NU poate adăuga refill', v_ok);
   insert into t_results (role, label, ok) values ('owner', 'NU poate înregistra rezervări BOCP', not public.record_partner_cart_bocp_order(cart1, '999004', null));

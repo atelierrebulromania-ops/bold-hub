@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { paymentStatus } from "@/lib/invoice-status";
 import { formatDateTime } from "@/lib/orders";
 import { discountFor, documentTotals, formatMoney, type DiscountRule } from "@/lib/pricing";
 import { cancelProforma, checkProforma, issueDocument, lookupCompany, offerToProforma, requestDocumentInvoice, reserveDocumentOrder, saveDocument, type DocumentInput } from "../../actions";
@@ -14,9 +15,10 @@ export type EditorDocument = {
   contact_email: string | null; contact_phone: string | null; save_as_partner: boolean; discount_percent: number;
   validity_days: number; notes: string | null; bocp_error: string | null; bocp_order_id: string | null; bocp_proforma_total: number | null;
   cart_id: string | null; invoice_requested_at: string | null; invoiced_at: string | null; invoice_number: string | null; invoice_date: string | null;
-  bocp_invoice_id: string | null; cancel_requested_at: string | null; cancel_reason: string | null; cancelled_at: string | null; issued_at: string | null;
+  bocp_invoice_id: string | null; invoice_due_date: string | null; invoice_rest: number | null; cancel_requested_at: string | null; cancel_reason: string | null; cancelled_at: string | null; issued_at: string | null;
   source_document_id: string | null;
-  partner_carts: { id: string; status: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null } | null;
+  partner_carts: { id: string; status: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
+    invoice_due_date: string | null; invoice_rest: number | null } | null;
   sales_document_items: { product_id: string; sku: string; name: string; quantity: number; unit_price: number; vat_percent: number; discount_percent: number | null; position: number }[];
 };
 export type EditorClient = {
@@ -280,7 +282,7 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
         {document?.status === "draft" && document.bocp_error && <p className="bocp-error document-feedback"><strong>BOCP:</strong> {document.bocp_error}</p>}
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"} document-feedback`} role="status">{feedback.message}</p>}
         <div className="document-actions">
-          <Link className="text-button" href="/account/offers">← Înapoi la listă</Link>
+          <Link className="text-button" href={kind === "proforma" ? "/account/offers?tab=proforme" : "/account/offers"}>← Înapoi la listă</Link>
           <span />
           {reopenable && editing && <button type="button" className="text-button" disabled={pending} onClick={onReset}>Renunță la modificări</button>}
           {reopenable && editing && <button type="button" className="button button-primary" disabled={pending || !lines.length || !client.name.trim()} onClick={() => save(false)}>Salvează modificările</button>}
@@ -345,6 +347,12 @@ function DocumentActions({ document, related, pending, act }: {
   </>;
 }
 
+// " · Scadentă în 5 zile" / " · Depășită cu 3 zile · rest …" / " · Plătită" for an invoice.
+function payment(dueDate: string | null, rest: number | null) {
+  const status = paymentStatus({ dueDate, rest }, "staff");
+  return status ? ` · ${status.label}` : "";
+}
+
 function formatDay(value: string) {
   return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
 }
@@ -370,10 +378,11 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
     } else if (cart) {
       const stage = cart.invoiced_at ? "Facturată" : cart.status === "delivered" ? "La facturare" : cart.prepared_at ? "Pe raft" : "În depozit (de pregătit)";
       steps.push({ label: "Comandă rezervată", detail: stage, done: cart.status === "delivered" });
-      steps.push({ label: "Factură", detail: cart.invoice_number ?? "Încă nu", done: !!cart.invoiced_at });
+      steps.push({ label: "Factură", done: !!cart.invoiced_at,
+        detail: cart.invoice_number ? `${cart.invoice_number}${payment(cart.invoice_due_date, cart.invoice_rest)}` : "Încă nu" });
     } else if (document.invoice_requested_at) {
       steps.push({ label: "Cerere de factură", detail: formatDateTime(document.invoice_requested_at), done: true });
-      steps.push({ label: "Factură", detail: document.invoice_number ? `${document.invoice_number}${document.invoice_date ? ` · ${formatDay(document.invoice_date)}` : ""}` : "La facturare", done: !!document.invoiced_at });
+      steps.push({ label: "Factură", detail: document.invoice_number ? `${document.invoice_number}${document.invoice_date ? ` · ${formatDay(document.invoice_date)}` : ""}${payment(document.invoice_due_date, document.invoice_rest)}` : "La facturare", done: !!document.invoiced_at });
     } else if (document.status === "issued") {
       steps.push({ label: "Următorul pas", detail: "Rezervă comanda la depozit sau cere factura direct. Le poți face oricând de aici.", done: false });
     }

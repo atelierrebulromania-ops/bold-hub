@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { resolveRange, type RangePreset } from "@/lib/dashboard-range";
 import { formatDateTime, returnReasonLabels, type ReturnReason } from "@/lib/orders";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function DashboardPage({
   return (
     <AppShell profile={profile} active="/dashboard" section="Monitorizare" title="Dashboard"
       note={{ title: "Doar vizualizare", text: "Dashboard-ul nu modifică nimic în operațiuni." }}>
-      <div className="page-heading"><div><p className="eyebrow">MONITORIZARE</p><h1>Dashboard</h1><p className="muted">Activitatea depozitului: {dayLabel(range.fromDay)} – {dayLabel(range.toDay)}</p></div><span className="page-heading-chip preview-chip">Doar citire</span></div>
+      <div className="page-heading"><div><p className="eyebrow">MONITORIZARE</p><h1>Dashboard</h1><p className="muted">Activitatea depozitului: {dayLabel(range.fromDay)} – {dayLabel(range.toDay)}</p></div></div>
 
       <div className="dashboard-filters" role="group" aria-label="Interval">
         <div className="dashboard-presets">{presets.map(preset => <Link key={preset.value} href={`/dashboard?range=${preset.value}`}
@@ -57,7 +58,7 @@ export default async function DashboardPage({
           <input type="hidden" name="range" value="custom"/>
           <label>De la <input type="date" name="from" defaultValue={range.fromDay} required/></label>
           <label>Până la <input type="date" name="to" defaultValue={range.toDay} required/></label>
-          <button type="submit" className={range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</button>
+          <SubmitButton className={range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</SubmitButton>
         </form>
       </div>
 

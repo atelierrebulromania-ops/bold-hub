@@ -41,6 +41,7 @@ export function homeFor(role: UserRole): string {
   if (role === "owner") return "/dashboard";
   if (role === "account") return "/account";
   if (role === "operator_facturare") return "/returns";
+  if (role === "operator_depozit") return "/warehouse";
   return "/orders";
 }
 

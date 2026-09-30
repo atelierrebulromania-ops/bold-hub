@@ -9,6 +9,8 @@ import { NotificationToggle } from "@/components/notification-toggle";
 import { RoleSwitcher } from "@/components/role-switcher";
 import type { Profile, UserRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { LinkPending } from "@/components/link-pending";
+import { SubmitButton } from "@/components/submit-button";
 
 const svg = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
@@ -17,6 +19,9 @@ type Counter = "orders" | "partners" | "returns" | "billing";
 const counterTables: Record<Counter, string[]> = { orders: ["online_orders"], partners: ["partner_carts"], returns: ["order_returns"], billing: ["partner_carts", "sales_documents"] };
 
 const sections: { label: string; items: NavItem[] }[] = [
+  { label: "DEPOZIT", items: [
+    { href: "/warehouse", label: "Dashboard", roles: ["operator_depozit"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
+  ] },
   { label: "OPERAȚIUNI", items: [
     { href: "/orders", label: "Comenzi online", roles: ["admin", "operator_depozit"], counter: "orders", icon: <svg {...svg}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h4"/></svg> },
     { href: "/partners", label: "Comenzi B2B", roles: ["admin", "operator_depozit", "account"], counter: "partners", icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2a5 5 0 0 1 5 5.8"/></svg> },
@@ -24,15 +29,18 @@ const sections: { label: string; items: NavItem[] }[] = [
     { href: "/returns", label: "Retururi", roles: ["admin", "operator_depozit", "operator_facturare"], counter: "returns", icon: <svg {...svg}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> },
   ] },
   { label: "VÂNZĂRI", items: [
-    { href: "/account", label: "Clienții mei", roles: ["account"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11h6M19 8v6"/></svg> },
+    { href: "/account", label: "Clienți", roles: ["account"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11h6M19 8v6"/></svg> },
     { href: "/account/offers", label: "Oferte și proforme", roles: ["account"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
-    { href: "/account/catalog", label: "Catalog și prețuri", roles: ["account"], icon: <svg {...svg}><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg> },
-  ] },
-  { label: "ISTORIC", items: [
-    { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
+    { href: "/account/catalog", label: "Catalog produse", roles: ["account"], icon: <svg {...svg}><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg> },
   ] },
   { label: "MONITORIZARE", items: [
     { href: "/dashboard", label: "Dashboard", roles: ["admin", "owner"], icon: <svg {...svg}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> },
+    { href: "/dashboard/clients", label: "Clienți", roles: ["owner"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4"/></svg> },
+    { href: "/dashboard/team", label: "Activitate echipă", roles: ["owner"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.5a3 3 0 0 1 0 6M18 20a6 6 0 0 0-3-5.2"/></svg> },
+    { href: "/dashboard/receivables", label: "Facturi restante", roles: ["owner"], icon: <svg {...svg}><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg> },
+  ] },
+  { label: "ISTORIC", items: [
+    { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "owner", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },
   { label: "ADMINISTRARE", items: [
     { href: "/admin/users", label: "Utilizatori", roles: ["admin"], icon: <svg {...svg}><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg> },
@@ -91,16 +99,16 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   return (
     <main className="app-shell" data-rail="open">
       <aside className="app-sidebar" aria-label="Navigație principală">
-        <div className="brand brand-wordmark"><Image src="/logo.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /><small>ATELIER REBUL</small></div>
+        <div className="brand brand-wordmark"><Image src="/logo-light.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /></div>
         <nav className="sidebar-nav">
           {visible.map((group, index) => <div className="sidebar-group" key={group.label}>
             <p className={index === 0 ? "sidebar-label" : "sidebar-label admin-sidebar-label"}>{group.label}</p>
             {group.items.map(item => item.href === active
               ? <span className="sidebar-link active" aria-current="page" key={item.href} title={item.label}>{item.icon}{item.label}{badge(item)}</span>
-              : <Link className="sidebar-link" href={item.href} key={item.href} title={item.label}>{item.icon}{item.label}{badge(item)}</Link>)}
+              : <Link className="sidebar-link" href={item.href} key={item.href} title={item.label}>{item.icon}{item.label}<LinkPending />{badge(item)}</Link>)}
           </div>)}
         </nav>
-        <div className="user-menu sidebar-user"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><form action={signOut}><button type="submit" className="logout-button" aria-label="Ieșire din cont" title="Ieșire din cont"><svg {...svg}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></button></form></div>
+        <div className="user-menu sidebar-user"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><form action={signOut}><SubmitButton className="logout-button" aria-label="Ieșire din cont" title="Ieșire din cont"><svg {...svg}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></SubmitButton></form></div>
         <div className="sidebar-bottom"><span className="sidebar-bottom-icon" aria-hidden="true">i</span><div><strong>{note.title}</strong><p>{note.text}</p></div></div>
       </aside>
       <div className="app-main">

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
-import { enableAll, saveEan, setMode, syncCatalog } from "./actions";
+import { cookies } from "next/headers";
+import { catalogScopeCookie, isB2bSku } from "@/lib/b2b-products";
+import { enableAll, saveEan, setCatalogScope, setMode, syncCatalog } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +27,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const filter = params.filter === "missing" || params.filter === "sku" ? params.filter : "all";
   const { data, error } = await supabase.from("products").select("id,sku,ean,name,variant_label,scan_mode,active")
     .eq("active", true).order("name").limit(2000);
-  const products = data ?? [];
+  const everything = data ?? [];
+  const scope = (await cookies()).get(catalogScopeCookie)?.value === "all" ? "all" : "ar";
+  const products = scope === "all" ? everything : everything.filter(product => isB2bSku(product.sku));
   const withEan = products.filter(product => product.ean).length;
   const eanMode = products.filter(product => product.scan_mode === "ean").length;
-  const ready = products.filter(product => product.ean && product.scan_mode === "sku").length;
+  // "Activează EAN pentru toate" applies to the whole catalog, whatever is shown.
+  const ready = everything.filter(product => product.ean && product.scan_mode === "sku").length;
   const visible = products.filter(product => filter === "missing" ? !product.ean : filter === "sku" ? product.scan_mode === "sku" : true);
   const enabled = params.notice?.startsWith("enabled_") ? Number(params.notice.slice(8)) : null;
 
@@ -54,10 +60,18 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           <div className="admin-card-heading catalog-heading">
             <div><h2>Produse</h2><p>EAN-ul de scanare vine din câmpul BOCP „Cod bare” (câmpul „Cod EAN” din BOCP nu este folosit). Schimbarea modului afectează doar comenzile încă nepreluate.</p></div>
             <div className="heading-actions">
-              <form action={syncCatalog}><input type="hidden" name="filter" value={filter}/><button className="button button-outline" type="submit">Sincronizează din BOCP</button></form>
-              {ready > 0 && <form action={enableAll}><input type="hidden" name="filter" value={filter}/><button className="button button-primary" type="submit">Activează EAN pentru toate cele {ready}</button></form>}
+              <form action={syncCatalog}><input type="hidden" name="filter" value={filter}/><SubmitButton className="button button-outline">Sincronizează din BOCP</SubmitButton></form>
+              {ready > 0 && <form action={enableAll}><input type="hidden" name="filter" value={filter}/><SubmitButton className="button button-primary">Activează EAN pentru toate cele {ready}{scope === "ar" ? " (tot catalogul)" : ""}</SubmitButton></form>}
             </div>
           </div>
+          <form action={setCatalogScope} className="catalog-scope" aria-label="Produse afișate">
+            <input type="hidden" name="filter" value={filter}/>
+            <span>Produse afișate</span>
+            <div className="dashboard-presets">
+              <SubmitButton name="scope" value="ar" className={scope === "ar" ? "preset active" : "preset"} aria-pressed={scope === "ar"}>Atelier Rebul (AT, PA)</SubmitButton>
+              <SubmitButton name="scope" value="all" className={scope === "all" ? "preset active" : "preset"} aria-pressed={scope === "all"}>Toate din BOCP</SubmitButton>
+            </div>
+          </form>
           <div className="dashboard-presets catalog-filters">
             <Link className={filter === "all" ? "preset active" : "preset"} href="/admin/catalog">Toate</Link>
             <Link className={filter === "missing" ? "preset active" : "preset"} href="/admin/catalog?filter=missing">Fără EAN</Link>
@@ -73,13 +87,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 <td><form action={saveEan} className="admin-inline catalog-ean-form">
                   <input type="hidden" name="product_id" value={product.id}/><input type="hidden" name="filter" value={filter}/>
                   <input name="ean" defaultValue={product.ean ?? ""} inputMode="numeric" maxLength={32} placeholder="EAN (8–14 cifre)" aria-label={`EAN pentru ${product.name}`}/>
-                  <button className="button button-outline" type="submit">Salvează</button>
+                  <SubmitButton className="button button-outline">Salvează</SubmitButton>
                 </form></td>
                 <td><form action={setMode}>
                   <input type="hidden" name="product_id" value={product.id}/><input type="hidden" name="filter" value={filter}/>
                   <input type="hidden" name="mode" value={product.scan_mode === "ean" ? "sku" : "ean"}/>
                   <span className={product.scan_mode === "ean" ? "partner-tag linked" : "partner-tag"}>{product.scan_mode === "ean" ? "EAN" : "SKU"}</span>
-                  <button className="text-button catalog-toggle" type="submit" disabled={product.scan_mode === "sku" && !product.ean}>{product.scan_mode === "ean" ? "Revino la SKU" : "Treci pe EAN"}</button>
+                  <SubmitButton className="text-button catalog-toggle" disabled={product.scan_mode === "sku" && !product.ean}>{product.scan_mode === "ean" ? "Revino la SKU" : "Treci pe EAN"}</SubmitButton>
                 </form></td>
               </tr>)}</tbody>
             </table></div>}

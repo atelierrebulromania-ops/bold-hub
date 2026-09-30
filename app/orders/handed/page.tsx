@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { resolveRange, type RangePreset } from "@/lib/dashboard-range";
 import { HandedTable, type HandedOrder } from "./handed-table";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function HandedOrdersPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string; page?: string; q?: string }>;
 }) {
-  const { supabase, profile } = await requireRole(["admin", "operator_depozit", "operator_facturare"]);
+  const { supabase, profile } = await requireRole(["admin", "owner", "operator_depozit", "operator_facturare"]);
   const params = await searchParams;
   const range = resolveRange({ range: params.range ?? "today", from: params.from, to: params.to });
   const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
@@ -63,7 +64,7 @@ export default async function HandedOrdersPage({
           <input type="hidden" name="range" value="custom"/>
           <label>De la <input type="date" name="from" defaultValue={range.fromDay} required/></label>
           <label>Până la <input type="date" name="to" defaultValue={range.toDay} required/></label>
-          <button type="submit" className={range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</button>
+          <SubmitButton className={range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</SubmitButton>
         </form>
       </div>
 
@@ -76,7 +77,7 @@ export default async function HandedOrdersPage({
             {range.preset === "custom" ? <><input type="hidden" name="range" value="custom"/><input type="hidden" name="from" value={range.fromDay}/><input type="hidden" name="to" value={range.toDay}/></>
               : <input type="hidden" name="range" value={range.preset}/>}
             <input type="search" name="q" defaultValue={query} minLength={3} maxLength={120} placeholder="Factură, comandă, client, email, telefon…" aria-label="Caută o comandă predată" autoComplete="off"/>
-            <button className="button button-primary" type="submit">Caută</button>
+            <SubmitButton className="button button-primary">Caută</SubmitButton>
           </form>
         </div>
         {query && !searching && <p className="admin-empty-note">Introdu cel puțin 3 caractere.</p>}

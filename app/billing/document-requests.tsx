@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { documentTotals, formatMoney, lineDiscount } from "@/lib/pricing";
 import type { BocpInvoiceMatch } from "@/lib/bocp/invoice-lookup";
@@ -22,6 +23,8 @@ export type BillingDocument = {
   invoiced_by: string | null;
   invoice_number: string | null;
   bocp_invoice_id: string | null;
+  invoice_due_date: string | null;
+  invoice_rest: number | null;
   cancel_requested_at: string | null;
   cancel_reason: string | null;
   status: string;
@@ -105,13 +108,14 @@ export function DocumentRequests({ toInvoice, toCancel, history, view, canInvoic
       {view === "history" && history.length > 0 && <div className="document-requests">
         <h3 className="board-subtitle">Facturi din proforme</h3>
         <div className="handed-table-wrap"><table className="handed-table">
-          <thead><tr><th>Facturată la</th><th>Nr. factură</th><th>Client</th><th>Proformă</th><th>Agent</th><th>Facturată de</th><th>Factură</th></tr></thead>
+          <thead><tr><th>Facturată la</th><th>Nr. factură</th><th>Client</th><th>Proformă</th><th>Scadență</th><th>Agent</th><th>Facturată de</th><th>Factură</th></tr></thead>
           <tbody>{history.map((document) => (
             <tr key={document.id} className={`handed-row ${selectedId === document.id ? "selected" : ""}`} onClick={() => open(document.id)}>
               <td className="nowrap">{formatDateTime(document.invoiced_at)}</td>
               <td className="nowrap strong">{document.invoice_number ?? "—"}</td>
               <td><button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); open(document.id); }}>{document.client_name}</button></td>
               <td className="nowrap">{document.number}</td>
+              <td className="nowrap"><PaymentChip dueDate={document.invoice_due_date} rest={document.invoice_rest} /></td>
               <td className="nowrap">{name(document.account_id)}</td>
               <td className="nowrap">{name(document.invoiced_by)}</td>
               <td className="nowrap">{document.bocp_invoice_id && <a className="icon-link" href={`/account/offers/${document.id}/invoice`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}

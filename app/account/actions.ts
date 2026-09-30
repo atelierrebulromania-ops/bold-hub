@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { b2bSkuFilter } from "@/lib/b2b-products";
 import { accountErrorMessages, createLogin, deleteLogin } from "@/lib/account-admin";
 import { lookupAnafCompany, normalizeCui } from "@/lib/anaf";
+import { listBocpInvoices } from "@/lib/bocp/invoices";
 import { requireRole } from "@/lib/auth";
 import type { Json } from "@/lib/database.types";
 import { cancelProformaInBocp, issueProformaInBocp, linkIssuedProforma } from "@/lib/proforma-bocp";
@@ -253,4 +255,75 @@ export async function cancelProforma(documentId: string, reason: string): Promis
   const result = await cancelProformaInBocp(supabase, documentId, reason);
   revalidatePath("/account/offers");
   return result;
+}
+
+export type InvoiceSuggestion = { productId: string; name: string; sku: string; quantity: number; invoices: number; lastDate: string };
+
+// Products a client bought (its BOCP invoices of the last 3 months) that are not on its shelf yet.
+// Invoices are matched by the linked BOCP contact, or by CUI.
+export async function suggestFromInvoices(clientId: string): Promise<Result & { items?: InvoiceSuggestion[] }> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId)) return { ok: false, message: "Clientul nu este valid." };
+  const { data: client } = await supabase.from("partners").select("id,bocp_contact_id,vat_id,partner_par_levels(product_id)").eq("id", clientId).maybeSingle();
+  if (!client) return { ok: false, message: "Nu ai acces la acest client." };
+  const cui = normalizeCui(client.vat_id ?? "");
+  if (!client.bocp_contact_id && !cui) return { ok: false, message: "Clientul nu are CUI și nu e legat de un contact BOCP." };
+
+  // BOCP invoice pages are slow (they carry the lines): months are read two at a time, which BOCP
+  // accepts (six at once gets 429 Too Many Requests).
+  const day = (date: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Bucharest" }).format(date);
+  const months = Array.from({ length: 3 }, (_, index) => {
+    const start = new Date();
+    start.setDate(1);
+    start.setMonth(start.getMonth() - index);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    return { from: day(start), through: day(end) };
+  });
+  const bought = new Map<string, { quantity: number; invoices: number; lastDate: string }>();
+  const readMonth = async (month: { from: string; through: string }) => {
+    const rows: unknown[] = [];
+    let page: number | null = 1;
+    for (let fetched = 0; page !== null && fetched < 15; fetched++) {
+      const result = await listBocpInvoices({ dateFrom: month.from, dateThrough: month.through, page });
+      rows.push(...result.rows);
+      page = result.nextPage;
+    }
+    return rows;
+  };
+  try {
+    const pages: unknown[] = [];
+    for (let index = 0; index < months.length; index += 2) {
+      for (const rows of await Promise.all(months.slice(index, index + 2).map(readMonth))) pages.push(...rows);
+    }
+    for (const raw of pages) {
+      const row = raw as Record<string, unknown>;
+      const sameContact = client.bocp_contact_id && String(row.bocp_contact_id ?? "") === client.bocp_contact_id;
+      const sameCui = cui && normalizeCui(String(row.client_vat_id ?? "")) === cui;
+      if ((!sameContact && !sameCui) || String(row.document_cancelled ?? "") === "1" || !Array.isArray(row.items)) continue;
+      const date = String(row.doc_date ?? "").slice(0, 10);
+      for (const rawItem of row.items) {
+        const item = rawItem as Record<string, unknown>;
+        const sku = String(item.item_code ?? "").trim();
+        const quantity = Number(item.qty_mu1);
+        if (!sku || !(quantity > 0)) continue;
+        const entry = bought.get(sku) ?? { quantity: 0, invoices: 0, lastDate: date };
+        entry.quantity += quantity;
+        entry.invoices += 1;
+        if (date > entry.lastDate) entry.lastDate = date;
+        bought.set(sku, entry);
+      }
+    }
+  } catch {
+    return { ok: false, message: "BOCP nu a răspuns. Încearcă din nou (funcționează doar de pe rețeaua permisă în BOCP)." };
+  }
+  if (!bought.size) return { ok: true, message: "Nu am găsit facturi pentru acest client în ultimele 3 luni.", items: [] };
+
+  const { data: products } = await supabase.from("products").select("id,name,sku").in("sku", [...bought.keys()]).eq("active", true).or(b2bSkuFilter);
+  const onShelf = new Set(client.partner_par_levels.map((level) => level.product_id));
+  const items = (products ?? []).filter((product) => !onShelf.has(product.id)).map((product) => {
+    const entry = bought.get(product.sku)!;
+    // A starting shelf quantity: the average bought per invoice.
+    return { productId: product.id, name: product.name, sku: product.sku, quantity: Math.max(1, Math.round(entry.quantity / entry.invoices)), invoices: entry.invoices, lastDate: entry.lastDate };
+  }).sort((a, b) => b.invoices - a.invoices || a.name.localeCompare(b.name, "ro"));
+  return { ok: true, message: items.length ? `${items.length} ${items.length === 1 ? "produs cumpărat nu e" : "produse cumpărate nu sunt"} încă în stocul inițial.` : "Tot ce a cumpărat clientul e deja în stocul inițial.", items };
 }

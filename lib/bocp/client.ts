@@ -1,6 +1,6 @@
 /** Fixed, read-only BOCP endpoints. Keep credentials on the server. */
 
-type BocpListEndpoint = "invoices/list" | "proformas/list" | "marketplace/orders/list" | "marketplace/connectors/list" | "product/list" | "contacts/list/include:address,pricelist";
+type BocpListEndpoint = "invoices/list" | "proformas/list" | "marketplace/orders/list" | "marketplace/connectors/list" | "product/list" | "product/list/include:images" | "contacts/list/include:address,pricelist";
 
 type BocpListEnvelope = {
   is_error?: boolean | number;
@@ -20,6 +20,7 @@ type BocpListOptions = {
   page?: number;
   modifiedAfter?: string;
   dateFrom?: string;
+  dateThrough?: string;
   id?: string;
 };
 
@@ -62,6 +63,11 @@ export async function bocpGetList(endpoint: BocpListEndpoint, options: BocpListO
   if (options.dateFrom) {
     if (!validIsoDate(options.dateFrom)) throw new Error("BOCP dateFrom must use a valid YYYY-MM-DD date.");
     segments.push(`datefrom:${options.dateFrom}`);
+  }
+
+  if (options.dateThrough) {
+    if (!validIsoDate(options.dateThrough)) throw new Error("BOCP dateThrough must use a valid YYYY-MM-DD date.");
+    segments.push(`datethrough:${options.dateThrough}`);
   }
 
   if (options.id !== undefined) {

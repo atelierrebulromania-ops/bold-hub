@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, setClientParLevel, type ClientInput,
+  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, setClientParLevel, suggestFromInvoices,
+  type ClientInput, type InvoiceSuggestion,
 } from "./actions";
+import { LinkPending } from "@/components/link-pending";
 
 export type AgentClient = {
   id: string;
@@ -29,10 +33,11 @@ export type AgentClient = {
   partner_discounts: { category: string | null; percent: number }[];
   partner_par_levels: { product_id: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
-    invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null; partner_cart_items: { quantity_needed: number }[] }[];
+    invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
+    invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
 };
 
-export type OtherClient = { id: string; business_name: string; location_name: string; type: string; account_name: string | null };
+export type OtherClient = { id: string; business_name: string; location_name: string; type: string; account_id: string | null; account_name: string | null; delivery_groups: string[] };
 export type CatalogItem = { id: string; name: string; sku: string; category: string | null; list_price: number | null };
 
 type Feedback = { ok: boolean; message: string } | null;
@@ -72,13 +77,20 @@ function orderStatus(client: AgentClient) {
   return last ? { tone: "done", label: `Ultima factură ${last.invoice_number ?? ""} · ${formatDateTime(last.invoiced_at)}` } : { tone: "done", label: "Nicio comandă încă" };
 }
 
-export function ClientsBoard({ clients, others, catalog }: { clients: AgentClient[]; others: OtherClient[]; catalog: CatalogItem[] }) {
+export type ClientsView = "mine" | "all";
+
+export function ClientsBoard({ view, clients, directory, catalog, userId }: {
+  view: ClientsView; clients: AgentClient[]; directory: OtherClient[]; catalog: CatalogItem[]; userId: string;
+}) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
   const [search, setSearch] = useState("");
   const selected = selectedId && selectedId !== "new" ? clients.find((client) => client.id === selectedId) ?? null : null;
   const needle = search.trim().toLocaleLowerCase("ro");
-  const visible = clients.filter((client) => !needle || `${client.business_name} ${client.location_name} ${client.vat_id ?? ""}`.toLocaleLowerCase("ro").includes(needle));
+  const matches = (text: string) => !needle || text.toLocaleLowerCase("ro").includes(needle);
+  const mine = clients.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.vat_id ?? ""}`));
+  const everyone = directory.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.account_name ?? ""}`));
+  const own = new Set(clients.map((client) => client.id));
   const categories = useMemo(() => [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro")), [catalog]);
 
   useEffect(() => {
@@ -90,40 +102,59 @@ export function ClientsBoard({ clients, others, catalog }: { clients: AgentClien
 
   return (
     <>
-      <section className="board-panel" aria-label="Clienții mei">
-        <div className="board-panel-heading">
-          <div><h2>Clienții mei</h2><p>{clients.length} {clients.length === 1 ? "client" : "clienți"} în portofoliu.</p></div>
+      <section className="board-panel" aria-label="Clienți">
+        <div className="panel-tabs-row">
+          <h2 className="panel-tabs-title">{view === "mine" ? "Clienții mei" : "Toți clienții"}</h2>
+          <nav className="board-tabs panel-tabs" aria-label="Vedere">
+            <Link href="/account" className={view === "mine" ? "active" : ""} aria-current={view === "mine" ? "page" : undefined}>Clienții mei<span>{clients.length}</span><LinkPending /></Link>
+            <Link href="/account?tab=all" className={view === "all" ? "active" : ""} aria-current={view === "all" ? "page" : undefined}>Toți clienții<span>{directory.length}</span><LinkPending /></Link>
+          </nav>
+          <span aria-hidden="true" />
+        </div>
+        <div className="catalog-toolbar">
+          <p>{view === "mine" ? "Un click pe client deschide fișa completă." : "Toți clienții, cu agentul fiecăruia. Ai acces complet doar la ai tăi."}</p>
           <div className="agent-heading-actions">
-            <input className="group-member-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută client sau CUI" aria-label="Caută client" />
+            <input className="group-member-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={view === "mine" ? "Caută client sau CUI" : "Caută client sau agent"} aria-label="Caută client" />
             <button type="button" className="button button-primary" onClick={() => setSelectedId("new")}>+ Client nou</button>
           </div>
         </div>
-        {visible.length === 0 ? <p className="admin-empty-note">{clients.length ? "Niciun client nu se potrivește căutării." : "Nu ai încă clienți. Adaugă primul client cu „+ Client nou”."}</p>
-          : <div className="returns-grid">{visible.map((client) => {
-            const status = orderStatus(client);
-            const rules = client.partner_discounts as DiscountRule[];
-            return (
-              <button key={client.id} type="button" className={`order-card ${selectedId === client.id ? "selected" : ""}`} onClick={() => setSelectedId(client.id)}>
-                <div className="card-top"><span className="invoice">{client.business_name}</span></div>
-                <div className="billing-card-chips">
-                  <span className={`partner-kind ${client.type}`}>{typeLabel(client.type)}</span>
-                  {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
-                  {!client.vat_id && <span className="item-flag no-ean">Fără date de facturare</span>}
-                </div>
-                <p className="card-subtitle">{client.location_name} · {describeRules(rules)}</p>
-                <div className="card-bottom"><span className={`agent-status ${status.tone}`}>{status.label}</span><span className="card-arrow" aria-hidden="true">›</span></div>
-              </button>
-            );
-          })}</div>}
-      </section>
 
-      {others.length > 0 && <section className="board-panel agent-others" aria-label="Clienții colegilor">
-        <div className="board-panel-heading"><div><h2>Clienții colegilor</h2><p>Doar pentru informare, ca să nu lucrați doi agenți cu același client.</p></div></div>
-        <div className="handed-table-wrap"><table className="handed-table">
-          <thead><tr><th>Client</th><th>Locație</th><th>Tip</th><th>Agent</th></tr></thead>
-          <tbody>{others.map((client) => <tr key={client.id}><td className="strong">{client.business_name}</td><td>{client.location_name}</td><td>{typeLabel(client.type)}</td><td>{client.account_name ?? "Nealocat"}</td></tr>)}</tbody>
-        </table></div>
-      </section>}
+        {view === "mine" ? (mine.length === 0
+          ? <p className="admin-empty-note">{clients.length ? "Niciun client nu se potrivește căutării." : "Nu ai încă clienți. Adaugă primul client cu „+ Client nou”."}</p>
+          : <div className="handed-table-wrap"><table className="handed-table">
+            <thead><tr><th>Client</th><th>Descriere</th><th>Discount</th><th>Status</th></tr></thead>
+            <tbody>{mine.map((client) => {
+              const status = orderStatus(client);
+              return (
+                <tr key={client.id} className={`handed-row ${selectedId === client.id ? "selected" : ""}`} onClick={() => setSelectedId(client.id)}>
+                  <td><button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); setSelectedId(client.id); }}>{client.business_name}</button><small>{client.location_name}</small></td>
+                  <td><span className="partner-tile-chip-group">
+                    <span className={`partner-kind ${client.type}`}>{typeLabel(client.type)}</span>
+                    {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
+                    {!client.vat_id && <span className="item-flag no-ean">Fără date de facturare</span>}
+                  </span></td>
+                  <td>{describeRules(client.partner_discounts as DiscountRule[])}</td>
+                  <td><span className={`agent-status ${status.tone}`}>{status.label}</span></td>
+                </tr>
+              );
+            })}</tbody>
+          </table></div>)
+          : (everyone.length === 0 ? <p className="admin-empty-note">Niciun client nu se potrivește căutării.</p>
+            : <div className="handed-table-wrap"><table className="handed-table">
+              <thead><tr><th>Client</th><th>Grup de livrare</th><th>Tip</th><th>Agent</th></tr></thead>
+              <tbody>{everyone.map((client) => {
+                const isOwn = own.has(client.id) || client.account_id === userId;
+                return (
+                  <tr key={client.id} className={isOwn ? "handed-row" : ""} onClick={isOwn ? () => setSelectedId(client.id) : undefined}>
+                    <td className="strong">{isOwn ? <button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); setSelectedId(client.id); }}>{client.business_name}</button> : client.business_name}</td>
+                    <td>{client.delivery_groups.length ? client.delivery_groups.join(", ") : <span className="muted">Fără grup</span>}</td>
+                    <td>{typeLabel(client.type)}</td>
+                    <td>{isOwn ? <span className="own-chip">Tu</span> : client.account_name ?? "Nealocat"}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table></div>)}
+      </section>
 
       {selectedId && <div className="detail-backdrop" onClick={() => setSelectedId(null)} aria-hidden="true" />}
       {selectedId && <ClientPanel key={selectedId} client={selected} catalog={catalog} categories={categories}
@@ -169,7 +200,7 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
 
   return (
     <aside className="detail-panel wide" aria-label={client ? client.business_name : "Client nou"}>
-      <div className="detail-header"><div><p className="eyebrow">{client ? typeLabel(client.type) : "Client nou"}</p><h2>{client?.business_name ?? "Client nou"}</h2></div>
+      <div className="detail-header"><div>{client && <p className="eyebrow">{typeLabel(client.type)}</p>}<h2>{client?.business_name ?? "Client nou"}</h2></div>
         <button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll">
         {client && <p className={`agent-status ${orderStatus(client).tone} block`}>{orderStatus(client).label}</p>}
@@ -272,6 +303,25 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(client.partner_par_levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
   const [pending, start] = useTransition();
+  // Products the client bought (BOCP invoices) that are not on its shelf yet.
+  const [suggestions, setSuggestions] = useState<InvoiceSuggestion[] | null>(null);
+  const [suggestMessage, setSuggestMessage] = useState<string | null>(null);
+  const [searching, startSearch] = useTransition();
+
+  function suggest() {
+    setSuggestMessage(null);
+    startSearch(async () => {
+      const result = await suggestFromInvoices(client.id);
+      setSuggestMessage(result.message);
+      setSuggestions(result.items ?? null);
+    });
+  }
+
+  function take(item: InvoiceSuggestion) {
+    setAdded((current) => [...current, { id: item.productId, name: item.name, sku: item.sku } as CatalogItem]);
+    setValues((current) => ({ ...current, [item.productId]: String(item.quantity) }));
+    setSuggestions((current) => current?.filter((row) => row.productId !== item.productId) ?? null);
+  }
   const rows = [
     ...client.partner_par_levels.map((level) => ({ id: level.product_id, name: level.products?.name ?? "Produs", sku: level.products?.sku ?? "—" })),
     ...added.map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
@@ -292,7 +342,17 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
         </div>
       ))}</div>
       <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.id))} onPick={(item) => setAdded([...added, item])} placeholder="Adaugă produs în stocul inițial (nume sau SKU)" />
-      <p className="muted small">0 scoate produsul din stocul inițial.</p>
+      <div className="invoice-suggest">
+        <button type="button" className="button button-outline" disabled={searching} onClick={suggest}>{searching ? "Caut în facturile BOCP (~30 sec.)…" : "Propune din facturi BOCP"}</button>
+        {suggestMessage && <span className="muted small">{suggestMessage}</span>}
+      </div>
+      {suggestions && suggestions.length > 0 && <div className="item-list suggestion-list">{suggestions.map((item) => (
+        <div className="order-item" key={item.productId}>
+          <div><strong>{item.name}</strong><small>SKU {item.sku} · pe {item.invoices} {item.invoices === 1 ? "factură" : "facturi"}, ultima {item.lastDate} · ~{item.quantity} buc./factură</small></div>
+          <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
+        </div>
+      ))}</div>}
+      <p className="muted small">0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
     </section>
   );
 }
@@ -361,6 +421,7 @@ function ClientInvoices({ client }: { client: AgentClient }) {
     <section className="detail-section"><div className="section-line"><h3>Facturi</h3><span>{invoiced.length}</span></div>
       <div className="item-list">{invoiced.map((cart) => (
         <div className="order-item" key={cart.id}><div><strong>{cart.invoice_number ?? "Factură"}</strong><small>{formatDateTime(cart.invoiced_at)}</small></div>
+          <PaymentChip dueDate={cart.invoice_due_date} rest={cart.invoice_rest} />
           <a className="text-button" href={`/billing/invoice/${cart.id}`} target="_blank" rel="noopener noreferrer">Descarcă</a></div>
       ))}</div>
     </section>

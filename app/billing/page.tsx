@@ -4,12 +4,13 @@ import { requireRole } from "@/lib/auth";
 import { bocpProductStock } from "@/lib/b2b-bocp";
 import { BillingBoard, type BillingCart, type BillingView, type BocpReserved } from "./billing-board";
 import { DocumentRequests, type BillingDocument } from "./document-requests";
+import { LinkPending } from "@/components/link-pending";
 
 export const dynamic = "force-dynamic";
 
-const fields = "id,prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,partners(business_name,location_name,type,is_important_client,contact_phone,contact_email,partner_discounts(category,percent)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,products(name,sku,variant_label,category))" as const;
+const fields = "id,prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,invoice_due_date,invoice_rest,partners(business_name,location_name,type,is_important_client,contact_phone,contact_email,partner_discounts(category,percent)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,products(name,sku,variant_label,category))" as const;
 
-const documentFields = "id,number,client_name,client_vat_id,discount_percent,account_id,bocp_order_id,bocp_proforma_total,invoice_requested_at,invoiced_at,invoiced_by,invoice_number,bocp_invoice_id,cancel_requested_at,cancel_reason,status,sales_document_items(sku,name,quantity,unit_price,vat_percent,discount_percent,position)" as const;
+const documentFields = "id,number,client_name,client_vat_id,discount_percent,account_id,bocp_order_id,bocp_proforma_total,invoice_requested_at,invoiced_at,invoiced_by,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,cancel_requested_at,cancel_reason,status,sales_document_items(sku,name,quantity,unit_price,vat_percent,discount_percent,position)" as const;
 
 const tabs: { view: BillingView; label: string; title: string }[] = [
   { view: "reserve", label: "Rezervare", title: "Rezervare în BOCP" },
@@ -81,7 +82,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <nav className="board-tabs panel-tabs" aria-label="Vedere">
             {tabs.map((tab) => <Link key={tab.view} href={tab.view === "reserve" ? "/billing" : `/billing?tab=${tab.view}`}
               className={view === tab.view ? "active" : ""} aria-current={view === tab.view ? "page" : undefined}>
-              {tab.label}{counts[tab.view] !== undefined && <span>{counts[tab.view]}</span>}</Link>)}
+              {tab.label}{counts[tab.view] !== undefined && <span>{counts[tab.view]}</span>}<LinkPending /></Link>)}
           </nav>
           <span aria-hidden="true" />
         </div>
