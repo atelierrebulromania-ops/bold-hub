@@ -7,6 +7,7 @@ import {
   assignDeliveryGroup, createCompany, createDeliveryGroup, createPartner, createPartnerAccount,
   removeDeliveryGroup, removePartnerAccount, setParLevel, setPartnerAgent, setPartnerPassword,
 } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function PartnersPage({
                 <div className="admin-card-heading"><h2 id="companies-title">Firme</h2><p>Firma este separată de locație, pentru extindere ulterioară.</p></div>
                 <form action={createCompany} className="admin-form compact-form">
                   <label htmlFor="company-name">Nume firmă</label>
-                  <div className="admin-inline"><input id="company-name" name="company_name" maxLength={160} required placeholder="Ex. Partener SRL"/><button className="button button-primary" type="submit">Adaugă</button></div>
+                  <div className="admin-inline"><input id="company-name" name="company_name" maxLength={160} required placeholder="Ex. Partener SRL"/><SubmitButton className="button button-primary">Adaugă</SubmitButton></div>
                 </form>
                 {companies.length > 0 && <ul className="admin-simple-list">{companies.map(company => <li key={company.id}>{company.company_name}</li>)}</ul>}
               </section>
@@ -105,7 +106,7 @@ export default async function PartnersPage({
                 <form action={createDeliveryGroup} className="admin-form compact-form">
                   <label htmlFor="group-name">Nume grup</label><input id="group-name" name="name" maxLength={120} required placeholder="Ex. București Nord"/>
                   <label htmlFor="group-description">Descriere (opțional)</label><input id="group-description" name="description" maxLength={500} placeholder="Zona / traseul"/>
-                  <button className="button button-primary" type="submit">Creează grup</button>
+                  <SubmitButton className="button button-primary">Creează grup</SubmitButton>
                 </form>
                 {groups.length > 0 && <ul className="admin-simple-list">{groups.map(group => <li key={group.id}><strong>{group.name}</strong>{group.description && <small>{group.description}</small>}</li>)}</ul>}
               </section>
@@ -120,7 +121,7 @@ export default async function PartnersPage({
                 <div><label htmlFor="partner-phone">Telefon responsabil comenzi</label><input id="partner-phone" name="contact_phone" type="tel" maxLength={30} required placeholder="+40…"/></div>
                 <div><label htmlFor="partner-email">Email (opțional)</label><input id="partner-email" name="contact_email" type="email" maxLength={254} placeholder="contact@partener.ro"/></div>
                 <label className="admin-checkbox"><input type="checkbox" name="is_important_client"/> Client prioritar — livrare imediată</label>
-                <button className="button button-primary" type="submit">Salvează revânzătorul</button>
+                <SubmitButton className="button button-primary">Salvează revânzătorul</SubmitButton>
               </form>}
             </section>
 
@@ -137,24 +138,24 @@ export default async function PartnersPage({
                       <form action={setPartnerPassword} className="admin-inline admin-mini-form">
                         <input type="hidden" name="partner_id" value={partner.id}/>
                         <input name="password" type="text" minLength={minPasswordLength} required autoComplete="new-password" placeholder="Parolă nouă" aria-label={`Parolă nouă pentru ${partner.business_name}`}/>
-                        <button className="button button-outline" type="submit">Schimbă parola</button>
+                        <SubmitButton className="button button-outline">Schimbă parola</SubmitButton>
                       </form>
                       <form action={removePartnerAccount}>
                         <input type="hidden" name="partner_id" value={partner.id}/>
-                        <button className="button button-quiet" type="submit">Șterge contul</button>
+                        <SubmitButton className="button button-quiet">Șterge contul</SubmitButton>
                       </form>
                     </div> : <form action={createPartnerAccount} className="admin-inline admin-mini-form account-link-form">
                       <input type="hidden" name="partner_id" value={partner.id}/>
                       <input name="username" maxLength={32} required autoCapitalize="none" spellCheck={false} autoComplete="off" placeholder="Username" aria-label={`Username pentru ${partner.business_name}`}/>
                       <input name="password" type="text" minLength={minPasswordLength} required autoComplete="new-password" placeholder={`Parolă (min. ${minPasswordLength})`} aria-label={`Parolă pentru ${partner.business_name}`}/>
-                      <button className="button button-outline" type="submit">Creează cont</button>
+                      <SubmitButton className="button button-outline">Creează cont</SubmitButton>
                     </form>}
                     <form action={setPartnerAgent} className="admin-inline admin-mini-form account-link-form">
                       <input type="hidden" name="partner_id" value={partner.id}/>
                       <select name="account_id" defaultValue={partner.account_id ?? ""} aria-label={`Agentul pentru ${partner.business_name}`}>
                         <option value="">Fără agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.full_name}</option>)}
                       </select>
-                      <button className="button button-outline" type="submit">Salvează agentul</button>
+                      <SubmitButton className="button button-outline">Salvează agentul</SubmitButton>
                     </form>
                     <PartnerBillingEditor partnerId={partner.id} initial={{
                       bocpContactId: partner.bocp_contact_id, billingName: partner.billing_name ?? "", vatId: partner.vat_id ?? "",
@@ -162,11 +163,11 @@ export default async function PartnersPage({
                       county: partner.billing_county ?? "", zip: partner.billing_zip ?? "",
                     }} />
                     <div className="partner-card-grid">
-                      <div><h4>Delivery Groups</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><button type="submit" className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></button></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
-                        {groups.length > 0 && <form action={assignDeliveryGroup} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><select name="delivery_group_id" aria-label={`Adaugă ${partner.business_name} în Delivery Group`} required defaultValue=""><option value="" disabled>Alege un grup</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button className="button button-outline" type="submit">Adaugă</button></form>}
+                      <div><h4>Delivery Groups</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><SubmitButton className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></SubmitButton></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
+                        {groups.length > 0 && <form action={assignDeliveryGroup} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><select name="delivery_group_id" aria-label={`Adaugă ${partner.business_name} în Delivery Group`} required defaultValue=""><option value="" disabled>Alege un grup</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><SubmitButton className="button button-outline">Adaugă</SubmitButton></form>}
                       </div>
                       <div><h4>Stoc inițial (par level)</h4>{levels.length ? <ul className="par-list">{levels.map(level => <li key={level.product_id}><span>{level.products?.name ?? "Produs"}<small>SKU {level.products?.sku ?? "—"}</small></span><strong>{level.par_level_quantity} buc.</strong></li>)}</ul> : <p className="admin-empty-inline">Niciun produs configurat</p>}
-                        {productCount > 0 ? <form action={setParLevel} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><input name="sku" maxLength={100} required placeholder="SKU produs" aria-label={`SKU pentru ${partner.business_name}`}/><input name="par_level_quantity" type="number" min={0} max={100000} step={1} required placeholder="Buc." aria-label={`Stoc inițial pentru ${partner.business_name}`}/><button className="button button-outline" type="submit">Salvează</button></form> : <p className="admin-empty-inline">Par levels devin disponibile după sincronizarea catalogului BOCP.</p>}
+                        {productCount > 0 ? <form action={setParLevel} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><input name="sku" maxLength={100} required placeholder="SKU produs" aria-label={`SKU pentru ${partner.business_name}`}/><input name="par_level_quantity" type="number" min={0} max={100000} step={1} required placeholder="Buc." aria-label={`Stoc inițial pentru ${partner.business_name}`}/><SubmitButton className="button button-outline">Salvează</SubmitButton></form> : <p className="admin-empty-inline">Par levels devin disponibile după sincronizarea catalogului BOCP.</p>}
                       </div>
                     </div>
                   </article>;

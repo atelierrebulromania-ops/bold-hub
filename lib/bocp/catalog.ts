@@ -7,6 +7,8 @@ type DataRecord = Record<string, unknown>;
 export type BocpCatalogProduct = {
   sku: string; name: string; ean: string | null; stock: number | null;
   category: string | null; price: number | null; priceWithVat: number | null; vatPercent: number | null;
+  imageUrl: string | null;
+  delisted: boolean;
 };
 
 export type BocpCatalogSummary = {
@@ -25,10 +27,20 @@ function flagged(value: unknown): boolean {
   return value === true || value === 1 || text(value) === "1";
 }
 
+// The product's picture (read with include:images): the cover one, else the first. BOCP CDN only.
+function coverImage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const images = value.filter((item): item is DataRecord => item !== null && typeof item === "object");
+  const pick = images.find((image) => flagged(image.cover_picture)) ?? images[0];
+  const url = pick ? text(pick.img_url_thumb) || text(pick.img_url_normal) : "";
+  return /^https:\/\/cdn\.bocp\.eu\//.test(url) && url.length <= 1000 ? url : null;
+}
+
 export function parseBocpCatalog(rows: unknown[]): { products: BocpCatalogProduct[]; summary: BocpCatalogSummary } {
   const active = rows
     .filter((row): row is DataRecord => row !== null && typeof row === "object" && !Array.isArray(row))
-    .filter(row => !flagged(row.is_deleted) && !flagged(row.deleted) && !flagged(row.is_archived) && !flagged(row.delistat))
+    // "delistat" products stay: they are flagged, so agents see they are no longer supplied.
+    .filter(row => !flagged(row.is_deleted) && !flagged(row.deleted) && !flagged(row.is_archived))
     .filter(row => text(row.cod_produs).length > 0 && text(row.cod_produs).length <= 100);
 
   const invalidEan: BocpCatalogSummary["invalidEan"] = [];
@@ -56,6 +68,8 @@ export function parseBocpCatalog(rows: unknown[]): { products: BocpCatalogProduc
       price: amount(row.pret_vanzare),
       priceWithVat: amount(row.pret_vanzare_cu_tva),
       vatPercent: amount(row.cota_tva_vanzare),
+      imageUrl: coverImage(row.images),
+      delisted: flagged(row.delistat),
     };
   });
 

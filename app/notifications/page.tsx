@@ -4,6 +4,7 @@ import { EnableBrowserNotifications } from "@/components/notification-listener";
 import { requireRole } from "@/lib/auth";
 import { formatDateTime } from "@/lib/orders";
 import { markRead } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function NotificationsPage() {
     <AppShell profile={profile} active="/notifications" section="Cont" title="Notificări"
       note={{ title: "Notificări pe rol", text: "Un mesaj marcat ca citit dispare pentru toată echipa rolului." }}>
       <div className="page-heading"><div><h1>Notificări</h1><p className="muted">Evenimentele care cer atenția ta. Cele trimise rolului tău sunt comune pentru toată echipa.</p></div>
-        <div className="heading-actions"><EnableBrowserNotifications/>{unread > 0 && <form action={markRead}><button className="button button-primary" type="submit">Marchează toate ca citite</button></form>}</div>
+        <div className="heading-actions"><EnableBrowserNotifications/>{unread > 0 && <form action={markRead}><SubmitButton className="button button-primary">Marchează toate ca citite</SubmitButton></form>}</div>
       </div>
       <section className="admin-card">
         {error ? <p className="notice error search-notice" role="alert">Notificările nu pot fi încărcate acum.</p>
@@ -41,7 +42,7 @@ export default async function NotificationsPage() {
               <div><p>{item.message}</p><small>{formatDateTime(item.created_at)}{item.read_at ? " · citită" : ""}</small></div>
               <div className="notification-actions">
                 {href && <Link className="text-button" href={href}>Deschide</Link>}
-                {!item.read_at && <form action={markRead}><input type="hidden" name="id" value={item.id}/><button className="text-button" type="submit">Marchează citită</button></form>}
+                {!item.read_at && <form action={markRead}><input type="hidden" name="id" value={item.id}/><SubmitButton className="text-button">Marchează citită</SubmitButton></form>}
               </div>
             </li>;
           })}</ul>}

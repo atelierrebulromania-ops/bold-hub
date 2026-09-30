@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { formatDateTime, returnReasonLabels, statusLabels, type OrderSearchResult } from "@/lib/orders";
+import { SubmitButton } from "@/components/submit-button";
 
 export function SearchForm({ action, query, placeholder }: { action: string; query: string; placeholder: string }) {
   return (
@@ -7,7 +8,7 @@ export function SearchForm({ action, query, placeholder }: { action: string; que
       <label htmlFor="order-search">Nr. factură, nr. comandă, nume, email sau telefon</label>
       <div className="admin-inline">
         <input id="order-search" name="q" defaultValue={query} minLength={3} maxLength={120} required placeholder={placeholder} autoComplete="off"/>
-        <button className="button button-primary" type="submit">Caută</button>
+        <SubmitButton className="button button-primary">Caută</SubmitButton>
       </div>
     </form>
   );

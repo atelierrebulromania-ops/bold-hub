@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { parseBocpCatalog } from "@/lib/bocp/catalog";
 import { bocpGetList } from "@/lib/bocp/client";
+import { catalogScopeCookie } from "@/lib/b2b-products";
 import type { Json } from "@/lib/database.types";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,7 +55,8 @@ export async function syncCatalog(form: FormData) {
   let failed = false;
   try {
     for (let fetched = 0; page !== null && fetched < MAX_CATALOG_PAGES; fetched++) {
-      const result = await bocpGetList("product/list", { page });
+      // With the pictures: the agents' catalog shows them.
+      const result = await bocpGetList("product/list/include:images", { page });
       rows.push(...result.rows);
       page = result.nextPage;
     }
@@ -92,4 +95,13 @@ export async function enableAll(form: FormData) {
   const { data, error } = await supabase.rpc("enable_ean_for_all");
   revalidatePath("/admin/catalog");
   redirect(error ? target(form, "error", "save_failed") : target(form, "notice", `enabled_${data ?? 0}`));
+}
+
+// Which products the admin catalog shows: only Atelier Rebul ones (B2B SKUs) or all of BOCP.
+// Remembered in a cookie, so it stays after syncing or saving.
+export async function setCatalogScope(form: FormData) {
+  await requireRole(["admin"]);
+  const scope = form.get("scope") === "all" ? "all" : "ar";
+  (await cookies()).set(catalogScopeCookie, scope, { path: "/admin/catalog", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true });
+  redirect(target(form, "notice", "scope"));
 }

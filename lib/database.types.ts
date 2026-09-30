@@ -336,6 +336,7 @@ export type Database = {
       }
       products: {
         Row: {
+          delisted: boolean
           list_price: number | null
           list_price_with_vat: number | null
           vat_percent: number | null
@@ -353,6 +354,7 @@ export type Database = {
           variant_label: string | null
         }
         Insert: {
+          delisted?: boolean
           list_price?: number | null
           list_price_with_vat?: number | null
           vat_percent?: number | null
@@ -370,6 +372,7 @@ export type Database = {
           variant_label?: string | null
         }
         Update: {
+          delisted?: boolean
           list_price?: number | null
           list_price_with_vat?: number | null
           vat_percent?: number | null
@@ -512,6 +515,11 @@ export type Database = {
       }
       partner_carts: {
         Row: {
+          invoice_due_date: string | null
+          invoice_last_payment_date: string | null
+          invoice_rest: number | null
+          invoice_total: number | null
+          payment_checked_at: string | null
           source_document_id: string | null
           bocp_order_id: string | null
           bocp_order_error: string | null
@@ -535,6 +543,11 @@ export type Database = {
           status: Database["public"]["Enums"]["cart_status"]
         }
         Insert: {
+          invoice_due_date?: string | null
+          invoice_last_payment_date?: string | null
+          invoice_rest?: number | null
+          invoice_total?: number | null
+          payment_checked_at?: string | null
           source_document_id?: string | null
           bocp_order_id?: string | null
           bocp_order_error?: string | null
@@ -558,6 +571,11 @@ export type Database = {
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Update: {
+          invoice_due_date?: string | null
+          invoice_last_payment_date?: string | null
+          invoice_rest?: number | null
+          invoice_total?: number | null
+          payment_checked_at?: string | null
           source_document_id?: string | null
           bocp_order_id?: string | null
           bocp_order_error?: string | null
@@ -809,6 +827,7 @@ export type Database = {
       }
       sales_documents: {
         Row: {
+          invoice_due_date: string | null; invoice_last_payment_date: string | null; invoice_rest: number | null; invoice_total: number | null; payment_checked_at: string | null
           account_id: string; cart_id: string | null; client_city: string | null; client_county: string | null; client_name: string
           client_registration: string | null; client_street: string | null; client_vat_id: string | null; client_zip: string | null
           contact_email: string | null; contact_name: string | null; contact_phone: string | null; created_at: string; discount_percent: number
@@ -818,6 +837,7 @@ export type Database = {
           invoiced_by: string | null; invoice_number: string | null; bocp_invoice_id: string | null; invoice_date: string | null; invoice_pdf_url: string | null; cancel_requested_at: string | null; cancel_reason: string | null; cancelled_at: string | null; cancelled_by: string | null
         }
         Insert: {
+          invoice_due_date?: string | null; invoice_last_payment_date?: string | null; invoice_rest?: number | null; invoice_total?: number | null; payment_checked_at?: string | null
           account_id: string; cart_id?: string | null; client_city?: string | null; client_county?: string | null; client_name: string
           client_registration?: string | null; client_street?: string | null; client_vat_id?: string | null; client_zip?: string | null
           contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null; created_at?: string; discount_percent?: number
@@ -827,6 +847,7 @@ export type Database = {
           invoiced_by?: string | null; invoice_number?: string | null; bocp_invoice_id?: string | null; invoice_date?: string | null; invoice_pdf_url?: string | null; cancel_requested_at?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null
         }
         Update: {
+          invoice_due_date?: string | null; invoice_last_payment_date?: string | null; invoice_rest?: number | null; invoice_total?: number | null; payment_checked_at?: string | null
           account_id?: string; cart_id?: string | null; client_city?: string | null; client_county?: string | null; client_name?: string
           client_registration?: string | null; client_street?: string | null; client_vat_id?: string | null; client_zip?: string | null
           contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null; created_at?: string; discount_percent?: number
@@ -879,6 +900,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      owner_clients: {
+        Args: { p_from: string | null; p_to: string | null }
+        Returns: { id: string; name: string; location: string; type: string; active: boolean; agent: string | null; delivery_groups: string[]; orders: number; units: number; invoiced_value: number; outstanding: number; last_order: string | null }[]
+      }
+      team_activity: { Args: { p_from: string; p_inactive_days: number; p_to: string }; Returns: Json }
+      account_invoices: {
+        Args: never
+        Returns: { source: string; id: string; partner_name: string; invoice_number: string; invoice_date: string; due_date: string | null; total: number | null; rest: number | null; invoiced_at: string; proforma_number: string | null }[]
+      }
+      submit_refill_counts_for: { Args: { p_counts: Json; p_partner_id: string }; Returns: Json }
+      b2b_receivables: {
+        Args: never
+        Returns: { source: string; id: string; partner_name: string; agent_name: string | null; invoice_number: string; invoice_date: string; due_date: string | null; total: number | null; rest: number | null; payment_checked_at: string | null }[]
+      }
+      invoices_to_check: { Args: { p_limit: number }; Returns: { source: string; id: string; bocp_invoice_id: string }[] }
+      record_invoice_payment: {
+        Args: { p_source: string; p_id: string; p_due_date: string | null; p_total: number | null; p_rest: number | null; p_last_payment: string | null }
+        Returns: boolean
+      }
+      partner_invoices: {
+        Args: { p_partner_id: string }
+        Returns: { bocp_invoice_id: string; id: string; invoice_date: string; invoice_number: string; invoice_pdf_url: string | null; invoiced_at: string; source: string; due_date: string | null; rest: number | null }[]
+      }
       delete_product_collection: { Args: { p_id: string }; Returns: boolean }
       save_product_collection: { Args: { p_id: string | null; p_name: string; p_product_ids: string[] }; Returns: string | null }
       confirm_proforma_cancelled: { Args: { p_id: string }; Returns: boolean }
@@ -899,7 +943,8 @@ export type Database = {
       issue_sales_document: { Args: { p_id: string }; Returns: string | null }
       partner_directory: {
         Args: never
-        Returns: { account_id: string | null; account_name: string | null; active: boolean; business_name: string; id: string; location_name: string; type: string }[]
+        Returns: { account_id: string | null; account_name: string | null; active: boolean; business_name: string; id: string; location_name: string
+          delivery_groups: string[]; type: string }[]
       }
       save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json }; Returns: boolean }
       save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { describeRules, discountFor } from "@/lib/pricing";
 import type { BocpInvoiceMatch } from "@/lib/bocp/invoice-lookup";
@@ -17,6 +18,8 @@ export type BillingCart = {
   invoice_number: string | null;
   invoice_date: string | null;
   bocp_invoice_id: string | null;
+  invoice_due_date: string | null;
+  invoice_rest: number | null;
   reserved_in_bocp_at: string | null;
   reserved_in_bocp_by: string | null;
   bocp_order_id: string | null;
@@ -136,13 +139,14 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
           ))}
         </div>
         : <div className="handed-table-wrap"><table className="handed-table">
-          <thead><tr><th>Facturată la</th><th>Nr. factură</th><th>Partener</th><th>Produse</th><th>Predată de</th><th>Facturată de</th><th>Factură</th></tr></thead>
+          <thead><tr><th>Facturată la</th><th>Nr. factură</th><th>Partener</th><th>Produse</th><th>Scadență</th><th>Predată de</th><th>Facturată de</th><th>Factură</th></tr></thead>
           <tbody>{carts.map((cart) => (
             <tr key={cart.id} className={`handed-row ${selectedId === cart.id ? "selected" : ""}`} onClick={() => open(cart.id)}>
               <td className="nowrap">{formatDateTime(cart.invoiced_at)}</td>
               <td className="nowrap strong">{cart.invoice_number ?? "—"}</td>
               <td><button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); open(cart.id); }}>{cart.partners?.business_name ?? "Partener"}</button><small>{cart.partners?.location_name}</small></td>
               <td className="nowrap">{units(cart)} buc.</td>
+              <td className="nowrap"><PaymentChip dueDate={cart.invoice_due_date} rest={cart.invoice_rest} /></td>
               <td className="nowrap">{name(cart.delivered_by)}</td>
               <td className="nowrap">{name(cart.invoiced_by)}</td>
               <td className="nowrap">{cart.bocp_invoice_id && <a className="icon-link" href={`/billing/invoice/${cart.id}`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}

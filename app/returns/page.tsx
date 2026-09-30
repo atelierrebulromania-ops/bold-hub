@@ -7,6 +7,8 @@ import { returnReasonLabels, type OrderSearchResult, type ReturnReason } from "@
 import { registerReturn } from "./actions";
 import { ReturnsHistoryTable, type ReturnHistoryRow } from "./history-table";
 import { ReturnsBoard, type ReturnRow } from "./returns-board";
+import { LinkPending } from "@/components/link-pending";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -147,8 +149,8 @@ export default async function ReturnsPage({
         <div className="panel-tabs-row">
           <h2 className="panel-tabs-title">{tab === "pending" ? "De procesat" : "Istoric"}</h2>
           <nav className="board-tabs panel-tabs" aria-label="Vedere">
-            <Link href="/returns" className={tab === "pending" ? "active" : ""} aria-current={tab === "pending" ? "page" : undefined}>De procesat <span>{pending.length}</span></Link>
-            <Link href="/returns?tab=history" className={tab === "history" ? "active" : ""} aria-current={tab === "history" ? "page" : undefined}>Istoric</Link>
+            <Link href="/returns" className={tab === "pending" ? "active" : ""} aria-current={tab === "pending" ? "page" : undefined}>De procesat <span>{pending.length}</span><LinkPending /></Link>
+            <Link href="/returns?tab=history" className={tab === "history" ? "active" : ""} aria-current={tab === "history" ? "page" : undefined}>Istoric<LinkPending /></Link>
           </nav>
           <span aria-hidden="true" />
         </div>
@@ -168,7 +170,7 @@ export default async function ReturnsPage({
                   <input type="hidden" name="q" value={query}/>
                   <select name="reason" defaultValue="neridicat" aria-label={`Motiv retur ${order.invoice_number}`}>{reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                   {isAdmin && order.source === "shopify" && <label className="admin-checkbox"><input type="checkbox" name="shopify_marked"/> Marcat deja „returned” în Shopify</label>}
-                  <button className="button button-primary" type="submit">Înregistrează retur</button>
+                  <SubmitButton className="button button-primary">Înregistrează retur</SubmitButton>
                 </form>
                 : !order.return && <p className="admin-empty-inline result-action">Comanda nu a fost încă predată curierului, deci nu poate fi retur.</p>}
             </OrderResultCard>)}
@@ -200,7 +202,7 @@ export default async function ReturnsPage({
                 : <input type="hidden" name="range" value={range.preset}/>}
               {outcome !== "all" && <input type="hidden" name="outcome" value={outcome}/>}
               <input type="search" name="q" defaultValue={query} minLength={3} maxLength={120} placeholder="Factură, comandă, client, telefon…" aria-label="Caută în istoricul retururilor" autoComplete="off"/>
-              <button className="button button-primary" type="submit">Caută</button>
+              <SubmitButton className="button button-primary">Caută</SubmitButton>
             </form>
           </div>
         </div>
@@ -212,7 +214,7 @@ export default async function ReturnsPage({
             {outcome !== "all" && <input type="hidden" name="outcome" value={outcome}/>}
             <label>De la <input type="date" name="from" defaultValue={range.fromDay} required/></label>
             <label>Până la <input type="date" name="to" defaultValue={range.toDay} required/></label>
-            <button type="submit" className={!historySearch && range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</button>
+            <SubmitButton className={!historySearch && range.preset === "custom" ? "button button-primary" : "button button-outline"}>Aplică</SubmitButton>
           </form>
           <p className="history-count">{historySearch
             ? <>{historyTotal} {historyTotal === 1 ? "retur găsit" : "retururi găsite"} pentru „{historyTerm}” în tot istoricul · <Link href={historyHref(`${rangeQuery}${outcomeQuery}`)}>Șterge căutarea</Link></>

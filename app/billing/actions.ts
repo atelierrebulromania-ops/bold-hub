@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { reserveCartInBocp } from "@/lib/b2b-bocp";
 import { findBocpInvoice, type BocpInvoiceMatch } from "@/lib/bocp/invoice-lookup";
+import { recordInvoicePayment } from "@/lib/invoice-payments";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -71,6 +72,7 @@ export async function markCartInvoiced(cartId: string, invoiceNumber: string): P
     p_invoice_pdf_url: invoice.pdfUrl,
   });
   if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
+  if (data === true) await recordInvoicePayment(supabase, "cart", cartId, invoice);
   revalidatePath("/billing");
   return data === true
     ? { ok: true, message: `Comanda a fost marcată ca facturată (${invoice.number}).` }
@@ -118,6 +120,7 @@ export async function markDocumentInvoiced(documentId: string, invoiceNumber: st
     p_id: documentId, p_invoice_number: invoice.number, p_bocp_invoice_id: invoice.bocpInvoiceId, p_invoice_date: invoice.date, p_invoice_pdf_url: invoice.pdfUrl,
   });
   if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
+  if (data === true) await recordInvoicePayment(supabase, "document", documentId, invoice);
   revalidatePath("/billing");
   return data === true
     ? { ok: true, message: `Proforma a fost marcată ca facturată (${invoice.number}). Agentul a fost anunțat.` }

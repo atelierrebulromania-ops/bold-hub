@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { b2bSkuFilter } from "@/lib/b2b-products";
 import { requireRole } from "@/lib/auth";
 import { PartnersBoard, type CatalogProduct, type DeliveryGroup, type Partner } from "./partners-board";
 
@@ -16,7 +17,7 @@ export default async function PartnersPage() {
     .in("partner_carts.status", ["open", "prepared"])
     .order("business_name").limit(1000),
     supabase.from("delivery_groups").select("id,name,partner_delivery_groups(partner_id)").order("name").limit(500),
-    supabase.from("products").select("id,name,sku,variant_label").eq("active", true).order("name").limit(5000),
+    supabase.from("products").select("id,name,sku,variant_label").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
   ]);
   const error = partnersResult.error ?? groupsResult.error ?? productsResult.error;
   const partners: Partner[] = partnersResult.data ?? [];
