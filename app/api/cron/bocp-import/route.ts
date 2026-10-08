@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
-import type { Database, Json } from "@/lib/database.types";
+import type { Json } from "@/lib/database.types";
 import { BOCP_LAUNCH_DATE, readBocpFeeds } from "@/lib/bocp/feeds";
 import { analyzeBocpImport } from "@/lib/bocp/preview";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,9 +38,8 @@ export async function GET(request: Request) {
     return Response.json({ status: "before-launch" }, { headers: noStore });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) {
+  const supabase = createAdminClient();
+  if (!supabase) {
     return Response.json({ error: "Configurația serverului este incompletă." }, { status: 503, headers: noStore });
   }
 
@@ -55,9 +54,6 @@ export async function GET(request: Request) {
       });
     }
     const { candidates, summary } = analyzeBocpImport(feeds.orders.rows, feeds.invoices.rows, from);
-    const supabase = createClient<Database>(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-    });
     for (let index = 0; index < candidates.length; index += 25) {
       const batch = candidates.slice(index, index + 25);
       const { data, error } = await supabase.rpc("import_bocp_online_orders", { p_orders: batch as unknown as Json });
