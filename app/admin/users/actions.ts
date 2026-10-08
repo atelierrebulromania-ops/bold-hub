@@ -66,3 +66,25 @@ export async function changePassword(id: string, password: string): Promise<Resu
   const error = await setLoginPassword(id, password);
   return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată." };
 }
+
+const deleteMessages: Record<string, string> = {
+  self: "Nu îți poți șterge propriul cont.",
+  not_found: "Utilizatorul nu mai există. Reîncarcă pagina.",
+  clients: "Agentul are clienți asociați. Mută-i la alt agent înainte să ștergi contul, sau dezactivează-l.",
+  history: "Contul apare în istoric (comenzi, retururi, documente), așa că nu poate fi șters. Dezactivează-l în schimb.",
+};
+
+// Deletes a staff account: the profile first (refused when it appears in the history), then the login.
+export async function deleteUser(id: string): Promise<Result> {
+  const { supabase } = await requireRole(["admin"]);
+  if (!uuid.test(id)) return { ok: false, message: "Utilizatorul nu este valid." };
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, message: accountErrorMessages.no_service_key };
+  const { data, error } = await supabase.rpc("delete_staff_user", { p_id: id });
+  if (error) return { ok: false, message: accountErrorMessages.failed };
+  if (data !== "deleted") return { ok: false, message: deleteMessages[data ?? ""] ?? accountErrorMessages.failed };
+  const loginError = await deleteLogin(id);
+  revalidatePath(page);
+  return loginError
+    ? { ok: false, message: "Profilul a fost șters, dar contul de logare nu. Încearcă din nou sau șterge-l din Supabase → Authentication." }
+    : { ok: true, message: "Contul a fost șters." };
+}

@@ -1025,6 +1025,7 @@ export type Database = {
         Returns: boolean
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
+      delete_staff_user: { Args: { p_id: string }; Returns: string }
       import_bocp_online_orders: {
         Args: { p_orders: Json }
         Returns: Json

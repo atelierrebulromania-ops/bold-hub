@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { minPasswordLength, roleLabels, usernamePattern, normalizeUsername } from "@/lib/accounts";
 import type { UserRole } from "@/lib/auth";
-import { changePassword, createUser, updateUser } from "./actions";
+import { changePassword, createUser, deleteUser, updateUser } from "./actions";
 
 export type StaffUser = {
   id: string;
@@ -25,10 +25,11 @@ export function UsersBoard({ users, currentUserId, serviceReady }: { users: Staf
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const open = (next: Draft) => { setDraft(next); setNewPassword(""); setFeedback(null); };
+  const open = (next: Draft) => { setDraft(next); setNewPassword(""); setFeedback(null); setConfirmDelete(false); };
   const close = () => { setDraft(null); setFeedback(null); };
 
   useEffect(() => {
@@ -109,6 +110,17 @@ export function UsersBoard({ users, currentUserId, serviceReady }: { users: Staf
                 <button type="button" className="button button-outline" disabled={pending || !serviceReady || newPassword.length < minPasswordLength}
                   onClick={() => run(() => changePassword(draft.id!, newPassword), false)}>Schimbă</button>
               </div>
+            </section>}
+            {draft.id && !isSelf && <section className="detail-section"><h3>Șterge contul</h3>
+              {!confirmDelete
+                ? <><p className="muted delete-note">Contul dispare definitiv. Dacă a lucrat deja în aplicație (comenzi, documente, clienți), îl poți doar dezactiva.</p>
+                  <button type="button" className="button button-outline" disabled={pending || !serviceReady} onClick={() => setConfirmDelete(true)}>Șterge contul…</button></>
+                : <div className="delete-confirm"><p>Sigur ștergi contul <strong>{editing?.full_name}</strong>? Nu se poate anula.</p>
+                  <div className="delete-confirm-actions">
+                    <button type="button" className="button button-danger" disabled={pending}
+                      onClick={() => run(() => deleteUser(draft.id!), true)}>Da, șterge</button>
+                    <button type="button" className="button button-outline" disabled={pending} onClick={() => setConfirmDelete(false)}>Renunță</button>
+                  </div></div>}
             </section>}
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
           </div>

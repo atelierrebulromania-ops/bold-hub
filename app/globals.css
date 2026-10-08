@@ -1053,3 +1053,7 @@ button.is-busy { cursor: progress; }
 .week-bar { display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; background: #b9cff3; }
 .week-bar-mine { width: 100%; background: var(--blue); }
 .week-chart .daily-bar-label { left: 50%; transform: translateX(-50%); }
+.delete-note { margin: 0 0 10px; font-size: .74rem; }
+.delete-confirm { padding: 12px; border: 1px solid #f2c4c6; border-radius: 8px; background: #fff8f8; font-size: .78rem; }
+.delete-confirm p { margin: 0 0 10px; }
+.delete-confirm-actions { display: flex; gap: 8px; }
