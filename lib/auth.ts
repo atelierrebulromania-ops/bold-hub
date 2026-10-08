@@ -39,8 +39,8 @@ export async function effectiveRole(realRole: UserRole): Promise<UserRole> {
 // Each role lands on the first screen it can actually use.
 export function homeFor(role: UserRole): string {
   if (role === "owner") return "/dashboard";
-  if (role === "account") return "/account";
-  if (role === "operator_facturare") return "/returns";
+  if (role === "account") return "/sales";
+  if (role === "operator_facturare") return "/invoicing";
   if (role === "operator_depozit") return "/warehouse";
   return "/orders";
 }

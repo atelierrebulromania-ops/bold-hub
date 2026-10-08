@@ -19,8 +19,10 @@ type Counter = "orders" | "partners" | "returns" | "billing";
 const counterTables: Record<Counter, string[]> = { orders: ["online_orders"], partners: ["partner_carts"], returns: ["order_returns"], billing: ["partner_carts", "sales_documents"] };
 
 const sections: { label: string; items: NavItem[] }[] = [
-  { label: "DEPOZIT", items: [
+  { label: "GENERAL", items: [
     { href: "/warehouse", label: "Dashboard", roles: ["operator_depozit"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
+    { href: "/invoicing", label: "Dashboard", roles: ["operator_facturare"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
+    { href: "/sales", label: "Dashboard", roles: ["account"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
   ] },
   { label: "OPERAȚIUNI", items: [
     { href: "/orders", label: "Comenzi online", roles: ["admin", "operator_depozit"], counter: "orders", icon: <svg {...svg}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h4"/></svg> },

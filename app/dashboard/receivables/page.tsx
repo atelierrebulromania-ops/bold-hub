@@ -37,7 +37,7 @@ export default async function ReceivablesPage({ searchParams }: { searchParams: 
 
   return (
     <AppShell profile={profile} active="/dashboard/receivables" section="Monitorizare" title="Facturi restante"
-      note={{ title: "Facturi restante", text: "Facturile B2B neîncasate, din BOCP. Plățile se reverifică automat o dată pe oră." }}>
+      note={{ title: "Facturi restante", text: "Facturile B2B neîncasate, din BOCP. Plățile se reverifică automat în fiecare dimineață." }}>
       {error && <p className="notice error admin-feedback" role="alert">Facturile nu pot fi încărcate acum.</p>}
       <div className="stat-grid receivables-summary">
         <div className="stat-card dashboard-stat"><div><p>De încasat</p><strong>{formatMoney(totalOwed)} lei</strong><small>{rows.length} {rows.length === 1 ? "factură" : "facturi"}</small></div></div>

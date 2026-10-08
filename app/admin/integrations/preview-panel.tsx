@@ -16,7 +16,21 @@ type PreviewResponse = {
 
 type ImportResult = { inserted: number; alreadyPresent: number; blockedInvoices: number; missingSkuLines: number };
 
-export function PreviewPanel({ importEnabled }: { importEnabled: boolean }) {
+// The first manual import marks the launch: before it the admin picks the day real orders start;
+// after it, re-running covers the last week (never before the launch).
+function defaultImportFrom(today: string, launchedOn: string | null) {
+  if (!launchedOn) return today;
+  const week = new Date(`${today}T00:00:00Z`);
+  week.setUTCDate(week.getUTCDate() - 7);
+  const lookback = week.toISOString().slice(0, 10);
+  return lookback > launchedOn ? lookback : launchedOn;
+}
+
+function dayLabel(day: string) {
+  return new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+}
+
+export function PreviewPanel({ importEnabled, today, minDate, launchedOn }: { importEnabled: boolean; today: string; minDate: string; launchedOn: string | null }) {
   const router = useRouter();
   const [from, setFrom] = useState("2026-09-01");
   const [result, setResult] = useState<PreviewResponse | null>(null);
@@ -25,6 +39,7 @@ export function PreviewPanel({ importEnabled }: { importEnabled: boolean }) {
   const [importPending, setImportPending] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState("");
+  const [importFrom, setImportFrom] = useState(() => defaultImportFrom(today, launchedOn));
 
   async function loadPreview(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,7 +72,7 @@ export function PreviewPanel({ importEnabled }: { importEnabled: boolean }) {
       const response = await fetch("/api/admin/bocp/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: "2026-10-01" }),
+        body: JSON.stringify({ from: importFrom }),
         cache: "no-store",
       });
       const body: ImportResult | { error?: string } = await response.json();
@@ -122,8 +137,14 @@ export function PreviewPanel({ importEnabled }: { importEnabled: boolean }) {
         </div>
       )}
       <div className="integration-import">
-        <div><p className="eyebrow">IMPORT OPERAȚIONAL</p><h3>Comenzi noi, confirmate după SKU</h3><p>Importă facturile online emise din 1 octombrie 2026. Rerularea nu dublează comenzile și nu resetează progresul operatorilor.</p></div>
-        <button type="button" className="button button-primary" onClick={importOrders} disabled={!importEnabled || importPending}>{importPending ? "Se importă…" : "Importă comenzile"}</button>
+        <div><p className="eyebrow">IMPORT OPERAȚIONAL</p><h3>{launchedOn ? "Import manual" : "Primul import (pornirea aplicației)"}</h3>
+          <p>{launchedOn
+            ? `Aplicația lucrează cu comenzi reale din ${dayLabel(launchedOn)}. Rerularea nu dublează comenzile și nu resetează progresul operatorilor.`
+            : "Alege ziua din care aplicația preia comenzile online. Data aleasă la primul import rămâne ziua de pornire; după el poți activa importul automat."}</p></div>
+        <div className="integration-import-actions">
+          <label>Facturi din<input type="date" value={importFrom} min={launchedOn ?? minDate} max={today} onChange={event => setImportFrom(event.target.value)} /></label>
+          <button type="button" className="button button-primary" onClick={importOrders} disabled={!importEnabled || importPending || !importFrom}>{importPending ? "Se importă…" : "Importă comenzile"}</button>
+        </div>
       </div>
       {!importEnabled && <p className="preview-note integration-import-note">Importul real rămâne dezactivat până la 1 octombrie. Auditul de mai sus poate fi folosit acum.</p>}
       {importError && <p className="notice error integration-import-feedback" role="alert">{importError}</p>}

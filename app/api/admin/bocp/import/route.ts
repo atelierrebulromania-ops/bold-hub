@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       inserted += result.inserted;
       alreadyPresent += result.alreadyPresent;
     }
+    await supabase.rpc("record_manual_import", { p_from: from });
     return Response.json({
       mode: "sku-confirmation",
       invoiceFrom: from,
