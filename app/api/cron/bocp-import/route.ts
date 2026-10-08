@@ -1,5 +1,5 @@
 import type { Json } from "@/lib/database.types";
-import { BOCP_LAUNCH_DATE, readBocpFeeds } from "@/lib/bocp/feeds";
+import { readBocpFeeds } from "@/lib/bocp/feeds";
 import { analyzeBocpImport } from "@/lib/bocp/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -17,46 +17,44 @@ function bucharestDate(): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function importWindowStart(today: string): string {
+// The last week of invoices, but never before the day of the first manual import (the launch).
+function importWindowStart(today: string, launchedOn: string): string {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 7);
   const lookback = date.toISOString().slice(0, 10);
-  return lookback > BOCP_LAUNCH_DATE ? lookback : BOCP_LAUNCH_DATE;
+  return lookback > launchedOn ? lookback : launchedOn;
 }
 
+// Scheduled job: imports new BOCP online orders once the admin turned on "Import automat"
+// (Admin → Integrări), which is possible only after the first manual import.
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return Response.json({ error: "Neautorizat." }, { status: 401, headers: noStore });
   }
-
-  if (process.env.BOCP_AUTO_IMPORT_ENABLED !== "true") {
-    return Response.json({ status: "disabled" }, { headers: noStore });
-  }
-  const today = bucharestDate();
-  if (today < BOCP_LAUNCH_DATE) {
-    return Response.json({ status: "before-launch" }, { headers: noStore });
-  }
-
   const supabase = createAdminClient();
   if (!supabase) {
     return Response.json({ error: "Configurația serverului este incompletă." }, { status: 503, headers: noStore });
   }
+  const { data: settings } = await supabase.from("app_settings").select("auto_import,launched_on").eq("id", 1).maybeSingle();
+  if (!settings?.auto_import || !settings.launched_on) {
+    return Response.json({ status: "disabled" }, { headers: noStore });
+  }
 
-  const from = importWindowStart(today);
+  const from = importWindowStart(bucharestDate(), settings.launched_on);
+  const finish = async (status: number, body: Record<string, unknown>) => {
+    await supabase.rpc("record_auto_import", { p_result: { ...body, ok: status === 200 } as Json });
+    return Response.json(body, { status, headers: noStore });
+  };
   let inserted = 0;
   let alreadyPresent = 0;
   try {
     const feeds = await readBocpFeeds(from);
-    if (!feeds.complete) {
-      return Response.json({ error: "BOCP a depășit limita de pagini; nu s-a importat nimic." }, {
-        status: 409, headers: noStore,
-      });
-    }
+    if (!feeds.complete) return finish(409, { error: "BOCP a depășit limita de pagini; nu s-a importat nimic." });
     const { candidates, summary } = analyzeBocpImport(feeds.orders.rows, feeds.invoices.rows, from);
     for (let index = 0; index < candidates.length; index += 25) {
       const batch = candidates.slice(index, index + 25);
-      const { data, error } = await supabase.rpc("import_bocp_online_orders", { p_orders: batch as unknown as Json });
+      const { data, error } = await supabase.rpc("import_bocp_online_orders_job", { p_orders: batch as unknown as Json });
       if (error || !data || typeof data !== "object" || Array.isArray(data)) {
         throw new Error("BOCP scheduled import batch failed.");
       }
@@ -67,10 +65,8 @@ export async function GET(request: Request) {
       inserted += result.inserted;
       alreadyPresent += result.alreadyPresent;
     }
-    return Response.json({ status: "ok", invoiceFrom: from, inserted, alreadyPresent,
-      blockedInvoices: summary.blockedInvoices }, { headers: noStore });
+    return finish(200, { status: "ok", invoiceFrom: from, inserted, alreadyPresent, blockedInvoices: summary.blockedInvoices });
   } catch {
-    return Response.json({ error: "Sincronizarea BOCP nu s-a finalizat; loturile deja salvate pot fi reluate fără dubluri.",
-      inserted, alreadyPresent }, { status: 502, headers: noStore });
+    return finish(502, { error: "Importul automat nu s-a finalizat; loturile deja salvate pot fi reluate fără dubluri.", inserted, alreadyPresent });
   }
 }

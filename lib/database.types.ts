@@ -14,6 +14,22 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: number
+          launched_on: string | null
+          launched_at: string | null
+          launched_by: string | null
+          auto_import: boolean
+          auto_import_changed_at: string | null
+          auto_import_changed_by: string | null
+          last_auto_import_at: string | null
+          last_auto_import: Json | null
+        }
+        Insert: { id?: number }
+        Update: { id?: number }
+        Relationships: []
+      }
       app_users: {
         Row: {
           active: boolean
@@ -1026,6 +1042,10 @@ export type Database = {
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
       delete_staff_user: { Args: { p_id: string }; Returns: string }
+      import_bocp_online_orders_job: { Args: { p_orders: Json }; Returns: Json }
+      record_manual_import: { Args: { p_from: string }; Returns: undefined }
+      set_auto_import: { Args: { p_on: boolean }; Returns: boolean }
+      record_auto_import: { Args: { p_result: Json }; Returns: undefined }
       import_bocp_online_orders: {
         Args: { p_orders: Json }
         Returns: Json
