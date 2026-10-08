@@ -1066,3 +1066,7 @@ button.is-busy { cursor: progress; }
 .auto-import-state.on { background: #e9f7ef; color: #23784d; }
 .auto-import-state.off { background: #f0f2f5; color: #65676b; }
 .danger-text { color: #c62f33; }
+.push-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 14px 4px; padding: 9px 11px; border: 1px solid var(--frame-line); border-radius: 8px; background: var(--frame-hover); color: var(--frame-muted); font-size: .7rem; }
+.push-toggle .text-button { color: #9d92ff; }
+p.push-toggle { display: block; }
+.push-toggle .text-button { flex-shrink: 0; }

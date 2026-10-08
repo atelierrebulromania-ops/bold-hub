@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { markNotificationsRead } from "@/app/notifications/actions";
+import { PushToggle } from "@/components/push-toggle";
 
 export type RailNotification = {
   id: string;
@@ -70,6 +71,7 @@ export function NotificationRail({ notifications, role }: { notifications: RailN
         <div><h2>Notificări</h2><p><span className="live-dot" /> {unread.length ? `${unread.length} necitite` : "Totul e la zi"}</p></div>
         {unread.length > 0 && <button type="button" className="text-button" disabled={pending} onClick={() => markRead(null)}>Marchează toate</button>}
       </div>
+      <PushToggle />
       {notifications.length === 0 ? <p className="rail-empty">Nu ai notificări.</p> : <ul className="rail-list" aria-live="polite">
         {notifications.map((item) => {
           const href = linkFor(item.related_entity_type);

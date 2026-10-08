@@ -25,9 +25,16 @@ export type Database = {
           auto_import_changed_by: string | null
           last_auto_import_at: string | null
           last_auto_import: Json | null
+          push_dispatch_url: string | null
         }
         Insert: { id?: number }
         Update: { id?: number }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; user_agent: string | null; created_at: string; last_used_at: string | null }
+        Insert: { id?: string }
+        Update: { last_used_at?: string | null }
         Relationships: []
       }
       app_users: {
@@ -1042,6 +1049,12 @@ export type Database = {
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
       delete_staff_user: { Args: { p_id: string }; Returns: string }
+      save_push_subscription: { Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_user_agent: string }; Returns: boolean }
+      delete_push_subscription: { Args: { p_endpoint: string }; Returns: boolean }
+      claim_push_notifications: {
+        Args: { p_limit: number }
+        Returns: { id: string; message: string; related_entity_type: string | null; recipient_user_id: string | null; recipient_role: Database["public"]["Enums"]["user_role"] | null }[]
+      }
       import_bocp_online_orders_job: { Args: { p_orders: Json }; Returns: Json }
       record_manual_import: { Args: { p_from: string }; Returns: undefined }
       set_auto_import: { Args: { p_on: boolean }; Returns: boolean }
