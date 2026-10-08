@@ -118,3 +118,14 @@ export async function bocpGetList(endpoint: BocpListEndpoint, options: BocpListO
     nextPage: hasNextPage ? (Number.isSafeInteger(reportedNextPage) && reportedNextPage > requestedPage ? reportedNextPage : requestedPage + 1) : null,
   };
 }
+
+// A message the admin can act on, from an error thrown while calling BOCP.
+export function bocpErrorMessage(error: unknown): string {
+  const text = error instanceof Error ? error.message : "";
+  if (/not configured|base URL is invalid/.test(text)) return "BOCP nu este configurat pe server (lipsesc variabilele BOCP_API_* în Vercel).";
+  if (/\(401\)/.test(text)) return "BOCP a refuzat cererea (401): adresa IP a serverului nu este permisă pentru utilizatorul API sau datele de logare sunt greșite.";
+  const status = text.match(/request failed \((\d+)\)/)?.[1];
+  if (status) return `BOCP a răspuns cu eroarea ${status}.`;
+  if (/fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|aborted|timeout/i.test(text)) return "BOCP nu a putut fi contactat de pe server (conexiune refuzată sau expirată).";
+  return "Previzualizarea BOCP nu este disponibilă acum.";
+}
