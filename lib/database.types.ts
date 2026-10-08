@@ -25,7 +25,7 @@ export type Database = {
           auto_import_changed_by: string | null
           last_auto_import_at: string | null
           last_auto_import: Json | null
-          push_dispatch_url: string | null
+          app_url: string | null
         }
         Insert: { id?: number }
         Update: { id?: number }
