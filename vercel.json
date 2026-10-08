@@ -2,8 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["lhr1"],
   "crons": [
-    { "path": "/api/cron/bocp-import", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/invoice-payments", "schedule": "0 * * * *" },
-    { "path": "/api/push/dispatch", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/invoice-payments", "schedule": "0 4 * * *" }
   ]
 }

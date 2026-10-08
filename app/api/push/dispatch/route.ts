@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const noStore = { "Cache-Control": "no-store" };
 
-// Called by the database right after a notification is created (and by a cron as a fallback).
+// Called by the database right after a notification is created.
 async function handle(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {

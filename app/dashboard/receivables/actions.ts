@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { refreshInvoicePayments } from "@/lib/invoice-payments";
 
-// Re-reads the unpaid invoices in BOCP now (the hourly job does the same in the background).
+// Re-reads the unpaid invoices in BOCP now (the daily morning job does the same in the background).
 export async function recheckPayments(): Promise<{ ok: boolean; message: string }> {
   const { supabase } = await requireRole(["owner"]);
   const { checked, failed } = await refreshInvoicePayments(supabase, 30);
