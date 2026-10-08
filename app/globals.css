@@ -1059,7 +1059,7 @@ button.is-busy { cursor: progress; }
 .delete-confirm-actions { display: flex; gap: 8px; }
 .integration-import-actions { display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
 .integration-import-actions label { display: grid; gap: 4px; color: #65676b; font-size: .7rem; font-weight: 700; }
-.auto-import-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; }
+.auto-import-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; padding: 22px 27px; }
 .auto-import-card h2 { margin: 0 0 6px; font-size: 1rem; }
 .auto-import-card p { margin: 0; color: #65676b; font-size: .76rem; }
 .auto-import-state { display: inline-block; margin-left: 8px; padding: .15rem .45rem; border-radius: 5px; font-size: .68rem; font-weight: 800; vertical-align: middle; }

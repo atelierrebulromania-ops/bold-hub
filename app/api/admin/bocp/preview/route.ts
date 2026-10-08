@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { BOCP_EARLIEST_AUDIT_DATE, BOCP_LAUNCH_DATE, readBocpFeeds, validDate } from "@/lib/bocp/feeds";
 import { summarizeBocpImport } from "@/lib/bocp/preview";
+import { bocpErrorMessage } from "@/lib/bocp/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,8 +36,8 @@ export async function GET(request: Request) {
       truncated: { orders: orders.truncated, invoices: invoices.truncated },
       summary: summarizeBocpImport(orders.rows, invoices.rows, from),
     }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
-    return Response.json({ error: "Previzualizarea BOCP nu este disponibilă acum." }, {
+  } catch (error) {
+    return Response.json({ error: bocpErrorMessage(error) }, {
       status: 502,
       headers: { "Cache-Control": "no-store" },
     });
