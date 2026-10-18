@@ -223,7 +223,7 @@ function AddLeadPanel({ onClose, onSaved }: { onClose: () => void; onSaved: (id:
   return <>
     <div className="detail-backdrop" onClick={onClose} aria-hidden="true" />
     <aside className="detail-panel" aria-label="Lead nou">
-      <div className="detail-header"><div><p className="eyebrow">CRM</p><h2>Lead nou</h2></div><button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
+      <div className="detail-header"><div><p className="eyebrow">LEAD</p><h2>Lead nou</h2></div><button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll"><div className="form-stack">
         <label>Nume<input value={input.full_name} maxLength={200} autoFocus onChange={(event) => set("full_name", event.target.value)} /></label>
         <label>Firmă<input value={input.company} maxLength={200} onChange={(event) => set("company", event.target.value)} /></label>
@@ -277,7 +277,7 @@ function ImportPanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return <>
     <div className="detail-backdrop" onClick={onClose} aria-hidden="true" />
     <aside className="detail-panel" aria-label="Importă lead-uri">
-      <div className="detail-header"><div><p className="eyebrow">CRM</p><h2>Importă lead-uri din CSV</h2></div><button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
+      <div className="detail-header"><div><p className="eyebrow">LEAD</p><h2>Importă lead-uri din CSV</h2></div><button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll"><div className="form-stack">
         <p className="muted">Din Meta: Leads Center (sau Business Suite → Toate instrumentele → Formulare instant) → Descarcă → CSV. Lead-urile deja existente sunt sărite.</p>
         <label>De unde vin<select value={source} onChange={(event) => setSource(event.target.value as "meta" | "website")}><option value="meta">Meta (Facebook / Instagram)</option><option value="website">Site / altă sursă</option></select></label>

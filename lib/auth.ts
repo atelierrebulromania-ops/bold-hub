@@ -57,7 +57,13 @@ export async function requireRole(roles: readonly UserRole[]) {
   if (view && "partnerId" in view) redirect("/partner");
   const role = view?.role ?? profile.role;
   if (!roles.includes(role)) redirect("/access");
-  const crm = profile.role === "admin" || profile.crm_access;
+  // CRM access follows the account; an admin previewing a role sees what that role's users have.
+  let crm = profile.role === "admin" || profile.crm_access;
+  if (view && role !== profile.role) {
+    const { count } = await supabase.from("app_users").select("id", { count: "exact", head: true })
+      .eq("role", role).eq("active", true).eq("crm_access", true);
+    crm = (count ?? 0) > 0;
+  }
   return { supabase, userId, profile: { id: userId, full_name: profile.full_name, role, realRole: profile.role, crm } as Profile };
 }
 

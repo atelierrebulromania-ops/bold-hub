@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function CrmPage() {
   const { supabase, profile } = await requireRole(staffRoles);
   if (!profile.crm) redirect("/access");
-  const canWork = profile.realRole === "admin" || profile.role === "account";
+  // Claiming follows the role on screen: agents, or the admin as themself.
+  const canWork = profile.role === "admin" || profile.role === "account";
 
   const [{ data: leads, error }, { data: people }] = await Promise.all([
     supabase.from("leads").select("id,source,campaign,ad_name,form_name,full_name,company,phone,email,city,message,answers,status,lost_reason,claimed_by,claimed_at,partner_id,received_at")
@@ -19,10 +20,10 @@ export default async function CrmPage() {
   const names = Object.fromEntries((people ?? []).map((person) => [person.id, person.full_name]));
 
   return (
-    <AppShell profile={profile} active="/crm" section="Vânzări" title="CRM"
-      note={{ title: "CRM", text: "Lead-urile din reclame și formulare. Agenții le preiau și le duc până la client." }}>
+    <AppShell profile={profile} active="/crm" section="Vânzări" title="Lead"
+      note={{ title: "Lead", text: "Lead-urile din reclame și formulare. Agenții le preiau și le duc până la client." }}>
       <NavCountsListener tables={["leads"]} />
-      <div className="page-heading"><div><p className="eyebrow">VÂNZĂRI</p><h1>CRM</h1><p className="muted">Lead-uri din Meta, de pe site și adăugate manual.</p></div></div>
+      <div className="page-heading"><div><p className="eyebrow">VÂNZĂRI</p><h1>Lead</h1><p className="muted">Lead-uri din Meta, de pe site și adăugate manual.</p></div></div>
       {error ? <p className="notice error" role="alert">Lead-urile nu pot fi încărcate acum.</p>
         : <LeadsBoard leads={(leads ?? []) as Lead[]} names={names} currentUserId={profile.id} canWork={canWork} />}
     </AppShell>

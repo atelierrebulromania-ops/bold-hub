@@ -15,7 +15,7 @@ export type LeadActivity = { id: string; kind: string; body: string | null; crea
 // Agents with CRM access work leads; the admin can too (also while previewing another role).
 async function worker() {
   const context = await requireRole(staffRoles);
-  const canWork = context.profile.crm && (context.profile.realRole === "admin" || context.profile.role === "account");
+  const canWork = context.profile.crm && (context.profile.role === "admin" || context.profile.role === "account");
   return { ...context, canWork };
 }
 
@@ -37,7 +37,7 @@ export async function getLeadActivity(leadId: string): Promise<LeadActivity[]> {
 
 export async function claimLead(leadId: string): Promise<Result> {
   const { supabase, canWork } = await worker();
-  if (!canWork || !uuid.test(leadId)) return { ok: false, message: "Doar agenții cu acces la CRM pot prelua lead-uri." };
+  if (!canWork || !uuid.test(leadId)) return { ok: false, message: "Doar agenții cu acces la Lead pot prelua lead-uri." };
   const { data } = await supabase.rpc("claim_lead", { p_id: leadId });
   return done(data ? { ok: true, message: "Lead-ul e al tău." } : { ok: false, message: "Lead-ul a fost preluat între timp de altcineva." });
 }
@@ -70,7 +70,7 @@ export type ManualLead = { full_name: string; company: string; phone: string; em
 
 export async function createLead(input: ManualLead): Promise<Result & { id?: string }> {
   const { supabase, canWork } = await worker();
-  if (!canWork) return { ok: false, message: "Doar agenții cu acces la CRM pot adăuga lead-uri." };
+  if (!canWork) return { ok: false, message: "Doar agenții cu acces la Lead pot adăuga lead-uri." };
   if (!input.full_name.trim() && !input.company.trim()) return { ok: false, message: "Completează numele sau firma." };
   const { data, error } = await supabase.rpc("create_lead", { p_lead: input as unknown as Json });
   if (error || !data) return { ok: false, message: "Nu am putut salva lead-ul." };
@@ -80,7 +80,7 @@ export async function createLead(input: ManualLead): Promise<Result & { id?: str
 // CSV from Meta Leads Center (or any sheet with a header row). Rows already imported are skipped.
 export async function importLeads(rows: Record<string, string>[], source: "meta" | "website"): Promise<Result> {
   const { supabase, canWork } = await worker();
-  if (!canWork) return { ok: false, message: "Doar agenții cu acces la CRM pot importa lead-uri." };
+  if (!canWork) return { ok: false, message: "Doar agenții cu acces la Lead pot importa lead-uri." };
   if (!Array.isArray(rows) || rows.length === 0 || rows.length > 2000) return { ok: false, message: "Fișierul trebuie să aibă între 1 și 2000 de rânduri." };
   let added = 0;
   let skipped = 0;

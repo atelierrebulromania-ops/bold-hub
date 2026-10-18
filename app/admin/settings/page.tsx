@@ -25,14 +25,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <AppShell profile={profile} active="/admin/settings" section="Administrare" title="Setări"
-      note={{ title: "Setări", text: "Cine are acces la CRM și de unde vin lead-urile." }}>
+      note={{ title: "Setări", text: "Cine are acces la Lead și de unde vin lead-urile." }}>
       <div className="page-heading"><div><p className="eyebrow">ADMINISTRARE</p><h1>Setări</h1></div></div>
       {params.notice === "rotated" && <p className="preview-alert success admin-feedback" role="status">Cheia a fost schimbată. Actualizează linkurile în Make, Zapier și MailerLite.</p>}
 
-      <section className="board-panel" aria-label="Acces CRM">
-        <div className="board-panel-heading"><div><h2>Acces la CRM</h2><p>Cei bifați văd toate lead-urile. Doar agenții (Account) le pot prelua; administratorul are acces mereu.</p></div></div>
+      <section className="board-panel" aria-label="Acces Lead">
+        <div className="board-panel-heading"><div><h2>Acces la Lead</h2><p>Cei bifați văd toate lead-urile. Doar agenții (Account) le pot prelua; administratorul are acces mereu.</p></div></div>
         <div className="handed-table-wrap"><table className="handed-table settings-users">
-          <thead><tr><th>Utilizator</th><th>Rol</th><th>Acces CRM</th></tr></thead>
+          <thead><tr><th>Utilizator</th><th>Rol</th><th>Acces Lead</th></tr></thead>
           <tbody>{(users ?? []).map((user) => <tr key={user.id}>
             <td className="strong">{user.full_name}</td>
             <td className="nowrap">{roleLabels[user.role]}{user.role === "account" ? " · poate prelua" : ""}</td>

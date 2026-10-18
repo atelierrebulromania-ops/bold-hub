@@ -31,7 +31,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     { href: "/returns", label: "Retururi", roles: ["admin", "operator_depozit", "operator_facturare"], counter: "returns", icon: <svg {...svg}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> },
   ] },
   { label: "VÂNZĂRI", items: [
-    { href: "/crm", label: "CRM", roles: ["admin", "owner", "operator_depozit", "operator_facturare", "account"], crm: true, counter: "leads", icon: <svg {...svg}><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> },
+    { href: "/crm", label: "Lead", roles: ["admin", "owner", "operator_depozit", "operator_facturare", "account"], crm: true, counter: "leads", icon: <svg {...svg}><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> },
     { href: "/account", label: "Clienți", roles: ["account"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11h6M19 8v6"/></svg> },
     { href: "/account/offers", label: "Oferte și proforme", roles: ["account"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
     { href: "/account/catalog", label: "Catalog produse", roles: ["account"], icon: <svg {...svg}><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg> },
