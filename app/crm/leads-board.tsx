@@ -96,12 +96,15 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
             <button type="button" className="button button-primary" onClick={() => setAdding(true)}>+ Lead nou</button>
           </div>}
         </div>
-        <nav className="board-tabs" aria-label="Etape">
-          {tabs.map((item) => <button key={item.value} type="button" className={tab === item.value ? "active" : ""} onClick={() => setTab(item.value)}>{item.label}<span>{counts[item.value]}</span></button>)}
-        </nav>
+        <div className="crm-tabs-row">
+          <nav className="board-tabs" aria-label="Etape">
+            {tabs.map((item) => <button key={item.value} type="button" className={tab === item.value ? "active" : ""} onClick={() => setTab(item.value)}>{item.label}<span>{counts[item.value]}</span></button>)}
+          </nav>
+          {canWork && <label className="crm-mine-toggle"><input type="checkbox" role="switch" checked={mine} onChange={(event) => setMine(event.target.checked)} />
+            <span className="crm-switch" aria-hidden="true" />Doar ale mele</label>}
+        </div>
         <div className="crm-filters">
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Caută nume, firmă, telefon, email, campanie…" aria-label="Caută lead" />
-          {canWork && <label className="admin-checkbox"><input type="checkbox" checked={mine} onChange={(event) => setMine(event.target.checked)} /> Doar ale mele</label>}
         </div>
         {feedback && !openId && <p className={`action-feedback ${feedback.ok ? "success" : "error"} crm-feedback`} role="status">{feedback.message}</p>}
         {visible.length === 0 ? <p className="admin-empty-note crm-empty">{tab === "new" ? "Niciun lead nou de preluat." : "Niciun lead aici."}</p>
@@ -214,7 +217,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
             </>}
         </section>}
 
-        {canWork && !closed && holder && <section className="detail-section"><h3>Rezultat</h3>
+        {canWork && holder && lead.status === "offer" && <section className="detail-section"><h3>Rezultat</h3>
           {!losing ? <div className="crm-result">
             <button type="button" className="button crm-won" disabled={pending} onClick={() => setConverting(true)}>✓ Câștigat<small>devine client nou</small></button>
             <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => setLosing(true)}>✕ Pierdut<small>alege motivul</small></button>
