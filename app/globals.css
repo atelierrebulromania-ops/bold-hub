@@ -1087,10 +1087,6 @@ p.push-toggle { display: block; }
 .crm-fields dd { margin: 0; overflow-wrap: anywhere; }
 .crm-fields a { color: var(--blue); }
 .crm-message { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; background: #f7f9fc; font-size: .78rem; white-space: pre-wrap; }
-.crm-stage-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.crm-stage-buttons .button { padding: .45rem .8rem; font-size: .74rem; }
-.crm-outcome { display: grid; gap: 10px; justify-items: start; }
-.crm-lost { display: flex; gap: 8px; }
 .crm-note { width: 100%; margin-bottom: 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: .8rem; resize: vertical; }
 .crm-timeline { margin: 0; padding: 0; list-style: none; }
 .crm-timeline li { position: relative; padding: 0 0 12px 16px; border-left: 2px solid #e6e8ec; margin-left: 4px; }
@@ -1114,3 +1110,31 @@ p.push-toggle { display: block; }
 .crm-deadline.late { border-color: #f2c4c6; background: #fff4f4; color: #a13032; }
 .crm-deadline-actions { display: flex; align-items: center; gap: 8px; color: #65676b; }
 .settings-days { display: flex; align-items: center; gap: 8px; flex-shrink: 0; } .settings-days input { width: 80px; }
+
+.crm-stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0 0 14px; padding: 0; list-style: none; }
+.crm-stepper li { position: relative; }
+.crm-stepper li + li::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: #e1e4e9; z-index: 0; }
+.crm-stepper li.done + li::before, .crm-stepper li.current::before { background: var(--blue); }
+.crm-stepper button { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; width: 100%; padding: 0 4px; border: 0; background: none; color: #7a7d83; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.crm-stepper button:disabled { cursor: default; }
+.crm-step-dot { display: grid; place-items: center; width: 32px; height: 32px; border: 2px solid #d5d9df; border-radius: 50%; background: #fff; color: #8a8d91; font-size: .76rem; transition: border-color .15s, background .15s; }
+.crm-stepper button:not(:disabled):hover .crm-step-dot { border-color: var(--blue); color: var(--blue); }
+.crm-stepper li.done button { color: var(--blue); }
+.crm-stepper li.done .crm-step-dot { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.crm-stepper li.current button { color: var(--ink); }
+.crm-stepper li.current .crm-step-dot { border-color: var(--blue); background: var(--blue); color: #fff; }
+.crm-result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.crm-result .button { display: grid; justify-items: start; gap: 2px; padding: 12px 14px; text-align: left; font-size: .84rem; }
+.crm-result small { font-size: .68rem; font-weight: 500; opacity: .85; }
+.crm-won { color: #fff; border-color: #23784d; background: #299367; }
+.crm-won:hover:not(:disabled) { background: #23784d; }
+.crm-lost-button { color: #a13032; border-color: #f0c3c5; background: #fff; }
+.crm-lost-button:hover:not(:disabled) { background: #fff5f5; }
+.crm-lost-box { padding: 12px; border: 1px solid #f0c3c5; border-radius: 9px; background: #fffafa; }
+.crm-lost-box p { margin: 0 0 10px; font-size: .78rem; font-weight: 700; }
+.crm-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.crm-reasons button { padding: .4rem .7rem; border: 1px solid #e1e4e9; border-radius: 999px; background: #fff; color: #4b4f56; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.crm-reasons button.selected { border-color: #c62f33; background: #c62f33; color: #fff; }
+.crm-lost-actions { display: flex; gap: 8px; }
+.crm-panel-footer { display: flex; align-items: center; gap: 12px; }
+.crm-panel-footer small { color: #8a8d91; font-size: .7rem; }

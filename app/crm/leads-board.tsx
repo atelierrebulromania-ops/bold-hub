@@ -120,7 +120,7 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
                   return due && <small className={due.late ? "crm-late" : ""}>{due.label}</small>;
                 })()}</td>
                 <td className="nowrap">{lead.claimed_by
-                  ? lead.claimed_by === currentUserId ? <span className="outcome-chip ok">Tu</span> : names[lead.claimed_by] ?? "—"
+                  ? names[lead.claimed_by] ?? "—"
                   : canWork && lead.status !== "won" && lead.status !== "lost"
                     ? <button type="button" className="button button-primary crm-claim" disabled={pending} onClick={(event) => { event.stopPropagation(); run(() => claimLead(lead.id)); }}>Preia</button>
                     : <span className="muted-cell">Nepreluat</span>}</td>
@@ -144,6 +144,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
   const [activity, setActivity] = useState<LeadActivity[] | null>(null);
   const [note, setNote] = useState("");
   const [lostReason, setLostReason] = useState("");
+  const [losing, setLosing] = useState(false);
   const [converting, setConverting] = useState(false);
   const holder = lead.claimed_by === currentUserId;
   const closed = lead.status === "won" || lead.status === "lost";
@@ -167,7 +168,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
     <aside className="detail-panel" aria-label="Lead">
       <div className="detail-header"><div><p className="eyebrow">{sourceLabels[lead.source] ?? lead.source}{lead.campaign ? ` · ${lead.campaign}` : ""}</p><h2>{title(lead)}</h2>
         <p className="crm-panel-meta"><span className={`payment-chip ${stage.tone}`}>{stage.label}</span>
-          {lead.claimed_by ? <span>Preluat de {holder ? "tine" : names[lead.claimed_by] ?? "—"}</span> : <span>Nepreluat</span>}</p></div>
+          {lead.claimed_by ? <span>Preluat de {names[lead.claimed_by] ?? "—"}</span> : <span>Nepreluat</span>}</p></div>
         <button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll">
         <section className="detail-section"><h3>Contact</h3>
@@ -192,9 +193,15 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
           {!lead.claimed_by ? <button type="button" className="button button-primary" disabled={pending} onClick={() => run(() => claimLead(lead.id))}>Preia lead-ul</button>
             : !holder ? <p className="muted">Lead-ul e preluat de {names[lead.claimed_by] ?? "alt agent"}. Doar el îl poate muta între etape.</p>
             : <>
-              <div className="crm-stage-buttons">{stages.filter((item) => ["to_contact", "contacted", "offer"].includes(item.value)).map((item) =>
-                <button key={item.value} type="button" className={`button ${lead.status === item.value ? "button-primary" : "button-outline"}`} disabled={pending || lead.status === item.value}
-                  onClick={() => run(() => setLeadStatus(lead.id, item.value, ""))}>{item.label}</button>)}</div>
+              <ol className="crm-stepper">{stages.filter((item) => ["to_contact", "contacted", "offer"].includes(item.value)).map((item, index, list) => {
+                const current = list.findIndex((step) => step.value === lead.status);
+                const state = index < current ? "done" : index === current ? "current" : "next";
+                return <li key={item.value} className={state}>
+                  <button type="button" disabled={pending || state === "current"} onClick={() => run(() => setLeadStatus(lead.id, item.value, ""))}
+                    aria-current={state === "current" ? "step" : undefined}>
+                    <span className="crm-step-dot" aria-hidden="true">{state === "done" ? "✓" : index + 1}</span>{item.label}</button>
+                </li>;
+              })}</ol>
               {lead.status === "offer" && (() => {
                 const due = deadline(lead, Date.now());
                 return due && <div className={`crm-deadline ${due.late ? "late" : ""}`}>
@@ -203,14 +210,22 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
                     <button key={days} type="button" className="text-button" disabled={pending} onClick={() => run(() => postponeFollowUp(lead.id, days))}>+{days} zile</button>)}</span>
                 </div>;
               })()}
-              <div className="crm-outcome">
-                <button type="button" className="button button-primary" disabled={pending} onClick={() => setConverting(true)}>Câștigat → client nou</button>
-                <div className="crm-lost"><select value={lostReason} onChange={(event) => setLostReason(event.target.value)} aria-label="Motiv pierdut">
-                  <option value="">Motiv pierdut…</option>{lostReasons.map((reason) => <option key={reason}>{reason}</option>)}</select>
-                  <button type="button" className="button button-outline" disabled={pending || !lostReason} onClick={() => run(() => setLeadStatus(lead.id, "lost", lostReason))}>Pierdut</button></div>
-                <button type="button" className="text-button" disabled={pending} onClick={() => run(() => releaseLead(lead.id))}>Eliberează lead-ul</button>
-              </div>
             </>}
+        </section>}
+
+        {canWork && !closed && holder && <section className="detail-section"><h3>Rezultat</h3>
+          {!losing ? <div className="crm-result">
+            <button type="button" className="button crm-won" disabled={pending} onClick={() => setConverting(true)}>✓ Câștigat<small>devine client nou</small></button>
+            <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => setLosing(true)}>✕ Pierdut<small>alege motivul</small></button>
+          </div> : <div className="crm-lost-box">
+            <p>De ce s-a pierdut?</p>
+            <div className="crm-reasons">{lostReasons.map((reason) => <button key={reason} type="button" className={lostReason === reason ? "selected" : ""}
+              onClick={() => setLostReason(reason)}>{reason}</button>)}</div>
+            <div className="crm-lost-actions">
+              <button type="button" className="button button-danger" disabled={pending || !lostReason} onClick={() => run(() => setLeadStatus(lead.id, "lost", lostReason), () => setLosing(false))}>Marchează pierdut</button>
+              <button type="button" className="button button-outline" disabled={pending} onClick={() => { setLosing(false); setLostReason(""); }}>Renunță</button>
+            </div>
+          </div>}
         </section>}
         {lead.status === "lost" && <section className="detail-section"><h3>Pierdut</h3><p>{lead.lost_reason ?? "Fără motiv."}</p>
           {canWork && (holder || !lead.claimed_by) && <button type="button" className="text-button" disabled={pending} onClick={() => run(() => setLeadStatus(lead.id, "contacted", ""))}>Redeschide</button>}</section>}
@@ -229,6 +244,10 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
         </section>
       </div>
       {!canWork && <div className="detail-actions"><p className="muted">Ai acces doar de vizualizare.</p></div>}
+      {canWork && holder && !closed && <div className="detail-actions crm-panel-footer">
+        <button type="button" className="button button-outline" disabled={pending} onClick={() => run(() => releaseLead(lead.id))}>Eliberează lead-ul</button>
+        <small>Îl pune înapoi în lista comună, ca să-l preia altcineva.</small>
+      </div>}
     </aside>
     {converting && <ConvertPanel lead={lead} onClose={() => setConverting(false)} run={run} />}
   </>;
