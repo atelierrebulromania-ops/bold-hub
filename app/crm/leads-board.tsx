@@ -143,6 +143,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
 }) {
   const [activity, setActivity] = useState<LeadActivity[] | null>(null);
   const [note, setNote] = useState("");
+  const [writing, setWriting] = useState(false);
   const [lostReason, setLostReason] = useState("");
   const [losing, setLosing] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -230,14 +231,17 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
         {lead.status === "lost" && <section className="detail-section"><h3>Pierdut</h3><p>{lead.lost_reason ?? "Fără motiv."}</p>
           {canWork && (holder || !lead.claimed_by) && <button type="button" className="text-button" disabled={pending} onClick={() => run(() => setLeadStatus(lead.id, "contacted", ""))}>Redeschide</button>}</section>}
 
-        {canWork && <section className="detail-section"><h3>Notiță</h3>
-          <textarea className="crm-note" value={note} maxLength={4000} rows={3} onChange={(event) => setNote(event.target.value)} placeholder="Ce s-a discutat, ce urmează…" />
-          <button type="button" className="button button-outline" disabled={pending || !note.trim()} onClick={() => run(() => addLeadNote(lead.id, note), () => setNote(""))}>Salvează notița</button>
-        </section>}
-
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
 
-        <section className="detail-section"><h3>Istoric</h3>
+        <section className="detail-section"><div className="crm-section-heading"><h3>Istoric</h3>
+          {canWork && !writing && <button type="button" className="text-button" onClick={() => setWriting(true)}>+ Adaugă notiță</button>}</div>
+          {writing && <div className="crm-note-box">
+            <textarea className="crm-note" value={note} maxLength={4000} rows={3} autoFocus onChange={(event) => setNote(event.target.value)} placeholder="Ce s-a discutat, ce urmează…" />
+            <div className="crm-lost-actions">
+              <button type="button" className="button button-primary" disabled={pending || !note.trim()} onClick={() => run(() => addLeadNote(lead.id, note), () => { setNote(""); setWriting(false); })}>Salvează</button>
+              <button type="button" className="button button-outline" disabled={pending} onClick={() => { setWriting(false); setNote(""); }}>Renunță</button>
+            </div>
+          </div>}
           {activity === null ? <p className="muted">Se încarcă…</p> : activity.length === 0 ? <p className="muted">Nimic încă.</p>
             : <ul className="crm-timeline">{activity.map((item) => <li key={item.id} className={item.kind}>
               <p>{item.body}</p><small>{item.user_name ?? "Sistem"} · {when(item.created_at)}</small></li>)}</ul>}

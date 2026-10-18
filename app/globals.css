@@ -1138,3 +1138,6 @@ p.push-toggle { display: block; }
 .crm-lost-actions { display: flex; gap: 8px; }
 .crm-panel-footer { display: flex; align-items: center; gap: 12px; }
 .crm-panel-footer small { color: #8a8d91; font-size: .7rem; }
+.crm-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 1rem; }
+.crm-section-heading h3 { margin-bottom: 0; }
+.crm-note-box { margin: 10px 0 14px; }
