@@ -1160,3 +1160,4 @@ p.push-toggle { display: block; }
 .backorder-actions input { width: 56px; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: .78rem; text-align: center; }
 .backorder-actions .button { padding: .35rem .7rem; font-size: .72rem; }
 .backorder-hint { margin: 8px 0 0; color: #8a8d91; font-size: .72rem; }
+.group-invoice-note { margin: 0 0 14px; font-size: .76rem; }

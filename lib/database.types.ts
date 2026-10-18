@@ -574,6 +574,7 @@ export type Database = {
       }
       partner_carts: {
         Row: {
+          invoiced_with: string | null
           invoice_due_date: string | null
           invoice_last_payment_date: string | null
           invoice_rest: number | null
@@ -1086,6 +1087,7 @@ export type Database = {
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
       delete_staff_user: { Args: { p_id: string }; Returns: string }
       prepare_partner_cart: { Args: { p_cart_id: string; p_lines: Json }; Returns: string }
+      mark_partner_carts_invoiced: { Args: { p_cart_ids: string[]; p_invoice_number: string; p_bocp_invoice_id: string; p_invoice_date: string; p_invoice_pdf_url: string | null }; Returns: string | null }
       shelve_backorder: { Args: { p_id: string; p_quantity: number }; Returns: boolean }
       cancel_backorder: { Args: { p_id: string; p_reason: string }; Returns: boolean }
       backorder_products: { Args: never; Returns: { product_id: string; sku: string; name: string; units: number; partners: number; unnotified: number }[] }

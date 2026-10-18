@@ -29,7 +29,8 @@ export default async function InvoicingDashboard() {
     supabase.from("sales_documents").select("id,client_name,bocp_proforma_number:number,invoice_requested_at,bocp_proforma_total")
       .eq("status", "issued").not("invoice_requested_at", "is", null).is("invoiced_at", null).order("invoice_requested_at").limit(100),
     supabase.from("sales_documents").select("id,cancel_requested_at").eq("status", "cancel_requested").order("cancel_requested_at").limit(100),
-    supabase.from("partner_carts").select("invoiced_at,invoiced_by,invoice_total").gte("invoiced_at", weekStart).limit(2000),
+    // Carts invoiced together are one invoice.
+    supabase.from("partner_carts").select("invoiced_at,invoiced_by,invoice_total").gte("invoiced_at", weekStart).is("invoiced_with", null).limit(2000),
     supabase.from("sales_documents").select("invoiced_at,invoiced_by,invoice_total").gte("invoiced_at", weekStart).limit(2000),
     supabase.from("order_returns").select("id", count).gte("registered_at", todayStart),
     supabase.from("order_returns").select("id", count).gte("registered_at", todayStart).eq("registered_by", profile.id),

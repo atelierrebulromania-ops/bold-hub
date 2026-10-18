@@ -6,10 +6,13 @@ import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { describeRules, discountFor } from "@/lib/pricing";
 import type { BocpInvoiceMatch } from "@/lib/bocp/invoice-lookup";
-import { findCartInvoice, markCartInvoiced, retryCartReservation } from "./actions";
+import { findCartInvoice, markCartsInvoiced, retryCartReservation } from "./actions";
 
 export type BillingCart = {
   id: string;
+  partner_id: string;
+  // Invoiced together with this (older) cart of the same partner: the invoice lives there.
+  invoiced_with: string | null;
   prepared_at: string | null;
   delivered_at: string | null;
   delivered_by: string | null;
@@ -77,7 +80,13 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
   const [found, setFound] = useState<{ invoice: BocpInvoiceMatch; warning: string | null } | null>(null);
   const [searching, startSearch] = useTransition();
   const [pending, startTransition] = useTransition();
-  const selected = carts.find((cart) => cart.id === selectedId) ?? null;
+  // To invoice: a partner's handed carts go on one invoice, so they show as one card (oldest first).
+  const groups = view === "invoice"
+    ? [...carts.reduce((map, cart) => map.set(cart.partner_id, [...(map.get(cart.partner_id) ?? []), cart]), new Map<string, BillingCart[]>()).values()]
+      .map((group) => [...group].sort((a, b) => (a.delivered_at ?? "").localeCompare(b.delivered_at ?? "")))
+    : carts.map((cart) => [cart]);
+  const selectedGroup = groups.find((group) => group.some((cart) => cart.id === selectedId)) ?? null;
+  const selected = selectedGroup?.[0] ?? null;
   const name = (id: string | null) => (id ? operatorNames[id] ?? "Operator" : "—");
 
   const open = (id: string) => { setSelectedId(id); setFeedback(null); setInvoiceNumber(""); setFound(null); };
@@ -109,9 +118,9 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
     });
   }
 
-  function invoice(cartId: string) {
+  function invoice(cartIds: string[]) {
     startTransition(async () => {
-      const result = await markCartInvoiced(cartId, invoiceNumber);
+      const result = await markCartsInvoiced(cartIds, invoiceNumber);
       setFeedback(result);
       router.refresh();
       if (result.ok) close();
@@ -128,15 +137,16 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
       {view === "products" ? <ReservedProducts carts={carts} bocpReserved={bocpReserved ?? null} bocpError={bocpError ?? null} />
         : carts.length === 0 ? hideEmpty ? null : <p className="admin-empty-note">{view === "reserve" ? "Toate comenzile de pe raft sunt rezervate în BOCP." : view === "invoice" ? "Nu există comenzi B2B de facturat." : "Nicio comandă facturată încă."}</p>
         : view !== "history" ? <div className="returns-grid">
-          {carts.map((cart) => (
-            <button key={cart.id} type="button" className={`order-card ${selectedId === cart.id ? "selected" : ""}`} onClick={() => open(cart.id)}>
+          {groups.map((group) => { const cart = group[0]; return (
+            <button key={cart.id} type="button" className={`order-card ${selectedGroup?.[0].id === cart.id ? "selected" : ""}`} onClick={() => open(cart.id)}>
               <div className="card-top"><span className="invoice">{cart.partners?.business_name ?? "Partener"}</span></div>
               <div className="billing-card-chips">{partnerChips(cart)}{view === "reserve" && <span className={`item-flag ${cart.bocp_order_error ? "no-ean" : "gift"}`}>{cart.bocp_order_error ? "Eroare BOCP" : "Se rezervă…"}</span>}
-                {view === "invoice" && !cart.reserved_in_bocp_at && <span className="item-flag no-ean" title="Stocul acestei comenzi nu este rezervat în BOCP.">Nerezervat în BOCP</span>}</div>
-              <p className="card-subtitle">{units(cart)} buc. · {cart.partner_cart_items.length} {cart.partner_cart_items.length === 1 ? "produs" : "produse"}</p>
+                {view === "invoice" && group.some((one) => !one.reserved_in_bocp_at) && <span className="item-flag no-ean" title="Stocul nu este rezervat în BOCP.">Nerezervat în BOCP</span>}
+                {group.length > 1 && <span className="item-flag gift" title="Comenzile acestui partener se facturează împreună.">{group.length} comenzi · o factură</span>}</div>
+              <p className="card-subtitle">{group.reduce((sum, one) => sum + units(one), 0)} buc. · {group.reduce((sum, one) => sum + one.partner_cart_items.length, 0)} {group.reduce((sum, one) => sum + one.partner_cart_items.length, 0) === 1 ? "produs" : "produse"}</p>
               <div className="card-bottom"><span>{view === "reserve" ? `Pe raft ${formatDateTime(cart.prepared_at)}` : `Predată ${formatDateTime(cart.delivered_at)}`}</span><span className="card-arrow" aria-hidden="true">›</span></div>
             </button>
-          ))}
+          ); })}
         </div>
         : <div className="handed-table-wrap"><table className="handed-table">
           <thead><tr><th>Facturată la</th><th>Nr. factură</th><th>Partener</th><th>Produse</th><th>Scadență</th><th>Predată de</th><th>Facturată de</th><th>Factură</th></tr></thead>
@@ -149,7 +159,7 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
               <td className="nowrap"><PaymentChip dueDate={cart.invoice_due_date} rest={cart.invoice_rest} /></td>
               <td className="nowrap">{name(cart.delivered_by)}</td>
               <td className="nowrap">{name(cart.invoiced_by)}</td>
-              <td className="nowrap">{cart.bocp_invoice_id && <a className="icon-link" href={`/billing/invoice/${cart.id}`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}
+              <td className="nowrap">{(cart.bocp_invoice_id || cart.invoiced_with) && <a className="icon-link" href={`/billing/invoice/${cart.invoiced_with ?? cart.id}`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}
                 aria-label={`Descarcă factura ${cart.invoice_number ?? ""}`} title="Descarcă factura">{downloadIcon}</a>}</td>
             </tr>
           ))}</tbody>
@@ -161,17 +171,21 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
           <div className="detail-header"><div><p className="eyebrow">Comandă B2B</p><h2>{selected.partners?.business_name ?? "Partener"}</h2></div><button className="close-button" aria-label="Închide detaliile" onClick={close}>×</button></div>
           <div className="detail-scroll">
             <div className="detail-meta"><span className={`status-badge ${selected.invoiced_at ? "handed" : ""}`}>{selected.invoiced_at ? "Facturată" : view === "reserve" ? "Nerezervată în BOCP" : "De facturat"}</span>{partnerChips(selected)}</div>
-            <section className="detail-section"><div className="section-line"><h3>Produse</h3><span>{units(selected)} buc.</span></div>
-              <div className="item-list">{selected.partner_cart_items.map((item) => {
+            {selectedGroup!.length > 1 && <p className="preview-alert success group-invoice-note">Se facturează împreună: <strong>{selectedGroup!.length} comenzi, o singură factură</strong> în BOCP pentru toate produsele de mai jos.</p>}
+            {selectedGroup!.map((cart) => <section className="detail-section" key={cart.id}><div className="section-line">
+              <h3>{selectedGroup!.length > 1 ? `Comanda predată ${formatDateTime(cart.delivered_at)}` : "Produse"}</h3><span>{units(cart)} buc.</span></div>
+              <div className="item-list">{cart.partner_cart_items.map((item) => {
                 // From a proforma: the product's own discount there, or the document's; otherwise the client's rules.
-                const source = selected.sales_documents;
+                const source = cart.sales_documents;
                 const lineDiscount = source
                   ? source.sales_document_items.find((line) => line.sku === item.products?.sku)?.discount_percent ?? source.discount_percent
-                  : discountFor(selected.partners?.partner_discounts ?? [], item.products?.category ?? null);
+                  : discountFor(cart.partners?.partner_discounts ?? [], item.products?.category ?? null);
                 return <div className="order-item" key={item.id}><div><strong>{item.products?.name ?? "Produs"}</strong><small>{item.products?.variant_label ? `${item.products.variant_label} · ` : ""}SKU {item.products?.sku ?? "—"}{item.products?.category ? ` · ${item.products.category}` : ""}</small></div>
                   {lineDiscount > 0 && <span className="item-flag gift">−{lineDiscount}%</span>}<b>×{item.quantity_needed}</b></div>;
               })}</div>
-            </section>
+              {selectedGroup!.length > 1 && cart.sales_documents && <p className="muted small">Din {cart.sales_documents.kind === "offer" ? "oferta" : "proforma"} {cart.sales_documents.number} · discount {cart.sales_documents.discount_percent}%</p>}
+              {selectedGroup!.length > 1 && <p className="muted small">{cart.reserved_in_bocp_at ? `Rezervată în BOCP${cart.bocp_order_id ? ` · comanda #${cart.bocp_order_id}` : ""}` : "Nerezervată în BOCP"}</p>}
+            </section>)}
             <section className="detail-section"><h3>Condiții de preț</h3>
               {selected.sales_documents
                 ? <p className="detail-primary">Din {selected.sales_documents.kind === "offer" ? "oferta" : "proforma"} {selected.sales_documents.number} · discount general {selected.sales_documents.discount_percent}%{selected.sales_documents.sales_document_items.some((line) => line.discount_percent !== null) ? ", unele produse cu discount propriu (vezi lista)" : ""}</p>
@@ -188,7 +202,7 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
               </dl>
             </section>
             <section className="detail-section"><h3>Partener</h3><p className="detail-primary">{selected.partners?.business_name}</p><p>{selected.partners?.location_name}</p>{selected.partners?.contact_phone && <p>{selected.partners.contact_phone}</p>}{selected.partners?.contact_email && <p>{selected.partners.contact_email}</p>}</section>
-            {selected.invoiced_at && selected.bocp_invoice_id && <a className="button button-outline invoice-button" href={`/billing/invoice/${selected.id}`} target="_blank" rel="noopener noreferrer">
+            {selected.invoiced_at && (selected.bocp_invoice_id || selected.invoiced_with) && <a className="button button-outline invoice-button" href={`/billing/invoice/${selected.invoiced_with ?? selected.id}`} target="_blank" rel="noopener noreferrer">
               <svg className="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>Descarcă factura</a>}
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
           </div>
@@ -211,7 +225,7 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
               <button type="submit" className="button button-outline" disabled={searching || pending || !invoiceNumber.trim()}>{searching ? "Caut…" : "Caută în BOCP"}</button>
             </form>
             <button type="button" className="button button-primary" disabled={pending || searching || !found}
-              title={found ? undefined : "Caută mai întâi factura în BOCP"} onClick={() => invoice(selected.id)}>Facturat</button>
+              title={found ? undefined : "Caută mai întâi factura în BOCP"} onClick={() => invoice(selectedGroup!.map((cart) => cart.id))}>{selectedGroup!.length > 1 ? `Facturat (${selectedGroup!.length} comenzi)` : "Facturat"}</button>
           </div>}
         </aside>
       )}
