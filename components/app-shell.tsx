@@ -6,6 +6,8 @@ import { NavCountsListener } from "@/components/nav-counts-listener";
 import { NotificationListener } from "@/components/notification-listener";
 import { NotificationRail } from "@/components/notification-rail";
 import { NotificationToggle } from "@/components/notification-toggle";
+import { railCookie } from "@/lib/rail";
+import { cookies } from "next/headers";
 import { RoleSwitcher } from "@/components/role-switcher";
 import type { Profile, UserRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -70,6 +72,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
     .filter(group => group.items.length > 0);
   // Admin can read every row, so count only what is addressed to this user or role.
   const supabase = await createClient();
+  const railOpen = (await cookies()).get(railCookie)?.value !== "closed";
   const addressed = `recipient_user_id.eq.${profile.id},recipient_role.eq.${profile.role}`;
   const shown = new Set(visible.flatMap(group => group.items.flatMap(item => item.counter ? [item.counter] : [])));
   const countOf = (enabled: boolean, query: () => PromiseLike<{ count: number | null }>) =>
@@ -104,7 +107,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   const badge = (item: NavItem) => item.counter && counts[item.counter] > 0
     ? <span className="nav-count" aria-label={`${counts[item.counter]} de procesat`}>{counts[item.counter]}</span> : null;
   return (
-    <main className="app-shell" data-rail="open">
+    <main className="app-shell" data-rail={railOpen ? "open" : "closed"}>
       <aside className="app-sidebar" aria-label="Navigație principală">
         <div className="brand brand-wordmark"><Image src="/logo-light.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /></div>
         <nav className="sidebar-nav">
@@ -122,7 +125,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
         <header className="topbar">
           <div className="breadcrumb"><span>{section}</span><span aria-hidden="true">/</span><strong>{title}</strong></div>
           <div className="topbar-right">{profile.realRole === "admin" && <RoleSwitcher current={profile.role} partners={switcherPartners} />}{topbarExtra}
-            <NotificationToggle unread={unread ?? 0} icon={bellIcon} />
+            <NotificationToggle unread={unread ?? 0} icon={bellIcon} initialOpen={railOpen} />
             <NotificationListener role={profile.role} userId={profile.id}/>
             {shown.size > 0 && <NavCountsListener tables={[...new Set([...shown].flatMap(counter => counterTables[counter]))]} />}</div>
         </header>

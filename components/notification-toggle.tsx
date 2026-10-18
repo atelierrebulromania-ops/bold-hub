@@ -1,19 +1,27 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { railCookie } from "@/lib/rail";
 
-const storageKey = "boldhub-notification-rail";
 const narrowQuery = "(max-width: 1200px)";
 
 // The bell shows or hides the notification rail. On wide screens the rail is a column and the
-// choice is remembered; on narrow screens it opens as an overlay and starts closed.
-export function NotificationToggle({ unread, icon }: { unread: number; icon: ReactNode }) {
-  const [open, setOpen] = useState(true);
+// choice is remembered in a cookie, so the server renders it in the right state (no flash on
+// navigation); on narrow screens it opens as an overlay and starts closed.
+export function NotificationToggle({ unread, icon, initialOpen }: { unread: number; icon: ReactNode; initialOpen: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
 
   useEffect(() => {
-    let saved: string | null = null;
-    try { saved = window.localStorage.getItem(storageKey); } catch {}
-    setOpen(window.matchMedia(narrowQuery).matches ? false : saved !== "closed");
+    if (window.matchMedia(narrowQuery).matches) { setOpen(false); return; }
+    // The choice used to live in localStorage: carry it over once.
+    try {
+      const legacy = window.localStorage.getItem("boldhub-notification-rail");
+      if (legacy && !document.cookie.includes(`${railCookie}=`)) {
+        document.cookie = `${railCookie}=${legacy}; path=/; max-age=31536000; samesite=lax`;
+        setOpen(legacy !== "closed");
+      }
+      window.localStorage.removeItem("boldhub-notification-rail");
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -27,7 +35,7 @@ export function NotificationToggle({ unread, icon }: { unread: number; icon: Rea
     const next = !open;
     setOpen(next);
     if (!window.matchMedia(narrowQuery).matches) {
-      try { window.localStorage.setItem(storageKey, next ? "open" : "closed"); } catch {}
+      document.cookie = `${railCookie}=${next ? "open" : "closed"}; path=/; max-age=31536000; samesite=lax`;
     }
   }
 
