@@ -70,6 +70,9 @@ function flatten(input: unknown, out: Flat, depth = 0) {
   }
 }
 
+// Bookkeeping that tools send along (MailerLite subscriber data, shop sync, tracking) — not answers.
+const noise = /shopify|mailerlite|hubspot|accepts_marketing|orders_count|total_spent|order_date|zi_de_nastere|stele|^ip|opted_in|optin|subscribed|unsubscribed|_at$|^(sent|opens|clicks|open_rate|click_rate|opens_count|clicks_count|sent_count|source|platform|is_organic|country|state|z_i_p|zip|groups?|group_id|account_id|webhook_id|batch|value|float|string|id)$/;
+
 export function normalizeLead(payload: unknown, source: LeadSource): NormalizedLead | null {
   const flat: Flat = new Map();
   flatten(payload, flat);
@@ -92,7 +95,7 @@ export function normalizeLead(payload: unknown, source: LeadSource): NormalizedL
 
   const skip = new Set(["type", "event", "events", "status", "page_id", "adgroup_id", "ad_id", "form_id", "campaign_id", "adset_id"]);
   for (const [key, { label, value }] of flat) {
-    if (used.has(key) || skip.has(key) || Object.keys(lead.answers).length >= 40) continue;
+    if (used.has(key) || skip.has(key) || noise.test(key) || Object.keys(lead.answers).length >= 40) continue;
     lead.answers[label] = value.slice(0, 500);
   }
   return lead;

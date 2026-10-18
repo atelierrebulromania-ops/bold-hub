@@ -56,14 +56,22 @@ export async function POST(request: Request) {
     : payload && typeof payload === "object" && Array.isArray((payload as { events?: unknown }).events) ? (payload as { events: unknown[] }).events
     : [payload];
 
+  // ?group=<id>: only events that mention this group (e.g. the site form's MailerLite group, not the newsletter).
+  const group = url.searchParams.get("group");
   const ids: string[] = [];
+  let ignored = 0;
   for (const item of items.slice(0, 50)) {
+    if (group && !JSON.stringify(item).includes(group)) { ignored++; continue; }
     const lead = normalizeLead(item, source);
     if (!lead) continue;
+    // ?form=<name>: which form the source posts for (MailerLite does not send it).
+    lead.form_name ??= url.searchParams.get("form")?.slice(0, 300) || null;
     const { data, error } = await supabase.rpc("ingest_lead", { p_lead: lead as unknown as Json });
     if (error) return Response.json({ error: "Lead-ul nu a putut fi salvat.", saved: ids.length }, { status: 500, headers: noStore });
     if (data) ids.push(data);
   }
+  // Events for other groups are acknowledged, so the sender does not retry them.
+  if (!ids.length && ignored) return Response.json({ status: "ignored", ignored }, { headers: noStore });
   if (!ids.length) return Response.json({ error: "Nu am găsit nume, firmă, email sau telefon în cerere." }, { status: 422, headers: noStore });
   return Response.json({ status: "ok", leads: ids.length }, { headers: noStore });
 }
