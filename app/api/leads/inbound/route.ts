@@ -29,6 +29,15 @@ function expandJsonFields(fields: Record<string, FormDataEntryValue>) {
   return out;
 }
 
+// MailerLite sends the subscriber with extras the person never typed (IP location, time zone, API
+// version, campaign stats): keep only the email and the subscriber's form fields.
+function mailerliteSubscriber(item: unknown): unknown {
+  const root = item as { subscriber?: unknown } | null;
+  const subscriber = (root && typeof root === "object" && root.subscriber ? root.subscriber : root) as { email?: unknown; fields?: unknown } | null;
+  if (!subscriber || typeof subscriber !== "object" || !subscriber.fields || typeof subscriber.fields !== "object") return item;
+  return { email: subscriber.email, ...(subscriber.fields as Record<string, unknown>) };
+}
+
 // Where lead sources post new leads: Meta Lead Ads through Make/Zapier, the MailerLite form on the
 // site, later Google and TikTok. The key from Admin → Setări authorizes the call (?key=… or a Bearer header).
 export async function POST(request: Request) {
@@ -65,7 +74,7 @@ export async function POST(request: Request) {
   let ignored = 0;
   for (const item of items.slice(0, 50)) {
     if (group && !JSON.stringify(item).includes(group)) { ignored++; continue; }
-    const lead = normalizeLead(item, source, labels);
+    const lead = normalizeLead(source === "website" ? mailerliteSubscriber(item) : item, source, labels);
     if (!lead) continue;
     // ?form=<name>: which form the source posts for (MailerLite does not send it).
     lead.form_name ??= url.searchParams.get("form")?.slice(0, 300) || null;
