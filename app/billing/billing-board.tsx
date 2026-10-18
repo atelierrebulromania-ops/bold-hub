@@ -47,6 +47,28 @@ function units(cart: BillingCart) {
   return cart.partner_cart_items.reduce((sum, item) => sum + item.quantity_needed, 0);
 }
 
+// The lines to invoice: the same product (by code) from several carts adds up into one line, as long as
+// it has the same discount (a proforma's price can differ from the client's rules; then it stays apart).
+function invoiceLines(carts: BillingCart[]) {
+  const lines = new Map<string, { key: string; name: string; variant: string | null; sku: string; category: string | null; discount: number; quantity: number; parts: number[] }>();
+  for (const cart of carts) {
+    for (const item of cart.partner_cart_items) {
+      const source = cart.sales_documents;
+      const discount = source
+        ? source.sales_document_items.find((line) => line.sku === item.products?.sku)?.discount_percent ?? source.discount_percent
+        : discountFor(cart.partners?.partner_discounts ?? [], item.products?.category ?? null);
+      const sku = item.products?.sku ?? "—";
+      const key = `${sku}|${discount}`;
+      const line = lines.get(key) ?? { key, name: item.products?.name ?? "Produs", variant: item.products?.variant_label ?? null, sku,
+        category: item.products?.category ?? null, discount, quantity: 0, parts: [] };
+      line.quantity += item.quantity_needed;
+      line.parts.push(item.quantity_needed);
+      lines.set(key, line);
+    }
+  }
+  return [...lines.values()].sort((a, b) => a.name.localeCompare(b.name, "ro") || a.discount - b.discount);
+}
+
 export type BillingView = "reserve" | "invoice" | "products" | "history";
 
 // "Produse": what currently sits in the BOCP "Rezervat" warehouse (moved there, not yet invoiced).
@@ -172,20 +194,19 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
           <div className="detail-scroll">
             <div className="detail-meta"><span className={`status-badge ${selected.invoiced_at ? "handed" : ""}`}>{selected.invoiced_at ? "Facturată" : view === "reserve" ? "Nerezervată în BOCP" : "De facturat"}</span>{partnerChips(selected)}</div>
             {selectedGroup!.length > 1 && <p className="preview-alert success group-invoice-note">Se facturează împreună: <strong>{selectedGroup!.length} comenzi, o singură factură</strong> în BOCP pentru toate produsele de mai jos.</p>}
-            {selectedGroup!.map((cart) => <section className="detail-section" key={cart.id}><div className="section-line">
-              <h3>{selectedGroup!.length > 1 ? `Comanda predată ${formatDateTime(cart.delivered_at)}` : "Produse"}</h3><span>{units(cart)} buc.</span></div>
-              <div className="item-list">{cart.partner_cart_items.map((item) => {
-                // From a proforma: the product's own discount there, or the document's; otherwise the client's rules.
-                const source = cart.sales_documents;
-                const lineDiscount = source
-                  ? source.sales_document_items.find((line) => line.sku === item.products?.sku)?.discount_percent ?? source.discount_percent
-                  : discountFor(cart.partners?.partner_discounts ?? [], item.products?.category ?? null);
-                return <div className="order-item" key={item.id}><div><strong>{item.products?.name ?? "Produs"}</strong><small>{item.products?.variant_label ? `${item.products.variant_label} · ` : ""}SKU {item.products?.sku ?? "—"}{item.products?.category ? ` · ${item.products.category}` : ""}</small></div>
-                  {lineDiscount > 0 && <span className="item-flag gift">−{lineDiscount}%</span>}<b>×{item.quantity_needed}</b></div>;
-              })}</div>
-              {selectedGroup!.length > 1 && cart.sales_documents && <p className="muted small">Din {cart.sales_documents.kind === "offer" ? "oferta" : "proforma"} {cart.sales_documents.number} · discount {cart.sales_documents.discount_percent}%</p>}
-              {selectedGroup!.length > 1 && <p className="muted small">{cart.reserved_in_bocp_at ? `Rezervată în BOCP${cart.bocp_order_id ? ` · comanda #${cart.bocp_order_id}` : ""}` : "Nerezervată în BOCP"}</p>}
-            </section>)}
+            <section className="detail-section"><div className="section-line"><h3>Produse</h3><span>{selectedGroup!.reduce((sum, cart) => sum + units(cart), 0)} buc.</span></div>
+              <div className="item-list">{invoiceLines(selectedGroup!).map((line) => <div className="order-item" key={line.key}>
+                <div><strong>{line.name}</strong><small>{line.variant ? `${line.variant} · ` : ""}SKU {line.sku}{line.category ? ` · ${line.category}` : ""}
+                  {line.parts.length > 1 ? ` · ${line.parts.join(" + ")} din ${line.parts.length} comenzi` : ""}</small></div>
+                {line.discount > 0 && <span className="item-flag gift">−{line.discount}%</span>}<b>×{line.quantity}</b></div>)}</div>
+            </section>
+            {selectedGroup!.length > 1 && <section className="detail-section"><h3>Comenzi incluse</h3>
+              <ul className="admin-simple-list">{selectedGroup!.map((cart) => <li key={cart.id}>
+                Predată {formatDateTime(cart.delivered_at)} · {units(cart)} buc.
+                {cart.sales_documents ? ` · din ${cart.sales_documents.kind === "offer" ? "oferta" : "proforma"} ${cart.sales_documents.number}` : ""}
+                {` · ${cart.reserved_in_bocp_at ? `rezervată în BOCP${cart.bocp_order_id ? ` (#${cart.bocp_order_id})` : ""}` : "nerezervată în BOCP"}`}
+              </li>)}</ul>
+            </section>}
             <section className="detail-section"><h3>Condiții de preț</h3>
               {selected.sales_documents
                 ? <p className="detail-primary">Din {selected.sales_documents.kind === "offer" ? "oferta" : "proforma"} {selected.sales_documents.number} · discount general {selected.sales_documents.discount_percent}%{selected.sales_documents.sales_document_items.some((line) => line.discount_percent !== null) ? ", unele produse cu discount propriu (vezi lista)" : ""}</p>
