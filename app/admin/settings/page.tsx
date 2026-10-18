@@ -26,7 +26,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <AppShell profile={profile} active="/admin/settings" section="Administrare" title="Setări"
       note={{ title: "Setări", text: "Cine are acces la Lead și de unde vin lead-urile." }}>
-      <div className="page-heading"><div><p className="eyebrow">ADMINISTRARE</p><h1>Setări</h1></div></div>
       {params.notice === "days" && <p className="preview-alert success admin-feedback" role="status">Termenul a fost salvat. Se aplică ofertelor marcate de acum înainte.</p>}
       {params.notice === "rotated" && <p className="preview-alert success admin-feedback" role="status">Cheia a fost schimbată. Actualizează linkurile în Make, Zapier și MailerLite.</p>}
 
