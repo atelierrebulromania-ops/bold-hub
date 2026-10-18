@@ -57,7 +57,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const since = new Date();
   since.setMonth(since.getMonth() - (MONTHS - 1), 1);
   const cartFields = "id,status,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,products(name,variant_label))";
-  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult] = await Promise.all([
+  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult] = await Promise.all([
     supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)")
       .eq("partner_id", partner.id).limit(500),
     // In progress: requested, on the shelf, or delivered and still waiting for the invoice.
@@ -69,6 +69,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     preview ? Promise.resolve(null)
       : supabase.from("notifications").select("id,message,created_at").eq("recipient_partner_id", partner.id).is("read_at", null)
         .order("created_at", { ascending: false }).limit(5),
+    supabase.from("partner_backorders").select("id,quantity,status,created_at,products(name,variant_label)")
+      .eq("partner_id", partner.id).in("status", ["open", "shelved"]).order("created_at"),
   ]);
   const loadError = parsResult.error ?? activeResult.error ?? deliveredResult.error;
   const pars = (parsResult.data ?? []).filter(par => par.products?.active)
@@ -77,10 +79,16 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const delivered = (deliveredResult.data ?? []) as Cart[];
   const invoices = invoicesResult.data ?? [];
   const news = newsResult?.data ?? [];
+  const backorders = backordersResult.data ?? [];
   const inProgress = new Map<string, number>();
   for (const cart of active) if (cart.status !== "delivered") for (const line of cart.partner_cart_items) {
     const key = productLabel(line.products);
     inProgress.set(key, (inProgress.get(key) ?? 0) + line.quantity_needed);
+  }
+  // What we still owe counts as already ordered, so the partner does not ask for it again.
+  for (const back of backorders) {
+    const key = productLabel(back.products);
+    inProgress.set(key, (inProgress.get(key) ?? 0) + back.quantity);
   }
 
   // Consumption: what was delivered per product, per month (last months).
@@ -154,6 +162,14 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
               </article>)}
             </div>}
           </section>
+
+          {backorders.length > 0 && <section className="admin-card partner-list-section">
+            <div className="admin-card-heading"><h2>Restanțe</h2><p>Produse pe care încă ți le datorăm. Le aducem la următoarea livrare, când revin în stoc.</p></div>
+            <ul className="par-list partner-lines">{backorders.map((back) => <li key={back.id}>
+              <span>{productLabel(back.products)}<small>{back.status === "shelved" ? " · pregătit, vine la următoarea livrare" : " · urmează când revine în stoc"}</small></span>
+              <span className="line-end"><strong>{back.quantity} buc.</strong></span>
+            </li>)}</ul>
+          </section>}
 
           <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Facturi</h2></div>

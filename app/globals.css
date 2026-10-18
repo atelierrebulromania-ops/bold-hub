@@ -1153,4 +1153,10 @@ p.push-toggle { display: block; }
 .crm-message-block { margin-top: 12px; }
 .crm-message-block > span { display: block; margin-bottom: 6px; color: #8a8d91; font-size: .78rem; }
 .crm-message-block .crm-message { margin-top: 0; }
-.put-quantity { color: var(--blue); white-space: nowrap; }
+.put-quantity { display: flex; align-items: center; gap: 6px; color: var(--blue); font-size: .74rem; font-weight: 800; white-space: nowrap; }
+.put-quantity input { width: 56px; padding: .3rem .4rem; border: 1px solid #c9d6ee; border-radius: 6px; font: inherit; font-size: .8rem; text-align: center; }
+.put-quantity span { color: #8a8d91; font-weight: 600; }
+.backorder-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.backorder-actions input { width: 56px; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: .78rem; text-align: center; }
+.backorder-actions .button { padding: .35rem .7rem; font-size: .72rem; }
+.backorder-hint { margin: 8px 0 0; color: #8a8d91; font-size: .72rem; }

@@ -19,6 +19,7 @@ const entityLinks: Record<string, string> = {
   partner_cart: "/partners",
   order_return: "/returns",
   lead: "/crm",
+  backorder: "/partners",
 };
 
 function timeAgo(value: string, now: number) {

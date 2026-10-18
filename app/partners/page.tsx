@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { b2bSkuFilter } from "@/lib/b2b-products";
 import { requireRole } from "@/lib/auth";
-import { PartnersBoard, type CatalogProduct, type DeliveryGroup, type Partner } from "./partners-board";
+import { PartnersBoard, type Backorder, type CatalogProduct, type DeliveryGroup, type Partner } from "./partners-board";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export default async function PartnersPage() {
   const { supabase, profile } = await requireRole(["admin", "operator_depozit", "account"]);
   const product = "products(name,sku,variant_label)";
   const cartProduct = "products(name,sku,variant_label,warehouse_stock(quantity_bocp_global))";
-  const [partnersResult, groupsResult, productsResult] = await Promise.all([supabase.from("partners")
+  const [partnersResult, groupsResult, productsResult, backordersResult] = await Promise.all([supabase.from("partners")
     .select(`id,business_name,type,contact_phone,contact_email,is_important_client,
       partner_par_levels(id,product_id,par_level_quantity,${product}),
       partner_carts(id,status,countdown_started_at,prepared_at,reserved_in_bocp_at,bocp_order_id,bocp_order_error,partner_cart_items(id,product_id,quantity_needed,${cartProduct}))`)
@@ -18,8 +18,11 @@ export default async function PartnersPage() {
     .order("business_name").limit(1000),
     supabase.from("delivery_groups").select("id,name,partner_delivery_groups(partner_id)").order("name").limit(500),
     supabase.from("products").select("id,name,sku,variant_label").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
+    supabase.from("partner_backorders").select(`id,partner_id,product_id,quantity,status,created_at,${cartProduct}`)
+      .in("status", ["open", "shelved"]).order("created_at").limit(2000),
   ]);
-  const error = partnersResult.error ?? groupsResult.error ?? productsResult.error;
+  const error = partnersResult.error ?? groupsResult.error ?? productsResult.error ?? backordersResult.error;
+  const backorders = (backordersResult.data ?? []) as Backorder[];
   const partners: Partner[] = partnersResult.data ?? [];
   const groups: DeliveryGroup[] = groupsResult.data ?? [];
   const catalog: CatalogProduct[] = productsResult.data ?? [];
@@ -30,7 +33,8 @@ export default async function PartnersPage() {
         ? { title: "Stoc pe raft", text: "Stocul estimat este stocul inițial minus ce e în coș sau pe drum." }
         : { title: "De pregătit", text: "„Pe raft” e ce mai are partenerul; „de pus” e cât trebuie pregătit pentru cererea nouă." }}>
       {error ? <p className="notice error" role="alert">Partenerii nu pot fi încărcați acum. Reîncarcă pagina.</p>
-        : <PartnersBoard partners={partners} groups={groups} catalog={catalog} warehouse={profile.role !== "account"} />}
+        : <PartnersBoard partners={partners} groups={groups} catalog={catalog} backorders={backorders}
+          warehouse={profile.role !== "account"} canCancel={profile.role === "account" || profile.role === "admin"} />}
     </AppShell>
   );
 }

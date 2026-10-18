@@ -53,6 +53,19 @@ export type Database = {
           { foreignKeyName: "lead_activities_lead_id_fkey"; columns: ["lead_id"]; isOneToOne: false; referencedRelation: "leads"; referencedColumns: ["id"] },
         ]
       }
+      partner_backorders: {
+        Row: {
+          id: string; partner_id: string; product_id: string; quantity: number; status: string; source_cart_id: string | null
+          delivered_cart_id: string | null; created_by: string | null; shelved_at: string | null; shelved_by: string | null
+          cancelled_at: string | null; cancelled_by: string | null; cancel_reason: string | null; stock_notified_at: string | null; created_at: string
+        }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_backorders_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
       push_subscriptions: {
         Row: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; user_agent: string | null; created_at: string; last_used_at: string | null }
         Insert: { id?: string }
@@ -1072,6 +1085,11 @@ export type Database = {
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
       delete_staff_user: { Args: { p_id: string }; Returns: string }
+      prepare_partner_cart: { Args: { p_cart_id: string; p_lines: Json }; Returns: string }
+      shelve_backorder: { Args: { p_id: string; p_quantity: number }; Returns: boolean }
+      cancel_backorder: { Args: { p_id: string; p_reason: string }; Returns: boolean }
+      backorder_products: { Args: never; Returns: { product_id: string; sku: string; name: string; units: number; partners: number; unnotified: number }[] }
+      notify_backorder_stock: { Args: { p_items: Json }; Returns: number }
       can_view_crm: { Args: never; Returns: boolean }
       ingest_lead: { Args: { p_lead: Json }; Returns: string }
       create_lead: { Args: { p_lead: Json }; Returns: string | null }
