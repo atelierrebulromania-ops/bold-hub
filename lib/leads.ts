@@ -24,7 +24,7 @@ const fields: Record<Exclude<keyof NormalizedLead, "source" | "answers">, string
   received_at: ["created_time", "created_at", "date", "submitted_at"],
 };
 
-function keyOf(raw: string) {
+export function keyOf(raw: string) {
   return raw.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
@@ -73,7 +73,9 @@ function flatten(input: unknown, out: Flat, depth = 0) {
 // Bookkeeping that tools send along (MailerLite subscriber data, shop sync, tracking) — not answers.
 const noise = /shopify|mailerlite|hubspot|accepts_marketing|orders_count|total_spent|order_date|zi_de_nastere|stele|^ip|opted_in|optin|subscribed|unsubscribed|_at$|^(sent|opens|clicks|open_rate|click_rate|opens_count|clicks_count|sent_count|source|platform|is_organic|country|state|z_i_p|zip|groups?|group_id|account_id|webhook_id|batch|value|float|string|id)$/;
 
-export function normalizeLead(payload: unknown, source: LeadSource): NormalizedLead | null {
+// `labels`: the source's own names for its fields (MailerLite field key → field name), so answers
+// read as the question the form asks.
+export function normalizeLead(payload: unknown, source: LeadSource, labels?: Record<string, string>): NormalizedLead | null {
   const flat: Flat = new Map();
   flatten(payload, flat);
   const used = new Set<string>();
@@ -96,7 +98,7 @@ export function normalizeLead(payload: unknown, source: LeadSource): NormalizedL
   const skip = new Set(["type", "event", "events", "status", "page_id", "adgroup_id", "ad_id", "form_id", "campaign_id", "adset_id"]);
   for (const [key, { label, value }] of flat) {
     if (used.has(key) || skip.has(key) || noise.test(key) || Object.keys(lead.answers).length >= 40) continue;
-    lead.answers[label] = value.slice(0, 500);
+    lead.answers[labels?.[key] ?? label] = value.slice(0, 500);
   }
   return lead;
 }
