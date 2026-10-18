@@ -87,20 +87,21 @@ export async function saveDiscounts(clientId: string, rules: { category: string 
   return { ok: true, message: "Discounturile au fost salvate." };
 }
 
-export async function setClientParLevel(clientId: string, productId: string, quantity: number): Promise<Result> {
+// The par level for the whole client (central stock) or for one point of work (locationId).
+export async function setClientParLevel(clientId: string, productId: string, quantity: number, locationId: string | null = null): Promise<Result> {
   const { supabase } = await agent();
-  if (!uuid.test(clientId) || !uuid.test(productId) || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 100000) {
+  if (!uuid.test(clientId) || !uuid.test(productId) || (locationId !== null && !uuid.test(locationId)) || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 100000) {
     return { ok: false, message: "Cantitate invalidă." };
   }
-  const { data, error } = await supabase.rpc("set_partner_par_level", { p_partner_id: clientId, p_product_id: productId, p_quantity: quantity });
+  const { data, error } = await supabase.rpc("set_partner_par_level", { p_partner_id: clientId, p_product_id: productId, p_quantity: quantity, p_location_id: locationId });
   if (error || !data) return { ok: false, message: "Nu am putut salva stocul inițial." };
   revalidatePath("/account");
   return { ok: true, message: quantity === 0 ? "Produsul a fost scos din stocul inițial." : "Stocul inițial a fost salvat." };
 }
 
-export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], source: "whatsapp" | "telefon"): Promise<Result> {
+export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], source: "whatsapp" | "telefon", locationId: string | null = null): Promise<Result> {
   const { supabase } = await agent();
-  if (!uuid.test(clientId) || !lines.length || lines.length > 100
+  if (!uuid.test(clientId) || (locationId !== null && !uuid.test(locationId)) || !lines.length || lines.length > 100
     || lines.some((line) => !uuid.test(line.productId) || !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 100000)) {
     return { ok: false, message: "Verifică produsele și cantitățile." };
   }
@@ -108,11 +109,42 @@ export async function addClientRequest(clientId: string, lines: { productId: str
     p_partner_id: clientId,
     p_items: lines.map((line) => ({ product_id: line.productId, quantity: line.quantity })) as Json,
     p_source: source,
+    p_location_id: locationId,
   });
   if (error) return { ok: false, message: "Nu am putut adăuga cererea." };
   revalidatePath("/account");
   revalidatePath("/partners");
   return { ok: true, message: "Cererea a ajuns la depozit (Comenzi B2B → Necesită produse)." };
+}
+
+export type LocationInput = { name: string; city: string; address: string; contactName: string; contactPhone: string; active: boolean };
+
+// A point of work of the client: where products are delivered (and, per point, counted).
+export async function saveLocation(clientId: string, locationId: string | null, input: LocationInput): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || (locationId !== null && !uuid.test(locationId))) return { ok: false, message: "Punctul de lucru nu este valid." };
+  if (!input.name.trim()) return { ok: false, message: "Scrie numele punctului de lucru." };
+  const { data, error } = await supabase.rpc("save_partner_location", {
+    p_partner_id: clientId, p_location_id: locationId,
+    p_data: { name: input.name, city: input.city, address: input.address, contact_name: input.contactName, contact_phone: input.contactPhone, active: input.active } as Json,
+  });
+  if (error || !data) return { ok: false, message: "Nu am putut salva punctul de lucru." };
+  revalidatePath("/account");
+  revalidatePath("/partners");
+  return { ok: true, message: locationId ? "Punctul de lucru a fost actualizat." : "Punctul de lucru a fost adăugat." };
+}
+
+// Central: one stock and one order for the firm, delivered to the main point. Per point: each point its own.
+export async function setStockMode(clientId: string, mode: "central" | "per_location"): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || !["central", "per_location"].includes(mode)) return { ok: false, message: "Setarea nu este validă." };
+  const { data, error } = await supabase.rpc("set_partner_stock_mode", { p_partner_id: clientId, p_mode: mode });
+  if (error || !data) return { ok: false, message: "Nu am putut schimba setarea." };
+  revalidatePath("/account");
+  revalidatePath("/partners");
+  return { ok: true, message: mode === "central"
+    ? "Stoc centralizat: o singură comandă pentru firmă, livrată la punctul principal. Stocul de la punctul principal a rămas stocul firmei."
+    : "Stoc pe punct de lucru: stocul firmei a trecut pe punctul principal; setează-l și pentru celelalte puncte." };
 }
 
 // Login for one of the agent's clients (username + password), like the admin does it.

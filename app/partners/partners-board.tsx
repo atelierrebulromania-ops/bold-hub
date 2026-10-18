@@ -9,8 +9,13 @@ import { addPartnerRequest, cancelBackorder, deleteDeliveryGroup, handCartsToBil
 
 type Product = { name: string; sku: string; variant_label: string | null; warehouse_stock?: { quantity_bocp_global: number } | null } | null;
 
+// A card on the board: a client, or one point of work of a client that orders per point.
 export type Partner = {
   id: string;
+  client_id: string;
+  location_id: string | null;
+  client_name: string;
+  address: string | null;
   business_name: string;
   type: string;
   contact_phone: string;
@@ -31,7 +36,7 @@ export type Partner = {
 
 // What the warehouse could not put at preparation (restanță): open until stock returns, then on the
 // partner's shelf until it leaves with the next delivery.
-export type Backorder = { id: string; partner_id: string; product_id: string; quantity: number; status: "open" | "shelved"; created_at: string; products: Product };
+export type Backorder = { id: string; partner_id: string; location_id: string | null; product_id: string; quantity: number; status: "open" | "shelved"; created_at: string; products: Product };
 
 export type DeliveryGroup = { id: string; name: string; partner_delivery_groups: { partner_id: string }[] };
 
@@ -117,8 +122,11 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  const summaries = useMemo(() => new Map(partners.map((partner) => [partner.id, summarize(partner, backorders.filter((back) => back.partner_id === partner.id))])), [partners, backorders]);
-  const partnerName = useMemo(() => new Map(partners.map((partner) => [partner.id, partner.business_name])), [partners]);
+  const belongs = (partner: Partner, back: Backorder) => back.partner_id === partner.client_id && (partner.location_id === null || back.location_id === partner.location_id);
+  const summaries = useMemo(() => new Map(partners.map((partner) => [partner.id, summarize(partner, backorders.filter((back) => belongs(partner, back)))])), [partners, backorders]);
+  const backName = (back: Backorder) => partners.find((partner) => belongs(partner, back))?.business_name ?? "Partener";
+  // Delivery groups hold clients; the group editor lists each client once.
+  const clients = useMemo(() => [...new Map(partners.map((partner) => [partner.client_id, partner])).values()], [partners]);
 
   const needle = query.trim().toLocaleLowerCase("ro");
   const visible = partners.filter((partner) =>
@@ -181,9 +189,11 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
     if (!request) return;
     const items = request.lines.map((line) => ({ productId: line.productId, quantity: Number(line.quantity) }));
     const { partnerId, source } = request;
+    const unit = partners.find((partner) => partner.id === partnerId);
+    if (!unit) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await addPartnerRequest(partnerId, items, source);
+      const result = await addPartnerRequest(unit.client_id, items, source, unit.location_id);
       setFeedback(result);
       if (result.ok) setRequest(null);
       router.refresh();
@@ -311,7 +321,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
   function renderBackorders() {
     const byProduct = new Map<string, { product: Product; rows: Backorder[] }>();
     for (const back of backorders) {
-      const text = `${productLabel(back.products)} ${back.products?.sku ?? ""} ${partnerName.get(back.partner_id) ?? ""}`.toLocaleLowerCase("ro");
+      const text = `${productLabel(back.products)} ${back.products?.sku ?? ""} ${backName(back)}`.toLocaleLowerCase("ro");
       if (needle && !text.includes(needle)) continue;
       const entry = byProduct.get(back.product_id) ?? { product: back.products, rows: [] };
       entry.rows.push(back);
@@ -326,7 +336,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
         <div className="admin-card-heading"><h2>{productLabel(entry.product)} {owed > 0 && <span className="product-block-total">{owed} buc. restante</span>}</h2>
           <p>SKU {entry.product?.sku ?? "—"} · {bocp > 0 ? `stoc BOCP ${bocp}` : "fără stoc în BOCP (la ultima sincronizare)"}</p></div>
         <ul className="admin-simple-list dashboard-list">{entry.rows.map((back) => <li key={back.id}>
-          <span>{partnerName.get(back.partner_id) ?? "Partener"}<small>{back.status === "shelved" ? "pe raft · pleacă la următoarea livrare" : `restant din ${formatDateTime(back.created_at)}`}</small></span>
+          <span>{backName(back)}<small>{back.status === "shelved" ? "pe raft · pleacă la următoarea livrare" : `restant din ${formatDateTime(back.created_at)}`}</small></span>
           <span className="backorder-actions">
             <strong>×{back.quantity}</strong>
             {warehouse && back.status === "open" && <>
@@ -342,10 +352,9 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
   }
 
   function renderGroups() {
-    const byId = new Map(partners.map((partner) => [partner.id, partner]));
     const shown = groups.map((group) => ({
       group,
-      members: group.partner_delivery_groups.map((member) => byId.get(member.partner_id)).filter((partner): partner is Partner => !!partner)
+      members: partners.filter((partner) => group.partner_delivery_groups.some((member) => member.partner_id === partner.client_id))
         .sort((a, b) => a.business_name.localeCompare(b.business_name, "ro")),
     })).map((entry) => ({ ...entry, urgent: entry.members.filter((partner) => isUrgent(partner, summaries.get(partner.id)!)) }))
       .sort((a, b) => Number(b.urgent.length > 0) - Number(a.urgent.length > 0))
@@ -524,7 +533,8 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
               </section>
             ))}
 
-            <section className="detail-section"><h3>Contact</h3>
+            <section className="detail-section"><h3>{selected.address ? "Livrare și contact" : "Contact"}</h3>
+              {selected.address && <p className="detail-primary">{selected.address}</p>}
               <p>{selected.contact_phone}</p>{selected.contact_email && <p>{selected.contact_email}</p>}
             </section>
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
@@ -546,10 +556,10 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
             <section className="detail-section"><div className="section-line"><h3>Parteneri</h3><span>{draft.members.length} selectați</span></div>
               <input className="group-member-search" type="search" value={draft.search} onChange={(event) => setDraft({ ...draft, search: event.target.value })} placeholder="Caută partener" aria-label="Caută partener în listă" />
               <div className="group-member-list">
-                {partners.filter((partner) => partner.business_name.toLocaleLowerCase("ro").includes(draft.search.trim().toLocaleLowerCase("ro"))).map((partner) => (
-                  <label key={partner.id} className="group-member">
-                    <input type="checkbox" checked={draft.members.includes(partner.id)} onChange={() => toggleMember(partner.id)} />
-                    <span>{partner.business_name}</span>
+                {clients.filter((partner) => partner.client_name.toLocaleLowerCase("ro").includes(draft.search.trim().toLocaleLowerCase("ro"))).map((partner) => (
+                  <label key={partner.client_id} className="group-member">
+                    <input type="checkbox" checked={draft.members.includes(partner.client_id)} onChange={() => toggleMember(partner.client_id)} />
+                    <span>{partner.client_name}</span>
                     <span className={`partner-kind ${partner.type}`}>{typeLabel(partner.type)}</span>
                   </label>
                 ))}

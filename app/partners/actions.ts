@@ -90,8 +90,8 @@ export async function deleteDeliveryGroup(groupId: string): Promise<{ ok: boolea
 
 // A request received by WhatsApp or phone: the products go into the partner's open cart
 // (the partner moves to "Necesită produse") and the stock is reserved.
-export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string): Promise<{ ok: boolean; message: string }> {
-  if (!uuid.test(partnerId) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100
+export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string, locationId: string | null = null): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(partnerId) || (locationId !== null && !uuid.test(locationId)) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100
     || !items.every((item) => uuid.test(item.productId) && Number.isSafeInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 100000)) {
     return { ok: false, message: "Alege partenerul, produsele și cantitățile." };
   }
@@ -100,6 +100,7 @@ export async function addPartnerRequest(partnerId: string, items: { productId: s
     p_partner_id: partnerId,
     p_items: items.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
     p_source: source,
+    p_location_id: locationId,
   });
   if (error) return { ok: false, message: "Nu am putut salva cererea. Încearcă din nou." };
   revalidatePath("/partners");

@@ -55,6 +55,7 @@ export type Database = {
       }
       partner_backorders: {
         Row: {
+          location_id: string | null
           id: string; partner_id: string; product_id: string; quantity: number; status: string; source_cart_id: string | null
           delivered_cart_id: string | null; created_by: string | null; shelved_at: string | null; shelved_by: string | null
           cancelled_at: string | null; cancelled_by: string | null; cancel_reason: string | null; stock_notified_at: string | null; created_at: string
@@ -62,8 +63,17 @@ export type Database = {
         Insert: { id?: string }
         Update: { id?: string }
         Relationships: [
+          { foreignKeyName: "partner_backorders_location_id_fkey"; columns: ["location_id"]; isOneToOne: false; referencedRelation: "partner_locations"; referencedColumns: ["id"] },
           { foreignKeyName: "partner_backorders_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
           { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_locations: {
+        Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_locations_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
         ]
       }
       push_subscriptions: {
@@ -574,6 +584,7 @@ export type Database = {
       }
       partner_carts: {
         Row: {
+          location_id: string | null
           invoiced_with: string | null
           invoice_due_date: string | null
           invoice_last_payment_date: string | null
@@ -659,6 +670,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Relationships: [
+          { foreignKeyName: "partner_carts_location_id_fkey"; columns: ["location_id"]; isOneToOne: false; referencedRelation: "partner_locations"; referencedColumns: ["id"] },
           {
             foreignKeyName: "partner_carts_source_document_id_fkey"
             columns: ["source_document_id"]
@@ -725,6 +737,7 @@ export type Database = {
       }
       partner_par_levels: {
         Row: {
+          location_id: string | null
           created_at: string
           id: string
           par_level_quantity: number
@@ -752,6 +765,7 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          { foreignKeyName: "partner_par_levels_location_id_fkey"; columns: ["location_id"]; isOneToOne: false; referencedRelation: "partner_locations"; referencedColumns: ["id"] },
           {
             foreignKeyName: "partner_par_levels_product_id_fkey"
             columns: ["product_id"]
@@ -777,6 +791,7 @@ export type Database = {
       }
       partners: {
         Row: {
+          stock_mode: string
           account_id: string | null
           bocp_contact_id: string | null
           billing_name: string | null
@@ -969,7 +984,7 @@ export type Database = {
         Args: never
         Returns: { source: string; id: string; partner_name: string; invoice_number: string; invoice_date: string; due_date: string | null; total: number | null; rest: number | null; invoiced_at: string; proforma_number: string | null }[]
       }
-      submit_refill_counts_for: { Args: { p_counts: Json; p_partner_id: string }; Returns: Json }
+      submit_refill_counts_for: { Args: { p_counts: Json; p_partner_id: string; p_location_id?: string | null }; Returns: Json }
       b2b_receivables: {
         Args: never
         Returns: { source: string; id: string; partner_name: string; agent_name: string | null; invoice_number: string; invoice_date: string; due_date: string | null; total: number | null; rest: number | null; payment_checked_at: string | null }[]
@@ -1010,7 +1025,9 @@ export type Database = {
       save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }
       save_sales_document: { Args: { p_doc: Json; p_id: string | null; p_items: Json }; Returns: string | null }
       send_sales_document: { Args: { p_id: string }; Returns: string | null }
-      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number }; Returns: boolean }
+      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number; p_location_id?: string | null }; Returns: boolean }
+      save_partner_location: { Args: { p_partner_id: string; p_location_id: string | null; p_data: Json }; Returns: string | null }
+      set_partner_stock_mode: { Args: { p_partner_id: string; p_mode: string }; Returns: boolean }
       link_partner_account: {
         Args: { p_email: string; p_partner_id: string }
         Returns: string
@@ -1018,10 +1035,10 @@ export type Database = {
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number }
       remove_cart_item: { Args: { p_item_id: string }; Returns: boolean }
       staff_add_refill: {
-        Args: { p_items: Json; p_partner_id: string; p_source: string }
+        Args: { p_items: Json; p_partner_id: string; p_source: string; p_location_id?: string | null }
         Returns: Json
       }
-      submit_refill_counts: { Args: { p_counts: Json }; Returns: Json }
+      submit_refill_counts: { Args: { p_counts: Json; p_location_id?: string | null }; Returns: Json }
       enable_ean_for_all: { Args: never; Returns: number }
       sync_bocp_catalog: { Args: { p_products: Json }; Returns: Json }
       set_product_ean: {

@@ -16,15 +16,19 @@ export async function submitCounts(form: FormData) {
     if (!uuid.test(productId) || !/^\d{1,6}$/.test(value.trim())) redirect(`${page}?error=invalid`);
     counts.push({ product_id: productId, remaining: value.trim() });
   }
-  if (counts.length === 0) redirect(`${page}?error=empty`);
+  // Per point of work: the counts are for the point picked at the top of the page.
+  const point = form.get("point");
+  const locationId = typeof point === "string" && uuid.test(point) ? point : null;
+  const back = locationId ? `${page}?point=${locationId}&` : `${page}?`;
+  if (counts.length === 0) redirect(`${back}error=empty`);
   // In dev mode the admin previews the location: the request is sent on the partner's behalf.
   const { data, error } = preview
-    ? await supabase.rpc("submit_refill_counts_for", { p_partner_id: partner.id, p_counts: counts })
-    : await supabase.rpc("submit_refill_counts", { p_counts: counts });
-  if (error) redirect(`${page}?error=save_failed`);
+    ? await supabase.rpc("submit_refill_counts_for", { p_partner_id: partner.id, p_counts: counts, p_location_id: locationId })
+    : await supabase.rpc("submit_refill_counts", { p_counts: counts, p_location_id: locationId });
+  if (error) redirect(`${back}error=save_failed`);
   const units = Number((data as { units?: number } | null)?.units ?? 0);
   revalidatePath(page);
-  redirect(units > 0 ? `${page}?notice=added&units=${units}` : `${page}?notice=nothing`);
+  redirect(units > 0 ? `${back}notice=added&units=${units}` : `${back}notice=nothing`);
 }
 
 export async function removeOwnItem(form: FormData) {

@@ -13,6 +13,8 @@ export type BillingCart = {
   partner_id: string;
   // Invoiced together with this (older) cart of the same partner: the invoice lives there.
   invoiced_with: string | null;
+  // The point of work the order is delivered to.
+  partner_locations: { name: string; city: string | null; address: string | null } | null;
   prepared_at: string | null;
   delivered_at: string | null;
   delivered_by: string | null;
@@ -202,6 +204,7 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
             </section>
             {selectedGroup!.length > 1 && <section className="detail-section"><h3>Comenzi incluse</h3>
               <ul className="admin-simple-list">{selectedGroup!.map((cart) => <li key={cart.id}>
+                {cart.partner_locations && new Set(selectedGroup!.map((one) => one.partner_locations?.name)).size > 1 && <strong>{cart.partner_locations.name}: </strong>}
                 Predată {formatDateTime(cart.delivered_at)} · {units(cart)} buc.
                 {cart.sales_documents ? ` · din ${cart.sales_documents.kind === "offer" ? "oferta" : "proforma"} ${cart.sales_documents.number}` : ""}
                 {` · ${cart.reserved_in_bocp_at ? `rezervată în BOCP${cart.bocp_order_id ? ` (#${cart.bocp_order_id})` : ""}` : "nerezervată în BOCP"}`}
@@ -222,7 +225,9 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
                 {selected.invoiced_at && <><dt>Nr. factură</dt><dd><strong>{selected.invoice_number ?? "—"}</strong>{selected.invoice_date ? ` · ${formatDay(selected.invoice_date)}` : ""}</dd><dt>Facturată</dt><dd>{formatDateTime(selected.invoiced_at)}</dd><dt>Facturată de</dt><dd>{name(selected.invoiced_by)}</dd></>}
               </dl>
             </section>
-            <section className="detail-section"><h3>Partener</h3><p className="detail-primary">{selected.partners?.business_name}</p><p>{selected.partners?.location_name}</p>{selected.partners?.contact_phone && <p>{selected.partners.contact_phone}</p>}{selected.partners?.contact_email && <p>{selected.partners.contact_email}</p>}</section>
+            <section className="detail-section"><h3>Partener</h3><p className="detail-primary">{selected.partners?.business_name}</p>
+              {[...new Map(selectedGroup!.filter((cart) => cart.partner_locations).map((cart) => [cart.partner_locations!.name, cart.partner_locations!])).values()].map((point) =>
+                <p key={point.name}>Livrare: <strong>{point.name}</strong>{[point.address, point.city].filter(Boolean).length ? ` — ${[point.address, point.city].filter(Boolean).join(", ")}` : ""}</p>)}{selected.partners?.contact_phone && <p>{selected.partners.contact_phone}</p>}{selected.partners?.contact_email && <p>{selected.partners.contact_email}</p>}</section>
             {selected.invoiced_at && (selected.bocp_invoice_id || selected.invoiced_with) && <a className="button button-outline invoice-button" href={`/billing/invoice/${selected.invoiced_with ?? selected.id}`} target="_blank" rel="noopener noreferrer">
               <svg className="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>Descarcă factura</a>}
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
