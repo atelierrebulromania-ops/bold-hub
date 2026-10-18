@@ -14,6 +14,20 @@ function sameKey(given: string, expected: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Make sends the form answers as one JSON field (they differ per form); unpack it next to the other fields.
+function expandJsonFields(fields: Record<string, FormDataEntryValue>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try { out[key] = JSON.parse(trimmed); continue; } catch { /* plain text */ }
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 // Where lead sources post new leads: Meta Lead Ads through Make/Zapier, the MailerLite form on the
 // site, later Google and TikTok. The key from Admin → Setări authorizes the call (?key=… or a Bearer header).
 export async function POST(request: Request) {
@@ -33,7 +47,7 @@ export async function POST(request: Request) {
   let payload: unknown;
   const type = request.headers.get("content-type") ?? "";
   try {
-    payload = type.includes("application/json") ? await request.json() : Object.fromEntries(await request.formData());
+    payload = type.includes("application/json") ? await request.json() : expandJsonFields(Object.fromEntries(await request.formData()));
   } catch {
     return Response.json({ error: "Conținut invalid." }, { status: 400, headers: noStore });
   }

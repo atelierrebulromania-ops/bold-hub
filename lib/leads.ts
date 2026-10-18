@@ -38,6 +38,12 @@ function text(value: unknown): string | null {
 
 type Flat = Map<string, { label: string; value: string }>;
 
+// Meta and Make turn questions into keys ("ce_tip_de_locație_reprezinți?"); show them as text again.
+function readable(key: string) {
+  const label = /\s/.test(key) ? key : key.replace(/_/g, " ");
+  return (label.charAt(0).toUpperCase() + label.slice(1)).slice(0, 200);
+}
+
 // Flattens nested payloads to "last key → value" (keeping the original label for the answers);
 // Meta's field_data ([{name, values}]) becomes plain keys.
 function flatten(input: unknown, out: Flat, depth = 0) {
@@ -47,16 +53,19 @@ function flatten(input: unknown, out: Flat, depth = 0) {
       if (item && typeof item === "object" && "name" in item && ("values" in item || "value" in item)) {
         const value = text((item as { values?: unknown; value?: unknown }).values ?? (item as { value?: unknown }).value);
         const name = text((item as { name: unknown }).name);
-        if (name && value) out.set(keyOf(name), { label: name.slice(0, 200), value });
+        if (name && value) out.set(keyOf(name), { label: readable(name), value });
       } else flatten(item, out, depth + 1);
     }
     return;
   }
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (value && typeof value === "object") flatten(value, out, depth + 1);
+    if (Array.isArray(value) && value.every((item) => item === null || typeof item !== "object")) {
+      const plain = text(value);
+      if (plain && !out.has(keyOf(key))) out.set(keyOf(key), { label: readable(key), value: plain });
+    } else if (value && typeof value === "object") flatten(value, out, depth + 1);
     else {
       const plain = text(value);
-      if (plain && !out.has(keyOf(key))) out.set(keyOf(key), { label: key.slice(0, 200), value: plain });
+      if (plain && !out.has(keyOf(key))) out.set(keyOf(key), { label: readable(key), value: plain });
     }
   }
 }
