@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import { ElapsedTimer } from "@/components/elapsed-timer";
 import type { Database } from "@/lib/database.types";
 import { formatDateTime } from "@/lib/orders";
-import { addPartnerRequest, deleteDeliveryGroup, handCartsToBilling, markCartPrepared, saveDeliveryGroup } from "./actions";
+import { addPartnerRequest, cancelBackorder, deleteDeliveryGroup, handCartsToBilling, prepareCart, saveDeliveryGroup, shelveBackorder } from "./actions";
 
 type Product = { name: string; sku: string; variant_label: string | null; warehouse_stock?: { quantity_bocp_global: number } | null } | null;
 
+// A card on the board: a client, or one point of work of a client that orders per point.
 export type Partner = {
   id: string;
+  client_id: string;
+  location_id: string | null;
+  client_name: string;
+  address: string | null;
   business_name: string;
   type: string;
   contact_phone: string;
@@ -28,6 +33,10 @@ export type Partner = {
     partner_cart_items: { id: string; product_id: string; quantity_needed: number; products: Product }[];
   }[];
 };
+
+// What the warehouse could not put at preparation (restanță): open until stock returns, then on the
+// partner's shelf until it leaves with the next delivery.
+export type Backorder = { id: string; partner_id: string; location_id: string | null; product_id: string; quantity: number; status: "open" | "shelved"; created_at: string; products: Product };
 
 export type DeliveryGroup = { id: string; name: string; partner_delivery_groups: { partner_id: string }[] };
 
@@ -50,8 +59,9 @@ function productLabel(product: Product) {
 
 // Shelf stock is estimated: the par level minus what still has to be prepared or is on the way.
 // Once the warehouse marks a cart prepared, its products count as back on the shelf.
-function summarize(partner: Partner) {
+function summarize(partner: Partner, backorders: Backorder[]) {
   const pending = new Map<string, number>();
+  for (const back of backorders) pending.set(back.product_id, (pending.get(back.product_id) ?? 0) + back.quantity);
   for (const cart of partner.partner_carts) {
     if (cart.status === "prepared") continue;
     for (const item of cart.partner_cart_items) pending.set(item.product_id, (pending.get(item.product_id) ?? 0) + item.quantity_needed);
@@ -65,6 +75,7 @@ function summarize(partner: Partner) {
   const units = (items: { quantity_needed: number }[]) => items.reduce((sum, item) => sum + item.quantity_needed, 0);
   return {
     levels,
+    backorders,
     openCart,
     prepared,
     openUnits: openCart ? units(openCart.partner_cart_items) : 0,
@@ -96,17 +107,26 @@ function stageOf(info: ReturnType<typeof summarize>): Stage {
 
 // `warehouse` is false for sales agents: they follow their clients' orders and add requests, while
 // putting products on the shelf and handing carts to billing stays with the warehouse.
-export function PartnersBoard({ partners, groups, catalog, warehouse = true }: { partners: Partner[]; groups: DeliveryGroup[]; catalog: CatalogProduct[]; warehouse?: boolean }) {
+export function PartnersBoard({ partners, groups, catalog, backorders, warehouse = true, canCancel = false }: {
+  partners: Partner[]; groups: DeliveryGroup[]; catalog: CatalogProduct[]; backorders: Backorder[]; warehouse?: boolean; canCancel?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<"partners" | "groups" | "products">("partners");
+  const [view, setView] = useState<"partners" | "groups" | "products" | "backorders">("partners");
+  // Quantities the warehouse actually puts, per cart item (missing = the full request).
+  const [putQty, setPutQty] = useState<Record<string, string>>({});
+  const [shelveQty, setShelveQty] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<GroupDraft | null>(null);
   const [request, setRequest] = useState<RequestDraft | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  const summaries = useMemo(() => new Map(partners.map((partner) => [partner.id, summarize(partner)])), [partners]);
+  const belongs = (partner: Partner, back: Backorder) => back.partner_id === partner.client_id && (partner.location_id === null || back.location_id === partner.location_id);
+  const summaries = useMemo(() => new Map(partners.map((partner) => [partner.id, summarize(partner, backorders.filter((back) => belongs(partner, back)))])), [partners, backorders]);
+  const backName = (back: Backorder) => partners.find((partner) => belongs(partner, back))?.business_name ?? "Partener";
+  // Delivery groups hold clients; the group editor lists each client once.
+  const clients = useMemo(() => [...new Map(partners.map((partner) => [partner.client_id, partner])).values()], [partners]);
 
   const needle = query.trim().toLocaleLowerCase("ro");
   const visible = partners.filter((partner) =>
@@ -127,6 +147,30 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
     setRequest(null);
     setSelectedId(id);
     setFeedback(null);
+    setPutQty({});
+  }
+
+  function prepare(cart: NonNullable<ReturnType<typeof summarize>["openCart"]>) {
+    const lines = cart.partner_cart_items.flatMap((item) => {
+      const typed = putQty[item.id];
+      const quantity = typed === undefined || typed === "" ? item.quantity_needed : Math.max(0, Math.min(item.quantity_needed, Math.floor(Number(typed)) || 0));
+      return quantity < item.quantity_needed ? [{ itemId: item.id, quantity }] : [];
+    });
+    if (lines.length && !window.confirm(`Pui mai puțin decât s-a cerut la ${lines.length} ${lines.length === 1 ? "produs" : "produse"}. Diferența trece la restanțe și pleacă la următoarea livrare. Continui?`)) return;
+    run(() => prepareCart(cart.id, lines));
+  }
+
+  function shelve(back: Backorder) {
+    const typed = shelveQty[back.id];
+    const quantity = typed === undefined || typed === "" ? back.quantity : Math.floor(Number(typed));
+    if (!quantity || quantity < 1 || quantity > back.quantity) { setFeedback({ ok: false, message: `Pune între 1 și ${back.quantity} buc.` }); return; }
+    run(() => shelveBackorder(back.id, quantity));
+  }
+
+  function cancel(back: Backorder) {
+    const reason = window.prompt(`De ce anulezi restanța (${productLabel(back.products)} ×${back.quantity})?`, "Clientul nu mai dorește");
+    if (reason === null) return;
+    run(() => cancelBackorder(back.id, reason));
   }
 
   function newRequest() {
@@ -145,9 +189,11 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
     if (!request) return;
     const items = request.lines.map((line) => ({ productId: line.productId, quantity: Number(line.quantity) }));
     const { partnerId, source } = request;
+    const unit = partners.find((partner) => partner.id === partnerId);
+    if (!unit) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await addPartnerRequest(partnerId, items, source);
+      const result = await addPartnerRequest(unit.client_id, items, source, unit.location_id);
       setFeedback(result);
       if (result.ok) setRequest(null);
       router.refresh();
@@ -271,11 +317,44 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
     );
   }
 
+  // Owed products, grouped by product: the warehouse sees BOCP stock and shelves them when it returns.
+  function renderBackorders() {
+    const byProduct = new Map<string, { product: Product; rows: Backorder[] }>();
+    for (const back of backorders) {
+      const text = `${productLabel(back.products)} ${back.products?.sku ?? ""} ${backName(back)}`.toLocaleLowerCase("ro");
+      if (needle && !text.includes(needle)) continue;
+      const entry = byProduct.get(back.product_id) ?? { product: back.products, rows: [] };
+      entry.rows.push(back);
+      byProduct.set(back.product_id, entry);
+    }
+    const entries = [...byProduct.entries()].sort((a, b) => productLabel(a[1].product).localeCompare(productLabel(b[1].product), "ro"));
+    if (entries.length === 0) return <p className="admin-empty-note">{needle ? "Nicio restanță nu corespunde căutării." : "Nicio restanță. Tot ce s-a cerut a fost livrat."}</p>;
+    return <div className="product-blocks">{entries.map(([id, entry]) => {
+      const owed = entry.rows.filter((back) => back.status === "open").reduce((sum, back) => sum + back.quantity, 0);
+      const bocp = entry.product?.warehouse_stock?.quantity_bocp_global ?? 0;
+      return <section key={id} className="admin-card product-block">
+        <div className="admin-card-heading"><h2>{productLabel(entry.product)} {owed > 0 && <span className="product-block-total">{owed} buc. restante</span>}</h2>
+          <p>SKU {entry.product?.sku ?? "—"} · {bocp > 0 ? `stoc BOCP ${bocp}` : "fără stoc în BOCP (la ultima sincronizare)"}</p></div>
+        <ul className="admin-simple-list dashboard-list">{entry.rows.map((back) => <li key={back.id}>
+          <span>{backName(back)}<small>{back.status === "shelved" ? "pe raft · pleacă la următoarea livrare" : `restant din ${formatDateTime(back.created_at)}`}</small></span>
+          <span className="backorder-actions">
+            <strong>×{back.quantity}</strong>
+            {warehouse && back.status === "open" && <>
+              <input type="number" min={1} max={back.quantity} value={shelveQty[back.id] ?? String(back.quantity)} aria-label="Bucăți puse pe raft"
+                onChange={(event) => setShelveQty({ ...shelveQty, [back.id]: event.target.value })} />
+              <button type="button" className="button button-outline" disabled={pending} onClick={() => shelve(back)}>Pune pe raft</button>
+            </>}
+            {canCancel && <button type="button" className="text-button" disabled={pending} onClick={() => cancel(back)}>Anulează</button>}
+          </span>
+        </li>)}</ul>
+      </section>;
+    })}</div>;
+  }
+
   function renderGroups() {
-    const byId = new Map(partners.map((partner) => [partner.id, partner]));
     const shown = groups.map((group) => ({
       group,
-      members: group.partner_delivery_groups.map((member) => byId.get(member.partner_id)).filter((partner): partner is Partner => !!partner)
+      members: partners.filter((partner) => group.partner_delivery_groups.some((member) => member.partner_id === partner.client_id))
         .sort((a, b) => a.business_name.localeCompare(b.business_name, "ro")),
     })).map((entry) => ({ ...entry, urgent: entry.members.filter((partner) => isUrgent(partner, summaries.get(partner.id)!)) }))
       .sort((a, b) => Number(b.urgent.length > 0) - Number(a.urgent.length > 0))
@@ -326,11 +405,12 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
     <>
       <section className="board-panel" aria-label="Parteneri">
         <div className="panel-tabs-row">
-          <h2 className="panel-tabs-title">{view === "partners" ? "Parteneri" : view === "groups" ? "Grupuri de livrare" : "Produse"}</h2>
+          <h2 className="panel-tabs-title">{view === "partners" ? "Parteneri" : view === "groups" ? "Grupuri de livrare" : view === "backorders" ? "Restanțe" : "Produse"}</h2>
           <div className="board-tabs panel-tabs" role="tablist" aria-label="Vedere">
             <button type="button" role="tab" aria-selected={view === "partners"} className={view === "partners" ? "active" : ""} onClick={() => setView("partners")}>Parteneri <span>{partners.length}</span></button>
             <button type="button" role="tab" aria-selected={view === "groups"} className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}>Grupuri de livrare <span>{groups.length}</span></button>
             <button type="button" role="tab" aria-selected={view === "products"} className={view === "products" ? "active" : ""} onClick={() => setView("products")}>Produse</button>
+            <button type="button" role="tab" aria-selected={view === "backorders"} className={view === "backorders" ? "active" : ""} onClick={() => setView("backorders")}>Restanțe <span>{backorders.filter((back) => back.status === "open").length}</span></button>
           </div>
           <span aria-hidden="true" />
         </div>
@@ -351,13 +431,13 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
           <div className="partners-heading-end">
             <label className="partners-search">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg>
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={view === "partners" ? "Caută partener" : view === "groups" ? "Caută grup sau partener" : "Caută produs sau SKU"} aria-label="Caută" />
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={view === "partners" ? "Caută partener" : view === "groups" ? "Caută grup sau partener" : view === "backorders" ? "Caută produs sau partener" : "Caută produs sau SKU"} aria-label="Caută" />
             </label>
           </div>
         </div>
         {feedback && !selected && !draft && !request && <p className={`action-feedback group-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
 
-        {view === "products" ? renderProducts() : view === "groups" ? renderGroups() : partners.length === 0 ? <p className="admin-empty-note">Niciun partener activ.</p>
+        {view === "products" ? renderProducts() : view === "backorders" ? renderBackorders() : view === "groups" ? renderGroups() : partners.length === 0 ? <p className="admin-empty-note">Niciun partener activ.</p>
           : <div className="board partners-board" aria-label="Board parteneri">
             {columns.map((column) => {
               const cards = visible.filter((partner) => stageOf(summaries.get(partner.id)!) === column.stage)
@@ -403,7 +483,7 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
               {selected.is_important_client && priorityChip}
             </div>
 
-            <section className="detail-section"><div className="section-line"><h3>Produse pe raft</h3><span>estimat / inițial</span></div>
+            {!warehouse && <section className="detail-section"><div className="section-line"><h3>Produse pe raft</h3><span>estimat / inițial</span></div>
               {summary.levels.length === 0 ? <p>Stocul inițial nu este setat pentru acest partener.</p>
                 : <div className="item-list">{summary.levels.map((level) => (
                   <div className="order-item" key={level.id}>
@@ -411,17 +491,33 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
                     <b className={level.missing > 0 ? "stock-short" : "stock-full"}>{level.onShelf}/{level.par_level_quantity}</b>
                   </div>
                 ))}</div>}
+            </section>}
+
+            <section className="detail-section"><div className="section-line"><h3>{warehouse ? "De pregătit" : "Coș"}</h3>{summary.openCart && <ElapsedTimer since={summary.openCart.countdown_started_at} />}</div>
+              {!summary.openCart ? <p>{warehouse ? "Nicio cerere nouă." : "Coșul este gol."}</p>
+                : <div className="item-list">{summary.openCart.partner_cart_items.map((item) => {
+                  // The warehouse sees what the partner still has on the shelf and what to put, not the initial stock.
+                  const shelf = summary.levels.find((level) => level.product_id === item.product_id)?.onShelf;
+                  return <div className="order-item" key={item.id}>
+                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}{warehouse && shelf !== undefined ? ` · pe raft: ${shelf}` : ""}</small></div>
+                    {warehouse ? <label className="put-quantity">de pus
+                      <input type="number" min={0} max={item.quantity_needed} value={putQty[item.id] ?? String(item.quantity_needed)} aria-label={`Bucăți puse: ${productLabel(item.products)}`}
+                        onChange={(event) => setPutQty({ ...putQty, [item.id]: event.target.value })} />
+                      <span>/ {item.quantity_needed}</span></label> : <b>×{item.quantity_needed}</b>}
+                  </div>;
+                })}</div>}
             </section>
 
-            <section className="detail-section"><div className="section-line"><h3>Coș</h3>{summary.openCart && <ElapsedTimer since={summary.openCart.countdown_started_at} />}</div>
-              {!summary.openCart ? <p>Coșul este gol.</p>
-                : <div className="item-list">{summary.openCart.partner_cart_items.map((item) => (
-                  <div className="order-item" key={item.id}>
-                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}</small></div>
-                    <b>×{item.quantity_needed}</b>
-                  </div>
-                ))}</div>}
-            </section>
+            {summary.backorders.length > 0 && <section className="detail-section"><div className="section-line"><h3>Restanțe</h3><span>{summary.backorders.reduce((sum, back) => sum + back.quantity, 0)} buc.</span></div>
+              <div className="item-list">{summary.backorders.map((back) => (
+                <div className="order-item" key={back.id}>
+                  <div><strong>{productLabel(back.products)}</strong><small>{back.status === "shelved" ? "Pe raft · pleacă la următoarea livrare" : `Restant din ${formatDateTime(back.created_at)}`}</small></div>
+                  <span className="backorder-actions"><b className={back.status === "shelved" ? "stock-full" : "stock-short"}>×{back.quantity}</b>
+                    {canCancel && <button type="button" className="text-button" disabled={pending} onClick={() => cancel(back)}>Anulează</button>}</span>
+                </div>
+              ))}</div>
+              {warehouse && summary.backorders.some((back) => back.status === "open") && <p className="backorder-hint">Când revine stocul, pune-le pe raft din tab-ul Restanțe.</p>}
+            </section>}
 
             {summary.prepared.map((cart) => (
               <section className="detail-section" key={cart.id}><div className="section-line"><h3>Pregătit de livrare</h3><span>{formatDateTime(cart.prepared_at)}</span></div>
@@ -437,13 +533,14 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
               </section>
             ))}
 
-            <section className="detail-section"><h3>Contact</h3>
+            <section className="detail-section"><h3>{selected.address ? "Livrare și contact" : "Contact"}</h3>
+              {selected.address && <p className="detail-primary">{selected.address}</p>}
               <p>{selected.contact_phone}</p>{selected.contact_email && <p>{selected.contact_email}</p>}
             </section>
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
           </div>
           {warehouse && (summary.needsRefill || summary.prepared.length > 0) && <div className="detail-actions">
-            {summary.needsRefill && <button className="button button-primary" disabled={pending} onClick={() => run(() => markCartPrepared(summary.openCart!.id))}>Produsele rezervate pe raft</button>}
+            {summary.needsRefill && <button className="button button-primary" disabled={pending} onClick={() => prepare(summary.openCart!)}>Produsele rezervate pe raft</button>}
             {summary.prepared.length > 0 && <button className={`button ${summary.needsRefill ? "button-outline" : "button-primary"}`} disabled={pending} onClick={() => handOver(selected)}>Predare - Facturare</button>}
           </div>}
         </aside>
@@ -459,10 +556,10 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
             <section className="detail-section"><div className="section-line"><h3>Parteneri</h3><span>{draft.members.length} selectați</span></div>
               <input className="group-member-search" type="search" value={draft.search} onChange={(event) => setDraft({ ...draft, search: event.target.value })} placeholder="Caută partener" aria-label="Caută partener în listă" />
               <div className="group-member-list">
-                {partners.filter((partner) => partner.business_name.toLocaleLowerCase("ro").includes(draft.search.trim().toLocaleLowerCase("ro"))).map((partner) => (
-                  <label key={partner.id} className="group-member">
-                    <input type="checkbox" checked={draft.members.includes(partner.id)} onChange={() => toggleMember(partner.id)} />
-                    <span>{partner.business_name}</span>
+                {clients.filter((partner) => partner.client_name.toLocaleLowerCase("ro").includes(draft.search.trim().toLocaleLowerCase("ro"))).map((partner) => (
+                  <label key={partner.client_id} className="group-member">
+                    <input type="checkbox" checked={draft.members.includes(partner.client_id)} onChange={() => toggleMember(partner.client_id)} />
+                    <span>{partner.client_name}</span>
                     <span className={`partner-kind ${partner.type}`}>{typeLabel(partner.type)}</span>
                   </label>
                 ))}

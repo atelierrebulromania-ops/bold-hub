@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, setClientParLevel, suggestFromInvoices,
+  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type InvoiceSuggestion,
 } from "./actions";
 import { LinkPending } from "@/components/link-pending";
@@ -31,11 +31,18 @@ export type AgentClient = {
   billing_county: string | null;
   billing_zip: string | null;
   partner_discounts: { category: string | null; percent: number }[];
-  partner_par_levels: { product_id: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
+  // central: one stock and one order for the firm (to the main point); per_location: each point its own.
+  stock_mode: "central" | "per_location";
+  partner_locations: ClientLocation[];
+  partner_par_levels: { product_id: string; location_id: string | null; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
     invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
 };
+
+export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean };
+
+const sortLocations = (locations: ClientLocation[]) => [...locations].sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.name.localeCompare(b.name, "ro"));
 
 export type OtherClient = { id: string; business_name: string; location_name: string; type: string; account_id: string | null; account_name: string | null; delivery_groups: string[] };
 export type CatalogItem = { id: string; name: string; sku: string; category: string | null; list_price: number | null };
@@ -237,6 +244,7 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
           </div>
         </section>
 
+        {client && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
@@ -244,6 +252,70 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
       </div>
     </aside>
+  );
+}
+
+const emptyPoint = { name: "", city: "", address: "", contactName: "", contactPhone: "", active: true };
+
+// Points of work (delivery addresses) and how the client counts its stock.
+function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const [editing, setEditing] = useState<{ id: string | null } & typeof emptyPoint | null>(null);
+  const [pending, start] = useTransition();
+  const points = sortLocations(client.partner_locations);
+  const set = (key: keyof typeof emptyPoint, value: string | boolean) => editing && setEditing({ ...editing, [key]: value });
+
+  function save() {
+    if (!editing) return;
+    start(async () => {
+      const result = await saveLocation(client.id, editing.id, editing);
+      onDone(result);
+      if (result.ok) setEditing(null);
+    });
+  }
+
+  function mode(next: "central" | "per_location") {
+    if (next === client.stock_mode) return;
+    const text = next === "per_location"
+      ? "Fiecare punct de lucru va avea stocul și comenzile lui. Stocul inițial de acum trece pe punctul principal. Continui?"
+      : "O singură comandă pentru toată firma, livrată la punctul principal. Rămâne stocul inițial al punctului principal; al celorlalte puncte se șterge. Continui?";
+    if (!window.confirm(text)) return;
+    start(async () => onDone(await setStockMode(client.id, next)));
+  }
+
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Puncte de lucru</h3><span>{points.filter((point) => point.active).length} active</span></div>
+      <div className="stock-mode" role="group" aria-label="Stoc și comenzi">
+        <span>Stoc și comenzi:</span>
+        <button type="button" className={client.stock_mode === "central" ? "active" : ""} disabled={pending} onClick={() => mode("central")}>Centralizat</button>
+        <button type="button" className={client.stock_mode === "per_location" ? "active" : ""} disabled={pending} onClick={() => mode("per_location")}>Pe punct de lucru</button>
+      </div>
+      <p className="muted small">{client.stock_mode === "central"
+        ? "Un singur stoc inițial și o singură comandă pentru firmă, livrată la punctul principal; își împart ei produsele."
+        : "Fiecare punct de lucru are stocul lui inițial și comenzile lui, livrate la adresa lui. Factura rămâne una pe CUI."}</p>
+      <div className="item-list">{points.map((point) => (
+        <div className={`order-item ${point.active ? "" : "inactive-point"}`} key={point.id}>
+          <div><strong>{point.name}{point.is_main && <span className="point-main">principal</span>}{!point.active && <span className="point-main off">inactiv</span>}</strong>
+            <small>{[point.address, point.city].filter(Boolean).join(", ") || "Fără adresă"}{point.contact_name || point.contact_phone ? ` · ${[point.contact_name, point.contact_phone].filter(Boolean).join(", ")}` : ""}</small></div>
+          <button type="button" className="text-button" onClick={() => setEditing({ id: point.id, name: point.name, city: point.city ?? "", address: point.address ?? "",
+            contactName: point.contact_name ?? "", contactPhone: point.contact_phone ?? "", active: point.active })}>Editează</button>
+        </div>
+      ))}</div>
+      {editing ? <div className="point-form">
+        <div className="partner-billing-grid">
+          <label>Nume punct<input value={editing.name} maxLength={120} autoFocus onChange={(event) => set("name", event.target.value)} placeholder="ex. Iulius Mall" /></label>
+          <label>Oraș<input value={editing.city} maxLength={120} onChange={(event) => set("city", event.target.value)} /></label>
+          <label>Adresă de livrare<input value={editing.address} maxLength={300} onChange={(event) => set("address", event.target.value)} /></label>
+          <label>Persoană de contact<input value={editing.contactName} maxLength={120} onChange={(event) => set("contactName", event.target.value)} /></label>
+          <label>Telefon<input value={editing.contactPhone} maxLength={40} onChange={(event) => set("contactPhone", event.target.value)} /></label>
+        </div>
+        {editing.id && !points.find((point) => point.id === editing.id)?.is_main && <label className="admin-checkbox">
+          <input type="checkbox" checked={editing.active} onChange={(event) => set("active", event.target.checked)} /> Punct activ (primește comenzi)</label>}
+        <div className="partner-billing-actions">
+          <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
+          <button type="button" className="button button-primary" disabled={pending || !editing.name.trim()} onClick={save}>{editing.id ? "Salvează punctul" : "Adaugă punctul"}</button>
+        </div>
+      </div> : <button type="button" className="button button-outline" onClick={() => setEditing({ id: null, ...emptyPoint })}>+ Punct de lucru</button>}
+    </section>
   );
 }
 
@@ -300,7 +372,19 @@ function ProductPicker({ catalog, exclude, onPick, placeholder }: { catalog: Cat
 }
 
 function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
-  const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(client.partner_par_levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
+  const points = sortLocations(client.partner_locations.filter((location) => location.active));
+  const perPoint = client.stock_mode === "per_location";
+  const [pointId, setPointId] = useState<string | null>(perPoint ? points[0]?.id ?? null : null);
+  const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null));
+  return <ParLevelList key={pointId ?? "central"} client={client} catalog={catalog} levels={levels} pointId={pointId} onDone={onDone}
+    header={perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
+      <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null} />;
+}
+
+function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
   const [pending, start] = useTransition();
   // Products the client bought (BOCP invoices) that are not on its shelf yet.
@@ -323,17 +407,19 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
     setSuggestions((current) => current?.filter((row) => row.productId !== item.productId) ?? null);
   }
   const rows = [
-    ...client.partner_par_levels.map((level) => ({ id: level.product_id, name: level.products?.name ?? "Produs", sku: level.products?.sku ?? "—" })),
+    ...levels.map((level) => ({ id: level.product_id, name: level.products?.name ?? "Produs", sku: level.products?.sku ?? "—" })),
     ...added.map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
   ];
 
   function save(productId: string) {
     const quantity = Number(values[productId] ?? "0");
-    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0)));
+    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId)));
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Stoc inițial pe raftul clientului</h3><span>{client.partner_par_levels.length} produse</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Stoc inițial pe raftul clientului</h3>
+      <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{levels.length} produse</span></div>
+      {header}
       <div className="item-list">{rows.map((row) => (
         <div className="order-item" key={row.id}>
           <div><strong>{row.name}</strong><small>SKU {row.sku}</small></div>
@@ -358,16 +444,19 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
 }
 
 function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const points = sortLocations(client.partner_locations.filter((location) => location.active));
+  const choosePoint = client.stock_mode === "per_location" && points.length > 1;
+  const [pointId, setPointId] = useState<string | null>(points[0]?.id ?? null);
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
   const [source, setSource] = useState<"whatsapp" | "telefon">("telefon");
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
-  const suggestions = client.partner_par_levels.filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
+  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null)).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
   const valid = lines.length > 0 && lines.every((line) => /^\d+$/.test(line.quantity) && Number(line.quantity) > 0);
 
   function send() {
     start(async () => {
-      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source);
+      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null);
       onDone(result);
       if (result.ok) setLines([]);
     });
@@ -375,6 +464,8 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
 
   return (
     <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>ajunge la depozit</span></div>
+      {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
+        {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
       {lines.length > 0 && <div className="item-list">{lines.map((line, index) => (
         <div className="order-item" key={line.item.id}>
           <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>

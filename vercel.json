@@ -1,7 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["lhr1"],
+  "regions": [
+    "lhr1"
+  ],
   "crons": [
-    { "path": "/api/cron/invoice-payments", "schedule": "0 4 * * *" }
+    {
+      "path": "/api/cron/invoice-payments",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/backorders",
+      "schedule": "0 5 * * *"
+    }
   ]
 }

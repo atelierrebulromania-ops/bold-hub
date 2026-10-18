@@ -106,7 +106,7 @@ export async function removeDeliveryGroup(form: FormData) {
 }
 
 export async function setParLevel(form: FormData) {
-  const { supabase, userId } = await adminContext();
+  const { supabase } = await adminContext();
   const partnerId = value(form, "partner_id", 36);
   const sku = value(form, "sku", 100);
   const rawQuantity = form.get("par_level_quantity");
@@ -119,14 +119,9 @@ export async function setParLevel(form: FormData) {
   if (productError) fail("save_failed");
   if (!product) fail("product_missing");
 
-  const { error } = await supabase.from("partner_par_levels").upsert({
-    partner_id: partnerId,
-    product_id: product.id,
-    par_level_quantity: quantity,
-    set_by: userId,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "partner_id,product_id" });
-  if (error) fail("save_failed");
+  // The client's central stock; per point of work it is set from the client's page (Clienți).
+  const { data, error } = await supabase.rpc("set_partner_par_level", { p_partner_id: partnerId, p_product_id: product.id, p_quantity: quantity });
+  if (error || !data) fail("save_failed");
   done("par_saved");
 }
 

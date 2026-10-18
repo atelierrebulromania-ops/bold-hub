@@ -57,26 +57,24 @@ export async function findCartInvoice(cartId: string, invoiceNumber: string): Pr
   return lookup(cartId, invoiceNumber);
 }
 
-// Billing issues the invoice in BOCP, then marks the handed cart invoiced here. The invoice is
-// looked up again on the server, so only an invoice that really exists in BOCP is linked.
-export async function markCartInvoiced(cartId: string, invoiceNumber: string): Promise<{ ok: boolean; message: string }> {
-  const found = await lookup(cartId, invoiceNumber);
+// Several handed carts of the same partner, invoiced with one BOCP invoice. The invoice is looked up
+// against the oldest cart; payments and totals are kept on that one.
+export async function markCartsInvoiced(cartIds: string[], invoiceNumber: string): Promise<{ ok: boolean; message: string }> {
+  if (cartIds.length === 0 || cartIds.length > 20 || !cartIds.every((id) => uuid.test(id))) return { ok: false, message: "Comenzile nu sunt valide." };
+  const found = await lookup(cartIds[0], invoiceNumber);
   if (!found.ok) return found;
   const { supabase } = await requireRole(["admin", "operator_facturare"]);
   const { invoice } = found;
-  const { data, error } = await supabase.rpc("mark_partner_cart_invoiced", {
-    p_cart_id: cartId,
-    p_invoice_number: invoice.number,
-    p_bocp_invoice_id: invoice.bocpInvoiceId,
-    p_invoice_date: invoice.date,
-    p_invoice_pdf_url: invoice.pdfUrl,
+  const { data, error } = await supabase.rpc("mark_partner_carts_invoiced", {
+    p_cart_ids: cartIds, p_invoice_number: invoice.number, p_bocp_invoice_id: invoice.bocpInvoiceId, p_invoice_date: invoice.date, p_invoice_pdf_url: invoice.pdfUrl,
   });
   if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
-  if (data === true) await recordInvoicePayment(supabase, "cart", cartId, invoice);
+  if (!data) return { ok: false, message: "Comenzile s-au schimbat între timp. Reîncarcă pagina." };
+  await recordInvoicePayment(supabase, "cart", data, invoice);
   revalidatePath("/billing");
-  return data === true
-    ? { ok: true, message: `Comanda a fost marcată ca facturată (${invoice.number}).` }
-    : { ok: false, message: "Comanda a fost deja facturată. Reîncarcă pagina." };
+  return { ok: true, message: cartIds.length > 1
+    ? `${cartIds.length} comenzi au fost marcate facturate într-o singură factură (${invoice.number}).`
+    : `Comanda a fost marcată ca facturată (${invoice.number}).` };
 }
 
 // Proformas sent to billing without the warehouse ("Cere factura").

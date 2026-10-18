@@ -13,13 +13,14 @@ export default async function AccountClientsPage({ searchParams }: { searchParam
       .select(`id,business_name,location_name,type,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username,
         billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip,
         partner_discounts(category,percent),
-        partner_par_levels(product_id,par_level_quantity,products(name,sku)),
+        stock_mode,partner_locations(id,name,city,address,contact_name,contact_phone,is_main,active),
+        partner_par_levels(product_id,location_id,par_level_quantity,products(name,sku)),
         partner_carts(id,status,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,partner_cart_items(quantity_needed))`)
       .eq("account_id", profile.id).order("business_name").limit(500),
     supabase.rpc("partner_directory"),
     supabase.from("products").select("id,name,sku,category,list_price").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
   ]);
-  const clients: AgentClient[] = clientsResult.data ?? [];
+  const clients = (clientsResult.data ?? []) as AgentClient[];
   // Every active client of the company, the agent's own included.
   const directory: OtherClient[] = (directoryResult.data ?? []).filter((row) => row.active);
   const catalog: CatalogItem[] = catalogResult.data ?? [];

@@ -20,7 +20,7 @@ const errors: Record<string, string> = {
 
 type Product = { name: string; variant_label: string | null } | null;
 type Line = { id: string; quantity_needed: number; products: Product };
-type Cart = { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null;
+type Cart = { id: string; status: string; location_id: string | null; created_at: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null;
   invoice_number: string | null; partner_cart_items: Line[] };
 
 const MONTHS = 6;
@@ -51,15 +51,24 @@ function steps(cart: Cart) {
   ];
 }
 
-export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string }> }) {
+export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string; point?: string }> }) {
   const { supabase, partner, preview } = await requirePartner();
   const params = await searchParams;
   const since = new Date();
   since.setMonth(since.getMonth() - (MONTHS - 1), 1);
-  const cartFields = "id,status,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,products(name,variant_label))";
-  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult] = await Promise.all([
-    supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)")
-      .eq("partner_id", partner.id).limit(500),
+  const cartFields = "id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,products(name,variant_label))";
+  // Points of work: in per-point mode the manager picks the point he counts and orders for.
+  const [{ data: client }, { data: locationRows }] = await Promise.all([
+    supabase.from("partners").select("stock_mode").eq("id", partner.id).maybeSingle(),
+    supabase.from("partner_locations").select("id,name,city,is_main").eq("partner_id", partner.id).eq("active", true).order("is_main", { ascending: false }).order("name"),
+  ]);
+  const locations = locationRows ?? [];
+  const perPoint = client?.stock_mode === "per_location";
+  const point = perPoint ? locations.find((location) => location.id === params.point) ?? locations[0] ?? null : null;
+  const pointName = new Map(locations.map((location) => [location.id, location.name]));
+  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult] = await Promise.all([
+    (point ? supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).eq("location_id", point.id)
+      : supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).is("location_id", null)).limit(500),
     // In progress: requested, on the shelf, or delivered and still waiting for the invoice.
     supabase.from("partner_carts").select(cartFields).eq("partner_id", partner.id)
       .or("status.in.(open,prepared),and(status.eq.delivered,invoiced_at.is.null)").order("created_at"),
@@ -69,6 +78,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     preview ? Promise.resolve(null)
       : supabase.from("notifications").select("id,message,created_at").eq("recipient_partner_id", partner.id).is("read_at", null)
         .order("created_at", { ascending: false }).limit(5),
+    supabase.from("partner_backorders").select("id,quantity,status,location_id,created_at,products(name,variant_label)")
+      .eq("partner_id", partner.id).in("status", ["open", "shelved"]).order("created_at"),
   ]);
   const loadError = parsResult.error ?? activeResult.error ?? deliveredResult.error;
   const pars = (parsResult.data ?? []).filter(par => par.products?.active)
@@ -77,10 +88,17 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const delivered = (deliveredResult.data ?? []) as Cart[];
   const invoices = invoicesResult.data ?? [];
   const news = newsResult?.data ?? [];
+  const backorders = backordersResult.data ?? [];
   const inProgress = new Map<string, number>();
-  for (const cart of active) if (cart.status !== "delivered") for (const line of cart.partner_cart_items) {
+  for (const cart of active) if (cart.status !== "delivered" && (!point || cart.location_id === point.id)) for (const line of cart.partner_cart_items) {
     const key = productLabel(line.products);
     inProgress.set(key, (inProgress.get(key) ?? 0) + line.quantity_needed);
+  }
+  // What we still owe counts as already ordered, so the partner does not ask for it again.
+  for (const back of backorders) {
+    if (point && back.location_id !== point.id) continue;
+    const key = productLabel(back.products);
+    inProgress.set(key, (inProgress.get(key) ?? 0) + back.quantity);
   }
 
   // Consumption: what was delivered per product, per month (last months).
@@ -126,8 +144,12 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
         {loadError ? <p className="notice error" role="alert">Datele nu pot fi încărcate acum.</p> : <>
           <section className="admin-card">
             <div className="admin-card-heading"><h2>Cerere aprovizionare</h2><p>Scrie câte bucăți mai ai pe raft. Calculăm automat cât lipsește până la stocul tău inițial.</p></div>
+            {point && locations.length > 1 && <nav className="point-tabs partner-points" aria-label="Punct de lucru"><span>Comanzi pentru:</span>{locations.map((location) =>
+              <a key={location.id} href={`/partner?point=${location.id}`} className={location.id === point.id ? "active" : ""} aria-current={location.id === point.id ? "page" : undefined}>
+                {location.name}{location.city ? ` · ${location.city}` : ""}</a>)}</nav>}
             {pars.length === 0 ? <p className="admin-empty-note">Stocul inițial nu a fost configurat încă. Contactează Atelier Rebul.</p>
               : <form action={submitCounts} className="refill-count-form">
+                {point && <input type="hidden" name="point" value={point.id} />}
                 <div className="refill-count-head" aria-hidden="true"><span>Produs</span><span className="refill-count-inputs"><span>Rămase</span><span>Stoc inițial</span></span></div>
                 {pars.map(par => <label key={par.product_id} className="refill-count-row">
                   <span><strong>{productLabel(par.products)}</strong>{inProgress.get(productLabel(par.products)) ? <small>{inProgress.get(productLabel(par.products))} buc. deja comandate</small> : null}</span>
@@ -144,6 +166,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
             <div className="admin-card-heading"><h2>Comenzi în curs</h2></div>
             {active.length === 0 ? <p className="admin-empty-note">Nu ai comenzi în curs.</p> : <div className="partner-list">
               {active.map(cart => <article key={cart.id} className="partner-card">
+                {locations.length > 1 && cart.location_id && <p className="point-label">{pointName.get(cart.location_id) ?? ""}</p>}
                 <ol className="order-steps">{steps(cart).map(step => <li key={step.label} className={step.done ? "done" : ""}>
                   <strong>{step.label}</strong><small>{step.done && step.at ? formatDateTime(step.at) : "—"}</small></li>)}</ol>
                 <ul className="par-list partner-lines">{cart.partner_cart_items.map(line => <li key={line.id}>
@@ -154,6 +177,14 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
               </article>)}
             </div>}
           </section>
+
+          {backorders.length > 0 && <section className="admin-card partner-list-section">
+            <div className="admin-card-heading"><h2>Restanțe</h2><p>Produse pe care încă ți le datorăm. Le aducem la următoarea livrare, când revin în stoc.</p></div>
+            <ul className="par-list partner-lines">{backorders.map((back) => <li key={back.id}>
+              <span>{productLabel(back.products)}<small>{back.status === "shelved" ? " · pregătit, vine la următoarea livrare" : " · urmează când revine în stoc"}</small></span>
+              <span className="line-end"><strong>{back.quantity} buc.</strong></span>
+            </li>)}</ul>
+          </section>}
 
           <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Facturi</h2></div>

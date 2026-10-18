@@ -1153,3 +1153,29 @@ p.push-toggle { display: block; }
 .crm-message-block { margin-top: 12px; }
 .crm-message-block > span { display: block; margin-bottom: 6px; color: #8a8d91; font-size: .78rem; }
 .crm-message-block .crm-message { margin-top: 0; }
+.put-quantity { display: flex; align-items: center; gap: 6px; color: var(--blue); font-size: .74rem; font-weight: 800; white-space: nowrap; }
+.put-quantity input { width: 56px; padding: .3rem .4rem; border: 1px solid #c9d6ee; border-radius: 6px; font: inherit; font-size: .8rem; text-align: center; }
+.put-quantity span { color: #8a8d91; font-weight: 600; }
+.backorder-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.backorder-actions input { width: 56px; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: .78rem; text-align: center; }
+.backorder-actions .button { padding: .35rem .7rem; font-size: .72rem; }
+.backorder-hint { margin: 8px 0 0; color: #8a8d91; font-size: .72rem; }
+.group-invoice-note { margin: 0 0 14px; font-size: .76rem; }
+
+/* Points of work */
+.stock-mode { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: .76rem; color: #4b4f56; font-weight: 700; }
+.stock-mode button { padding: .35rem .7rem; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #4b4f56; font: inherit; font-size: .72rem; cursor: pointer; }
+.stock-mode button.active { border-color: var(--blue); background: var(--blue); color: #fff; }
+.point-main { margin-left: 6px; padding: .1rem .4rem; border-radius: 5px; background: var(--blue-soft); color: var(--blue); font-size: .62rem; font-weight: 800; vertical-align: middle; }
+.point-main.off { background: #f0f2f5; color: #65676b; }
+.inactive-point { opacity: .6; }
+.point-form { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #fafbfc; }
+.point-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.point-tabs button { padding: .35rem .7rem; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #4b4f56; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.point-tabs button.active { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+.point-select { display: grid; gap: 4px; margin-bottom: 10px; color: #65676b; font-size: .72rem; font-weight: 700; }
+.point-label { display: block; color: #6b4fd1; font-size: .7rem; font-weight: 700; }
+.partner-points { align-items: center; margin: 4px 0 14px; }
+.partner-points > span { color: #65676b; font-size: .74rem; font-weight: 700; }
+.partner-points a { padding: .4rem .75rem; border: 1px solid var(--line); border-radius: 999px; color: #4b4f56; font-size: .74rem; font-weight: 700; text-decoration: none; }
+.partner-points a.active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }

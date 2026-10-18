@@ -6,21 +6,46 @@ import { reserveCartInBocp } from "@/lib/b2b-bocp";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// The missing products are on the reserved shelf: the cart is ready to deliver (billing comes later).
-// The cart is then sent to BOCP as a connector order, which reserves its stock there.
-export async function markCartPrepared(cartId: string): Promise<{ ok: boolean; message: string }> {
-  if (!uuid.test(cartId)) return { ok: false, message: "Coșul nu este valid." };
+// The warehouse prepares a cart with what it actually put (lines: only the cart items it put less of,
+// with the quantity put). Shortfalls
+// become backorders; backorders already on the partner's shelf join this delivery.
+export async function prepareCart(cartId: string, lines: { itemId: string; quantity: number }[]): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(cartId) || lines.length > 500 || !lines.every((line) => uuid.test(line.itemId) && Number.isInteger(line.quantity) && line.quantity >= 0)) {
+    return { ok: false, message: "Cantitățile nu sunt valide." };
+  }
   const { supabase } = await requireRole(["admin", "operator_depozit"]);
-  const { data, error } = await supabase.rpc("mark_partner_cart_prepared", { p_cart_id: cartId });
+  const { data, error } = await supabase.rpc("prepare_partner_cart", {
+    p_cart_id: cartId, p_lines: lines.map((line) => ({ item_id: line.itemId, quantity: line.quantity })),
+  });
   if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
-  if (data !== true) return { ok: false, message: "Coșul s-a schimbat între timp. Reîncarcă pagina." };
-  const bocp = await reserveCartInBocp(supabase, cartId);
   revalidatePath("/partners");
+  if (data === "empty") return { ok: true, message: "Nimic de pus acum: toate produsele au trecut la restanțe. Agentul a fost anunțat." };
+  if (data !== "prepared") return { ok: false, message: "Coșul s-a schimbat între timp. Reîncarcă pagina." };
+  const short = lines.length > 0;
+  const bocp = await reserveCartInBocp(supabase, cartId);
   revalidatePath("/billing");
-  // The shelf step succeeded either way; a failed BOCP reservation is retried from billing.
-  return bocp.ok
-    ? { ok: true, message: `Produsele sunt pe raft. ${bocp.message}` }
-    : { ok: true, message: `Produsele sunt pe raft, dar rezervarea în BOCP nu a reușit: ${bocp.message} Facturarea a fost anunțată.` };
+  const shelf = short ? "Produsele sunt pe raft; ce lipsește a trecut la restanțe." : "Produsele sunt pe raft.";
+  return bocp.ok ? { ok: true, message: `${shelf} ${bocp.message}` }
+    : { ok: true, message: `${shelf} Rezervarea în BOCP nu a reușit: ${bocp.message} Facturarea a fost anunțată.` };
+}
+
+export async function shelveBackorder(backorderId: string, quantity: number): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(backorderId) || !Number.isInteger(quantity) || quantity < 1) return { ok: false, message: "Cantitatea nu este validă." };
+  const { supabase } = await requireRole(["admin", "operator_depozit"]);
+  const { data } = await supabase.rpc("shelve_backorder", { p_id: backorderId, p_quantity: quantity });
+  revalidatePath("/partners");
+  return data ? { ok: true, message: "Pus pe raft. Pleacă la următoarea livrare a partenerului." }
+    : { ok: false, message: "Restanța s-a schimbat între timp sau cantitatea e mai mare decât restanța." };
+}
+
+export async function cancelBackorder(backorderId: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(backorderId)) return { ok: false, message: "Restanța nu este validă." };
+  if (!reason.trim()) return { ok: false, message: "Scrie motivul anulării." };
+  const { supabase } = await requireRole(["admin", "account"]);
+  const { data, error } = await supabase.rpc("cancel_backorder", { p_id: backorderId, p_reason: reason });
+  if (error) return { ok: false, message: "Doar agentul clientului sau administratorul pot anula restanța." };
+  revalidatePath("/partners");
+  return data ? { ok: true, message: "Restanța a fost anulată." } : { ok: false, message: "Restanța nu mai este deschisă." };
 }
 
 // Hand-off to billing: billing is notified and invoices the prepared products.
@@ -65,8 +90,8 @@ export async function deleteDeliveryGroup(groupId: string): Promise<{ ok: boolea
 
 // A request received by WhatsApp or phone: the products go into the partner's open cart
 // (the partner moves to "Necesită produse") and the stock is reserved.
-export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string): Promise<{ ok: boolean; message: string }> {
-  if (!uuid.test(partnerId) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100
+export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string, locationId: string | null = null): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(partnerId) || (locationId !== null && !uuid.test(locationId)) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100
     || !items.every((item) => uuid.test(item.productId) && Number.isSafeInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 100000)) {
     return { ok: false, message: "Alege partenerul, produsele și cantitățile." };
   }
@@ -75,6 +100,7 @@ export async function addPartnerRequest(partnerId: string, items: { productId: s
     p_partner_id: partnerId,
     p_items: items.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
     p_source: source,
+    p_location_id: locationId,
   });
   if (error) return { ok: false, message: "Nu am putut salva cererea. Încearcă din nou." };
   revalidatePath("/partners");
