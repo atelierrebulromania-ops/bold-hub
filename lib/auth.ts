@@ -6,8 +6,8 @@ import type { Database } from "@/lib/database.types";
 export type UserRole = Database["public"]["Enums"]["user_role"];
 
 // `role` is the role the screens act on; `realRole` is the one stored on the account.
-// They differ only when an admin uses the dev-mode role switcher.
-export type Profile = { id: string; full_name: string; role: UserRole; realRole: UserRole };
+// They differ only when an admin uses the dev-mode role switcher. `crm`: may open the CRM.
+export type Profile = { id: string; full_name: string; role: UserRole; realRole: UserRole; crm: boolean };
 
 export const staffRoles: readonly UserRole[] = ["admin", "owner", "operator_depozit", "operator_facturare", "account"];
 export const viewAsCookie = "boldhub-view-as";
@@ -51,13 +51,14 @@ export async function requireRole(roles: readonly UserRole[]) {
   const userId = authData?.claims?.sub;
   if (!userId) redirect("/login");
   const { data: profile } = await supabase.from("app_users")
-    .select("full_name,role,active").eq("id", userId).maybeSingle();
+    .select("full_name,role,active,crm_access").eq("id", userId).maybeSingle();
   if (!profile?.active) redirect("/access");
   const view = await viewAs(profile.role);
   if (view && "partnerId" in view) redirect("/partner");
   const role = view?.role ?? profile.role;
   if (!roles.includes(role)) redirect("/access");
-  return { supabase, userId, profile: { id: userId, full_name: profile.full_name, role, realRole: profile.role } as Profile };
+  const crm = profile.role === "admin" || profile.crm_access;
+  return { supabase, userId, profile: { id: userId, full_name: profile.full_name, role, realRole: profile.role, crm } as Profile };
 }
 
 // Partners log in with their own Supabase Auth account, linked by an admin; they have no staff profile.

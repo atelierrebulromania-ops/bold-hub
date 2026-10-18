@@ -14,9 +14,9 @@ import { SubmitButton } from "@/components/submit-button";
 
 const svg = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
-type NavItem = { href: string; label: string; roles: UserRole[]; icon: ReactNode; counter?: Counter };
-type Counter = "orders" | "partners" | "returns" | "billing";
-const counterTables: Record<Counter, string[]> = { orders: ["online_orders"], partners: ["partner_carts"], returns: ["order_returns"], billing: ["partner_carts", "sales_documents"] };
+type NavItem = { href: string; label: string; roles: UserRole[]; icon: ReactNode; counter?: Counter; crm?: boolean };
+type Counter = "orders" | "partners" | "returns" | "billing" | "leads";
+const counterTables: Record<Counter, string[]> = { orders: ["online_orders"], partners: ["partner_carts"], returns: ["order_returns"], billing: ["partner_carts", "sales_documents"], leads: ["leads"] };
 
 const sections: { label: string; items: NavItem[] }[] = [
   { label: "GENERAL", items: [
@@ -31,6 +31,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     { href: "/returns", label: "Retururi", roles: ["admin", "operator_depozit", "operator_facturare"], counter: "returns", icon: <svg {...svg}><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg> },
   ] },
   { label: "VÂNZĂRI", items: [
+    { href: "/crm", label: "CRM", roles: ["admin", "owner", "operator_depozit", "operator_facturare", "account"], crm: true, counter: "leads", icon: <svg {...svg}><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> },
     { href: "/account", label: "Clienți", roles: ["account"], icon: <svg {...svg}><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11h6M19 8v6"/></svg> },
     { href: "/account/offers", label: "Oferte și proforme", roles: ["account"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
     { href: "/account/catalog", label: "Catalog produse", roles: ["account"], icon: <svg {...svg}><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg> },
@@ -49,6 +50,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     { href: "/admin/partners", label: "Revânzători", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },
     { href: "/admin/catalog", label: "Catalog & EAN", roles: ["admin"], icon: <svg {...svg}><path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20 6v12"/></svg> },
     { href: "/admin/integrations", label: "Integrări", roles: ["admin"], icon: <svg {...svg}><path d="M4 7h8M4 17h8M16 4v6M16 14v6"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="12" r="2"/></svg> },
+    { href: "/admin/settings", label: "Setări", roles: ["admin"], icon: <svg {...svg}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> },
   ] },
 ];
 
@@ -64,7 +66,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   children: ReactNode;
 }) {
   const visible = sections
-    .map(group => ({ ...group, items: group.items.filter(item => item.roles.includes(profile.role)) }))
+    .map(group => ({ ...group, items: group.items.filter(item => item.roles.includes(profile.role) && (!item.crm || profile.crm)) }))
     .filter(group => group.items.length > 0);
   // Admin can read every row, so count only what is addressed to this user or role.
   const supabase = await createClient();
@@ -72,7 +74,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   const shown = new Set(visible.flatMap(group => group.items.flatMap(item => item.counter ? [item.counter] : [])));
   const countOf = (enabled: boolean, query: () => PromiseLike<{ count: number | null }>) =>
     enabled ? Promise.resolve(query()).then(result => result.count ?? 0) : Promise.resolve(0);
-  const [{ count: unread }, { data: recent }, orders, partners, returns, billing, switcherPartners] = await Promise.all([
+  const [{ count: unread }, { data: recent }, orders, partners, returns, billing, switcherPartners, leads] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null).or(addressed),
     supabase.from("notifications").select("id,message,related_entity_type,read_at,created_at")
       .or(addressed).order("created_at", { ascending: false }).limit(30),
@@ -94,8 +96,11 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
     profile.realRole === "admin"
       ? supabase.from("partners").select("id,business_name").eq("active", true).order("business_name").limit(200).then((result) => result.data ?? [])
       : Promise.resolve([]),
+    // CRM: new leads nobody has taken yet.
+    countOf(shown.has("leads"), () => supabase.from("leads").select("id", { count: "exact", head: true })
+      .is("claimed_by", null).not("status", "in", "(won,lost)")),
   ]);
-  const counts: Record<Counter, number> = { orders, partners, returns, billing };
+  const counts: Record<Counter, number> = { orders, partners, returns, billing, leads };
   const badge = (item: NavItem) => item.counter && counts[item.counter] > 0
     ? <span className="nav-count" aria-label={`${counts[item.counter]} de procesat`}>{counts[item.counter]}</span> : null;
   return (

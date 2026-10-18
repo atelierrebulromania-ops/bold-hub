@@ -26,10 +26,30 @@ export type Database = {
           last_auto_import_at: string | null
           last_auto_import: Json | null
           app_url: string | null
+          leads_webhook_key: string | null
         }
         Insert: { id?: number }
         Update: { id?: number }
         Relationships: []
+      }
+      leads: {
+        Row: {
+          id: string; source: string; external_id: string | null; campaign: string | null; ad_name: string | null; form_name: string | null
+          full_name: string | null; company: string | null; phone: string | null; email: string | null; city: string | null; message: string | null
+          answers: Json; status: string; lost_reason: string | null; claimed_by: string | null; claimed_at: string | null
+          partner_id: string | null; created_by: string | null; received_at: string; updated_at: string
+        }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: []
+      }
+      lead_activities: {
+        Row: { id: string; lead_id: string; user_id: string | null; kind: string; body: string | null; created_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "lead_activities_lead_id_fkey"; columns: ["lead_id"]; isOneToOne: false; referencedRelation: "leads"; referencedColumns: ["id"] },
+        ]
       }
       push_subscriptions: {
         Row: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; user_agent: string | null; created_at: string; last_used_at: string | null }
@@ -39,6 +59,7 @@ export type Database = {
       }
       app_users: {
         Row: {
+          crm_access: boolean
           active: boolean
           created_at: string
           full_name: string
@@ -1049,6 +1070,17 @@ export type Database = {
       }
       release_online_order: { Args: { p_order_id: string }; Returns: boolean }
       delete_staff_user: { Args: { p_id: string }; Returns: string }
+      can_view_crm: { Args: never; Returns: boolean }
+      ingest_lead: { Args: { p_lead: Json }; Returns: string }
+      create_lead: { Args: { p_lead: Json }; Returns: string | null }
+      claim_lead: { Args: { p_id: string }; Returns: boolean }
+      release_lead: { Args: { p_id: string }; Returns: boolean }
+      set_lead_status: { Args: { p_id: string; p_status: string; p_reason: string }; Returns: boolean }
+      add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
+      link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
+      set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
+      rotate_leads_webhook_key: { Args: never; Returns: string }
+      crm_people: { Args: never; Returns: { id: string; full_name: string }[] }
       save_push_subscription: { Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_user_agent: string }; Returns: boolean }
       delete_push_subscription: { Args: { p_endpoint: string }; Returns: boolean }
       claim_push_notifications: {
