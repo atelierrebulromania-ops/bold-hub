@@ -186,7 +186,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
             {lead.form_name && <><dt>Formular</dt><dd>{lead.form_name}</dd></>}
             {lead.ad_name && <><dt>Reclamă</dt><dd>{lead.ad_name}</dd></>}
           </dl>
-          {lead.message && <p className="crm-message">{lead.message}</p>}
+          {lead.message && <div className="crm-message-block"><span>Mesaj</span><p className="crm-message">{lead.message}</p></div>}
         </section>
         {answers.length > 0 && <section className="detail-section"><h3>Răspunsuri din formular</h3>
           <dl className="crm-fields">{answers.map(([question, answer]) => <Fragment key={question}><dt>{question}</dt><dd>{answer}</dd></Fragment>)}</dl></section>}

@@ -1150,3 +1150,6 @@ p.push-toggle { display: block; }
 .crm-mine-toggle input:checked + .crm-switch { background: var(--blue); }
 .crm-mine-toggle input:checked + .crm-switch::after { transform: translateX(13px); }
 .crm-mine-toggle input:focus-visible + .crm-switch { outline: 2px solid var(--blue); outline-offset: 2px; }
+.crm-message-block { margin-top: 12px; }
+.crm-message-block > span { display: block; margin-bottom: 6px; color: #8a8d91; font-size: .78rem; }
+.crm-message-block .crm-message { margin-top: 0; }
