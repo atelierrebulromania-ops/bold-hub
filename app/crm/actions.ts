@@ -86,8 +86,8 @@ export async function createLead(input: ManualLead): Promise<Result & { id?: str
 
 // CSV from Meta Leads Center (or any sheet with a header row). Rows already imported are skipped.
 export async function importLeads(rows: Record<string, string>[], source: "meta" | "website"): Promise<Result> {
-  const { supabase, canWork } = await worker();
-  if (!canWork) return { ok: false, message: "Doar agenții cu acces la Lead pot importa lead-uri." };
+  // Only the admin imports a file (agents could load anything).
+  const { supabase } = await requireRole(["admin"]);
   if (!Array.isArray(rows) || rows.length === 0 || rows.length > 2000) return { ok: false, message: "Fișierul trebuie să aibă între 1 și 2000 de rânduri." };
   let added = 0;
   let skipped = 0;

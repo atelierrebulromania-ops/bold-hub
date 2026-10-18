@@ -58,7 +58,7 @@ function title(lead: Lead) {
   return lead.company || lead.full_name || lead.email || lead.phone || "Lead fără nume";
 }
 
-export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Lead[]; names: Record<string, string>; currentUserId: string; canWork: boolean }) {
+export function LeadsBoard({ leads, names, currentUserId, canWork, canImport }: { leads: Lead[]; names: Record<string, string>; currentUserId: string; canWork: boolean; canImport: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("new");
   const [mine, setMine] = useState(false);
@@ -92,7 +92,7 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
         <div className="board-panel-heading">
           <div><h2>Lead-uri</h2><p>{counts.new ? `${counts.new} ${counts.new === 1 ? "lead nou așteaptă" : "lead-uri noi așteaptă"} să fie preluate.` : "Toate lead-urile noi au fost preluate."}</p></div>
           {canWork && <div className="crm-heading-actions">
-            <button type="button" className="button button-outline" onClick={() => setImporting(true)}>Importă CSV</button>
+            {canImport && <button type="button" className="button button-outline" onClick={() => setImporting(true)}>Importă CSV</button>}
             <button type="button" className="button button-primary" onClick={() => setAdding(true)}>+ Lead nou</button>
           </div>}
         </div>
@@ -135,7 +135,7 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
       {open && <LeadPanel key={open.id} lead={open} names={names} currentUserId={currentUserId} canWork={canWork} pending={pending}
         feedback={feedback} run={run} onClose={() => { setOpenId(null); setFeedback(null); }} />}
       {adding && <AddLeadPanel onClose={() => setAdding(false)} onSaved={(id) => { setAdding(false); router.refresh(); setTab("new"); setOpenId(id); }} />}
-      {importing && <ImportPanel onClose={() => setImporting(false)} onDone={() => router.refresh()} />}
+      {importing && canImport && <ImportPanel onClose={() => setImporting(false)} onDone={() => router.refresh()} />}
     </>
   );
 }

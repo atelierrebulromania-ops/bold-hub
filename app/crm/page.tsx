@@ -25,7 +25,7 @@ export default async function CrmPage() {
       <NavCountsListener tables={["leads"]} />
       <div className="page-heading"><div><p className="eyebrow">VÂNZĂRI</p><h1>Lead</h1><p className="muted">Lead-uri din Meta, de pe site și adăugate manual.</p></div></div>
       {error ? <p className="notice error" role="alert">Lead-urile nu pot fi încărcate acum.</p>
-        : <LeadsBoard leads={(leads ?? []) as Lead[]} names={names} currentUserId={profile.id} canWork={canWork} />}
+        : <LeadsBoard leads={(leads ?? []) as Lead[]} names={names} currentUserId={profile.id} canWork={canWork} canImport={profile.role === "admin"} />}
     </AppShell>
   );
 }
