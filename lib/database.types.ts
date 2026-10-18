@@ -27,6 +27,7 @@ export type Database = {
           last_auto_import: Json | null
           app_url: string | null
           leads_webhook_key: string | null
+          lead_offer_days: number
         }
         Insert: { id?: number }
         Update: { id?: number }
@@ -38,6 +39,7 @@ export type Database = {
           full_name: string | null; company: string | null; phone: string | null; email: string | null; city: string | null; message: string | null
           answers: Json; status: string; lost_reason: string | null; claimed_by: string | null; claimed_at: string | null
           partner_id: string | null; created_by: string | null; received_at: string; updated_at: string
+          follow_up_at: string | null; follow_up_notified_at: string | null
         }
         Insert: { id?: string }
         Update: { id?: string }
@@ -1076,6 +1078,8 @@ export type Database = {
       claim_lead: { Args: { p_id: string }; Returns: boolean }
       release_lead: { Args: { p_id: string }; Returns: boolean }
       set_lead_status: { Args: { p_id: string; p_status: string; p_reason: string }; Returns: boolean }
+      postpone_lead_follow_up: { Args: { p_id: string; p_days: number }; Returns: boolean }
+      set_lead_offer_days: { Args: { p_days: number }; Returns: boolean }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }

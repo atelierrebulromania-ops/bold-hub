@@ -21,3 +21,11 @@ export async function rotateLeadsKey() {
   revalidatePath("/admin/settings");
   redirect("/admin/settings?notice=rotated");
 }
+
+export async function setLeadOfferDays(form: FormData) {
+  const { supabase } = await requireRole(["admin"]);
+  const days = Number(form.get("days"));
+  if (Number.isInteger(days) && days >= 1 && days <= 60) await supabase.rpc("set_lead_offer_days", { p_days: days });
+  revalidatePath("/admin/settings");
+  redirect("/admin/settings?notice=days");
+}

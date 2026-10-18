@@ -5,7 +5,7 @@ import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { lookupCompany, type ClientInput } from "@/app/account/actions";
 import {
-  addLeadNote, claimLead, convertLead, createLead, getLeadActivity, importLeads, releaseLead, setLeadStatus,
+  addLeadNote, claimLead, convertLead, createLead, getLeadActivity, importLeads, postponeFollowUp, releaseLead, setLeadStatus,
   type LeadActivity, type ManualLead,
 } from "./actions";
 
@@ -13,7 +13,7 @@ export type Lead = {
   id: string; source: string; campaign: string | null; ad_name: string | null; form_name: string | null;
   full_name: string | null; company: string | null; phone: string | null; email: string | null; city: string | null;
   message: string | null; answers: Record<string, string> | null; status: string; lost_reason: string | null;
-  claimed_by: string | null; claimed_at: string | null; partner_id: string | null; received_at: string;
+  claimed_by: string | null; claimed_at: string | null; partner_id: string | null; received_at: string; follow_up_at: string | null;
 };
 
 type Tab = "new" | "working" | "won" | "lost" | "all";
@@ -21,9 +21,9 @@ type Result = { ok: boolean; message: string };
 
 const stages: { value: string; label: string; tone: string }[] = [
   { value: "new", label: "Nou", tone: "new" },
+  { value: "to_contact", label: "De contactat", tone: "soon" },
   { value: "contacted", label: "Contactat", tone: "open" },
-  { value: "qualified", label: "Calificat", tone: "open" },
-  { value: "offer", label: "Ofertă trimisă", tone: "soon" },
+  { value: "offer", label: "Ofertă trimisă", tone: "offer" },
   { value: "won", label: "Câștigat", tone: "paid" },
   { value: "lost", label: "Pierdut", tone: "overdue" },
 ];
@@ -46,6 +46,14 @@ function when(value: string) {
   return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(value));
 }
 
+// The reply deadline of a sent offer: "răspuns în 3 zile", or overdue.
+function deadline(lead: Lead, now: number): { label: string; late: boolean } | null {
+  if (lead.status !== "offer" || !lead.follow_up_at) return null;
+  const hours = Math.round((new Date(lead.follow_up_at).getTime() - now) / 3600000);
+  const span = (value: number) => value >= 48 ? `${Math.round(value / 24)} zile` : value >= 24 ? "o zi" : `${Math.max(value, 1)} h`;
+  return hours >= 0 ? { label: `răspuns în ${span(hours)}`, late: false } : { label: `depășit cu ${span(-hours)}`, late: true };
+}
+
 function title(lead: Lead) {
   return lead.company || lead.full_name || lead.email || lead.phone || "Lead fără nume";
 }
@@ -61,6 +69,8 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<Result | null>(null);
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
   const search = query.trim().toLowerCase();
   const visible = useMemo(() => leads.filter((lead) => inTab(lead, tab) && (!mine || lead.claimed_by === currentUserId)
     && (!search || [lead.full_name, lead.company, lead.phone, lead.email, lead.campaign, lead.city].some((value) => value?.toLowerCase().includes(search)))),
@@ -105,7 +115,10 @@ export function LeadsBoard({ leads, names, currentUserId, canWork }: { leads: Le
                 <td className="nowrap">{lead.phone ?? "—"}{lead.email && <small>{lead.email}</small>}</td>
                 <td><span className="crm-source">{sourceLabels[lead.source] ?? lead.source}</span>{(lead.campaign || lead.form_name) && <small>{lead.campaign ?? lead.form_name}</small>}</td>
                 <td className="nowrap">{when(lead.received_at)}</td>
-                <td><span className={`payment-chip ${stage.tone}`}>{stage.label}</span></td>
+                <td><span className={`payment-chip ${stage.tone}`}>{stage.label}</span>{(() => {
+                  const due = deadline(lead, now);
+                  return due && <small className={due.late ? "crm-late" : ""}>{due.label}</small>;
+                })()}</td>
                 <td className="nowrap">{lead.claimed_by
                   ? lead.claimed_by === currentUserId ? <span className="outcome-chip ok">Tu</span> : names[lead.claimed_by] ?? "—"
                   : canWork && lead.status !== "won" && lead.status !== "lost"
@@ -179,9 +192,17 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
           {!lead.claimed_by ? <button type="button" className="button button-primary" disabled={pending} onClick={() => run(() => claimLead(lead.id))}>Preia lead-ul</button>
             : !holder ? <p className="muted">Lead-ul e preluat de {names[lead.claimed_by] ?? "alt agent"}. Doar el îl poate muta între etape.</p>
             : <>
-              <div className="crm-stage-buttons">{stages.filter((item) => ["contacted", "qualified", "offer"].includes(item.value)).map((item) =>
+              <div className="crm-stage-buttons">{stages.filter((item) => ["to_contact", "contacted", "offer"].includes(item.value)).map((item) =>
                 <button key={item.value} type="button" className={`button ${lead.status === item.value ? "button-primary" : "button-outline"}`} disabled={pending || lead.status === item.value}
                   onClick={() => run(() => setLeadStatus(lead.id, item.value, ""))}>{item.label}</button>)}</div>
+              {lead.status === "offer" && (() => {
+                const due = deadline(lead, Date.now());
+                return due && <div className={`crm-deadline ${due.late ? "late" : ""}`}>
+                  <span><strong>{due.late ? "Termen depășit" : "Așteaptă răspuns"}</strong> · {due.label}</span>
+                  <span className="crm-deadline-actions">Amână:{[3, 7, 14].map((days) =>
+                    <button key={days} type="button" className="text-button" disabled={pending} onClick={() => run(() => postponeFollowUp(lead.id, days))}>+{days} zile</button>)}</span>
+                </div>;
+              })()}
               <div className="crm-outcome">
                 <button type="button" className="button button-primary" disabled={pending} onClick={() => setConverting(true)}>Câștigat → client nou</button>
                 <div className="crm-lost"><select value={lostReason} onChange={(event) => setLostReason(event.target.value)} aria-label="Motiv pierdut">

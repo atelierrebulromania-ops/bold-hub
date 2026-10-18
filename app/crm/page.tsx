@@ -13,7 +13,7 @@ export default async function CrmPage() {
   const canWork = profile.role === "admin" || profile.role === "account";
 
   const [{ data: leads, error }, { data: people }] = await Promise.all([
-    supabase.from("leads").select("id,source,campaign,ad_name,form_name,full_name,company,phone,email,city,message,answers,status,lost_reason,claimed_by,claimed_at,partner_id,received_at")
+    supabase.from("leads").select("id,source,campaign,ad_name,form_name,full_name,company,phone,email,city,message,answers,status,lost_reason,claimed_by,claimed_at,partner_id,received_at,follow_up_at")
       .order("received_at", { ascending: false }).limit(1000),
     supabase.rpc("crm_people"),
   ]);

@@ -58,6 +58,13 @@ export async function setLeadStatus(leadId: string, status: string, reason: stri
   return done(data ? { ok: true, message: "Etapa a fost schimbată." } : { ok: false, message: "Doar cine a preluat lead-ul îi poate schimba etapa." });
 }
 
+export async function postponeFollowUp(leadId: string, days: number): Promise<Result> {
+  const { supabase, canWork } = await worker();
+  if (!canWork || !uuid.test(leadId) || ![3, 7, 14].includes(days)) return { ok: false, message: "Nu ai acces." };
+  const { data } = await supabase.rpc("postpone_lead_follow_up", { p_id: leadId, p_days: days });
+  return done(data ? { ok: true, message: `Termenul a fost mutat cu ${days} zile.` } : { ok: false, message: "Doar cine a preluat lead-ul poate muta termenul." });
+}
+
 export async function addLeadNote(leadId: string, body: string): Promise<Result> {
   const { supabase, canWork } = await worker();
   if (!canWork || !uuid.test(leadId)) return { ok: false, message: "Nu ai acces." };
