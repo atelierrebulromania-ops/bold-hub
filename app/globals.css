@@ -1153,3 +1153,4 @@ p.push-toggle { display: block; }
 .crm-message-block { margin-top: 12px; }
 .crm-message-block > span { display: block; margin-bottom: 6px; color: #8a8d91; font-size: .78rem; }
 .crm-message-block .crm-message { margin-top: 0; }
+.put-quantity { color: var(--blue); white-space: nowrap; }

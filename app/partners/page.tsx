@@ -26,7 +26,9 @@ export default async function PartnersPage() {
 
   return (
     <AppShell profile={profile} active="/partners" section="Operațiuni" title="Comenzi B2B"
-      note={{ title: "Stoc pe raft", text: "Stocul estimat este stocul inițial minus ce e în coș sau pe drum." }}>
+      note={profile.role === "account"
+        ? { title: "Stoc pe raft", text: "Stocul estimat este stocul inițial minus ce e în coș sau pe drum." }
+        : { title: "De pregătit", text: "„Pe raft” e ce mai are partenerul; „de pus” e cât trebuie pregătit pentru cererea nouă." }}>
       {error ? <p className="notice error" role="alert">Partenerii nu pot fi încărcați acum. Reîncarcă pagina.</p>
         : <PartnersBoard partners={partners} groups={groups} catalog={catalog} warehouse={profile.role !== "account"} />}
     </AppShell>

@@ -403,7 +403,7 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
               {selected.is_important_client && priorityChip}
             </div>
 
-            <section className="detail-section"><div className="section-line"><h3>Produse pe raft</h3><span>estimat / inițial</span></div>
+            {!warehouse && <section className="detail-section"><div className="section-line"><h3>Produse pe raft</h3><span>estimat / inițial</span></div>
               {summary.levels.length === 0 ? <p>Stocul inițial nu este setat pentru acest partener.</p>
                 : <div className="item-list">{summary.levels.map((level) => (
                   <div className="order-item" key={level.id}>
@@ -411,16 +411,18 @@ export function PartnersBoard({ partners, groups, catalog, warehouse = true }: {
                     <b className={level.missing > 0 ? "stock-short" : "stock-full"}>{level.onShelf}/{level.par_level_quantity}</b>
                   </div>
                 ))}</div>}
-            </section>
+            </section>}
 
-            <section className="detail-section"><div className="section-line"><h3>Coș</h3>{summary.openCart && <ElapsedTimer since={summary.openCart.countdown_started_at} />}</div>
-              {!summary.openCart ? <p>Coșul este gol.</p>
-                : <div className="item-list">{summary.openCart.partner_cart_items.map((item) => (
-                  <div className="order-item" key={item.id}>
-                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}</small></div>
-                    <b>×{item.quantity_needed}</b>
-                  </div>
-                ))}</div>}
+            <section className="detail-section"><div className="section-line"><h3>{warehouse ? "De pregătit" : "Coș"}</h3>{summary.openCart && <ElapsedTimer since={summary.openCart.countdown_started_at} />}</div>
+              {!summary.openCart ? <p>{warehouse ? "Nicio cerere nouă." : "Coșul este gol."}</p>
+                : <div className="item-list">{summary.openCart.partner_cart_items.map((item) => {
+                  // The warehouse sees what the partner still has on the shelf and what to put, not the initial stock.
+                  const shelf = summary.levels.find((level) => level.product_id === item.product_id)?.onShelf;
+                  return <div className="order-item" key={item.id}>
+                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}{warehouse && shelf !== undefined ? ` · pe raft: ${shelf}` : ""}</small></div>
+                    {warehouse ? <b className="put-quantity">de pus ×{item.quantity_needed}</b> : <b>×{item.quantity_needed}</b>}
+                  </div>;
+                })}</div>}
             </section>
 
             {summary.prepared.map((cart) => (
