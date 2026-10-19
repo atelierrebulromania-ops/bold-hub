@@ -165,14 +165,14 @@ export function OrderBoard({ orders, userId, operatorNames }: { orders: Order[];
                     <small>{item.products?.variant_label ? `${item.products.variant_label} · ` : ""}SKU {item.products?.sku ?? "—"}</small>
                     {(item.is_gift || item.no_ean) && <span className="item-flags">
                       {item.is_gift && <span className="item-flag gift" title="Produs gratuit din ofertă. Pe factură apare cu preț și cu un discount egal; se pune o singură dată.">Cadou</span>}
-                      {item.no_ean && <span className="item-flag no-ean" title="Produsul nu are cod de bare: scrie SKU-ul sau bifează-l.">Fără EAN · SKU sau bifă</span>}
+                      {item.no_ean && <span className="item-flag no-ean" title="Produsul nu are cod de bare: se bifează.">Fără EAN · se bifează</span>}
                     </span>}
                   </div>
                   <b>{item.scanned_quantity}/{item.quantity}</b>
                 </div>;
               })}</div> : <p className="muted">Produsele vor apărea după sincronizarea cu BOCP.</p>}
             </section>
-            {mine && ["claimed", "preparing"].includes(selected.status) && <section className="detail-section scan-section"><h3>Scanare produs</h3><p>Scanează codul de bare sau scrie SKU-ul afișat la produs și apasă Enter. Merg amândouă.</p><form onSubmit={handleScan} className="scan-form"><input ref={scanRef} value={scanCode} onChange={(event) => setScanCode(event.target.value)} aria-label="Cod produs" placeholder="Cod de bare sau SKU" autoComplete="off" inputMode="text" disabled={pending} /><button className="button button-primary" disabled={pending || !scanCode.trim()}>Confirmă</button></form></section>}
+            {mine && ["claimed", "preparing"].includes(selected.status) && <section className="detail-section scan-section"><h3>Scanare produs</h3><p>Scanează codul de bare al produsului.</p><form onSubmit={handleScan} className="scan-form"><input ref={scanRef} value={scanCode} onChange={(event) => setScanCode(event.target.value)} aria-label="Cod produs" placeholder="Scanează codul de bare" autoComplete="off" inputMode="text" disabled={pending} /><button className="button button-primary" disabled={pending || !scanCode.trim()}>Confirmă</button></form></section>}
             {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
             {selected.invoice_pdf_url && <a className="button button-outline invoice-button" href={selected.invoice_pdf_url} target="_blank" rel="noopener noreferrer"><svg className="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>Descarcă factura</a>}
           </div>
