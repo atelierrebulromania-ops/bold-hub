@@ -174,6 +174,46 @@ export async function createClientLogin(clientId: string, username: string, pass
   return { ok: true, message: `Contul „${login.username}” a fost creat. Dă-i clientului username-ul și parola.` };
 }
 
+// A login for one point of work: it sees only that point (stock, requests, orders), no invoices.
+// Only for clients that order per point of work.
+export async function createPointLogin(clientId: string, locationId: string, username: string, password: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || !uuid.test(locationId)) return { ok: false, message: "Punctul de lucru nu este valid." };
+  const { data: client } = await supabase.from("partners").select("id,stock_mode").eq("id", clientId).maybeSingle();
+  if (!client) return { ok: false, message: "Nu ai acces la acest client." };
+  if (client.stock_mode !== "per_location") return { ok: false, message: "Conturile pe punct merg doar când clientul comandă pe punct de lucru." };
+  const { data: point } = await supabase.from("partner_locations").select("id,account_username").eq("id", locationId).eq("partner_id", clientId).maybeSingle();
+  if (!point) return { ok: false, message: "Punctul de lucru nu există." };
+  if (point.account_username) return { ok: false, message: "Punctul are deja un cont." };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, message: accountErrorMessages.no_service_key };
+  const login = await createLogin(username, password);
+  if ("error" in login) return { ok: false, message: accountErrorMessages[login.error] };
+  const { data: saved, error } = await admin.from("partner_locations").update({ auth_user_id: login.id, account_username: login.username })
+    .eq("id", locationId).is("auth_user_id", null).select("id").maybeSingle();
+  if (error || !saved) {
+    await deleteLogin(login.id);
+    return { ok: false, message: accountErrorMessages.failed };
+  }
+  revalidatePath("/account");
+  return { ok: true, message: `Contul „${login.username}” pentru punct a fost creat. Dă-i username-ul și parola.` };
+}
+
+export async function deletePointLogin(clientId: string, locationId: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || !uuid.test(locationId)) return { ok: false, message: "Punctul de lucru nu este valid." };
+  const { data: point } = await supabase.from("partner_locations").select("id").eq("id", locationId).eq("partner_id", clientId).maybeSingle();
+  if (!point) return { ok: false, message: "Nu ai acces la acest punct." };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, message: accountErrorMessages.no_service_key };
+  const { data: row } = await admin.from("partner_locations").select("auth_user_id").eq("id", locationId).maybeSingle();
+  if (!row?.auth_user_id) return { ok: false, message: "Punctul nu are cont." };
+  await admin.from("partner_locations").update({ auth_user_id: null, account_username: null }).eq("id", locationId);
+  const failed = await deleteLogin(row.auth_user_id);
+  revalidatePath("/account");
+  return failed ? { ok: false, message: accountErrorMessages[failed] } : { ok: true, message: "Contul punctului a fost șters." };
+}
+
 export type DocumentInput = {
   kind: "offer" | "proforma";
   partnerId: string | null;

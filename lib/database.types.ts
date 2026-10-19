@@ -72,9 +72,9 @@ export type Database = {
         ]
       }
       partner_locations: {
-        Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string }
+        Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string; auth_user_id: string | null; account_username: string | null }
         Insert: { id?: string }
-        Update: { id?: string }
+        Update: { id?: string; auth_user_id?: string | null; account_username?: string | null }
         Relationships: [
           { foreignKeyName: "partner_locations_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
         ]

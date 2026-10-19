@@ -8,7 +8,7 @@ import { formatDateTime } from "@/lib/orders";
 import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
 import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
+  addClientRequest, createClientLogin, createPointLogin, deletePointLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type InvoiceSuggestion,
 } from "./actions";
 import { LinkPending } from "@/components/link-pending";
@@ -43,7 +43,7 @@ export type AgentClient = {
     invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
 };
 
-export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean };
+export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; account_username?: string | null };
 
 const sortLocations = (locations: ClientLocation[]) => [...locations].sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.name.localeCompare(b.name, "ro"));
 
@@ -264,8 +264,25 @@ const emptyPoint = { name: "", city: "", address: "", contactName: "", contactPh
 function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
   const [editing, setEditing] = useState<{ id: string | null } & typeof emptyPoint | null>(null);
   const [pending, start] = useTransition();
+  // Point logins (per-point mode): each point can have its own account that sees only that point.
+  const [login, setLogin] = useState<{ pointId: string; username: string; password: string } | null>(null);
   const points = sortLocations(client.partner_locations);
   const set = (key: keyof typeof emptyPoint, value: string | boolean) => editing && setEditing({ ...editing, [key]: value });
+  const perPoint = client.stock_mode === "per_location";
+
+  function createLogin() {
+    if (!login) return;
+    start(async () => {
+      const result = await createPointLogin(client.id, login.pointId, login.username, login.password);
+      onDone(result);
+      if (result.ok) setLogin(null);
+    });
+  }
+
+  function removeLogin(point: ClientLocation) {
+    if (!window.confirm(`Ștergi contul „${point.account_username}” al punctului ${point.name}? Nu se mai poate conecta; îi poți face altul.`)) return;
+    start(async () => onDone(await deletePointLogin(client.id, point.id)));
+  }
 
   function save() {
     if (!editing) return;
@@ -299,10 +316,25 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         <div className={`order-item ${point.active ? "" : "inactive-point"}`} key={point.id}>
           <div><strong>{point.name}{point.is_main && <span className="point-main">principal</span>}{!point.active && <span className="point-main off">inactiv</span>}</strong>
             <small>{[point.address, point.city].filter(Boolean).join(", ") || "Fără adresă"}{point.contact_name || point.contact_phone ? ` · ${[point.contact_name, point.contact_phone].filter(Boolean).join(", ")}` : ""}</small></div>
-          <button type="button" className="text-button" onClick={() => setEditing({ id: point.id, name: point.name, city: point.city ?? "", address: point.address ?? "",
-            contactName: point.contact_name ?? "", contactPhone: point.contact_phone ?? "", active: point.active })}>Editează</button>
+          <span className="point-actions">
+            {perPoint && point.active && (point.account_username
+              ? <><span className="point-login">Cont: <strong>{point.account_username}</strong></span>
+                <button type="button" className="text-button" disabled={pending} onClick={() => removeLogin(point)}>Șterge contul</button></>
+              : <button type="button" className="text-button" onClick={() => setLogin({ pointId: point.id, username: "", password: "" })}>Creează cont</button>)}
+            <button type="button" className="text-button" onClick={() => setEditing({ id: point.id, name: point.name, city: point.city ?? "", address: point.address ?? "",
+              contactName: point.contact_name ?? "", contactPhone: point.contact_phone ?? "", active: point.active })}>Editează</button>
+          </span>
         </div>
       ))}</div>
+      {login && <div className="point-form">
+        <p className="muted small">Cont pentru <strong>{points.find((point) => point.id === login.pointId)?.name}</strong>: vede doar punctul lui (stoc, cereri, comenzi, restanțe), fără facturi.</p>
+        <div className="admin-inline admin-mini-form">
+          <input value={login.username} maxLength={32} autoCapitalize="none" spellCheck={false} autoFocus onChange={(event) => setLogin({ ...login, username: event.target.value })} placeholder="Username" aria-label="Username" />
+          <input value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} placeholder="Parolă (min. 6)" aria-label="Parolă" autoComplete="new-password" />
+          <button type="button" className="button button-outline" disabled={pending} onClick={() => setLogin(null)}>Renunță</button>
+          <button type="button" className="button button-primary" disabled={pending || login.username.trim().length < 3 || login.password.length < 6} onClick={createLogin}>Creează cont</button>
+        </div>
+      </div>}
       {editing ? <div className="point-form">
         <div className="partner-billing-grid">
           <label>Nume punct<input value={editing.name} maxLength={120} autoFocus onChange={(event) => set("name", event.target.value)} placeholder="ex. Iulius Mall" /></label>
@@ -532,7 +564,8 @@ function LoginEditor({ client, onDone }: { client: AgentClient; onDone: (result:
   const [password, setPassword] = useState("");
   const [pending, start] = useTransition();
   return (
-    <section className="detail-section"><h3>Cont în aplicație</h3>
+    <section className="detail-section"><h3>{client.stock_mode === "per_location" ? "Cont manager" : "Cont în aplicație"}</h3>
+      {client.stock_mode === "per_location" && <p className="muted small">Vede toate punctele de lucru și facturile. Conturile pe punct se fac la Puncte de lucru.</p>}
       {client.auth_user_id ? <p>Clientul are cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>. Parola se schimbă din Administrare.</p>
         : <div className="admin-inline admin-mini-form">
           <input value={username} maxLength={32} autoCapitalize="none" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="Username" aria-label="Username" />

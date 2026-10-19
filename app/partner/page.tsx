@@ -53,7 +53,8 @@ function steps(cart: Cart) {
 }
 
 export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string; point?: string; channel?: string }> }) {
-  const { supabase, partner, preview } = await requirePartner();
+  // pointLogin: an account of one point of work; it sees only that point and no invoices.
+  const { supabase, partner, point: pointLogin, preview } = await requirePartner();
   const params = await searchParams;
   const since = new Date();
   since.setMonth(since.getMonth() - (MONTHS - 1), 1);
@@ -65,7 +66,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   ]);
   const locations = locationRows ?? [];
   const perPoint = client?.stock_mode === "per_location";
-  const point = perPoint ? locations.find((location) => location.id === params.point) ?? locations[0] ?? null : null;
+  const point = pointLogin ? locations.find((location) => location.id === pointLogin.id) ?? null
+    : perPoint ? locations.find((location) => location.id === params.point) ?? locations[0] ?? null : null;
   const pointName = new Map(locations.map((location) => [location.id, location.name]));
   const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult] = await Promise.all([
     (point ? supabase.from("partner_par_levels").select("product_id,channel,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).eq("location_id", point.id)
@@ -75,7 +77,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
       .or("status.in.(open,prepared),and(status.eq.delivered,invoiced_at.is.null)").order("created_at"),
     supabase.from("partner_carts").select(cartFields).eq("partner_id", partner.id).eq("status", "delivered")
       .gte("delivered_at", since.toISOString()).order("delivered_at", { ascending: false }).limit(200),
-    supabase.rpc("partner_invoices", { p_partner_id: partner.id }),
+    pointLogin ? Promise.resolve({ data: [] }) : supabase.rpc("partner_invoices", { p_partner_id: partner.id }),
     preview ? Promise.resolve(null)
       : supabase.from("notifications").select("id,message,created_at").eq("recipient_partner_id", partner.id).is("read_at", null)
         .order("created_at", { ascending: false }).limit(5),
@@ -141,7 +143,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     <main className="partner-app">
       <NavCountsListener tables={["partner_carts", "notifications"]} />
       <header className="partner-header">
-        <div className="brand"><Image src="/icon.png" alt="" width={300} height={300} className="brand-icon-image" /><div><strong>{partner.business_name}</strong></div></div>
+        <div className="brand"><Image src="/icon.png" alt="" width={300} height={300} className="brand-icon-image" /><div><strong>{partner.business_name}</strong>{pointLogin && <small className="partner-point-name">{pointLogin.name}</small>}</div></div>
         {preview && <PreviewSwitcher partnerId={partner.id} />}
         <form action={signOut}><SubmitButton className="text-button">Ieșire</SubmitButton></form>
       </header>
@@ -164,7 +166,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
             <div className="admin-card-heading"><h2>Cerere aprovizionare</h2><p>{channel === "consumption"
               ? "Scrie câte bucăți mai ai din produsele pentru uzul tău. Calculăm automat cât lipsește până la stocul inițial pentru consum."
               : "Scrie câte bucăți mai ai pe raft. Calculăm automat cât lipsește până la stocul tău inițial."}</p></div>
-            {point && locations.length > 1 && <nav className="point-tabs partner-points" aria-label="Punct de lucru"><span>Comanzi pentru:</span>{locations.map((location) =>
+            {point && !pointLogin && locations.length > 1 && <nav className="point-tabs partner-points" aria-label="Punct de lucru"><span>Comanzi pentru:</span>{locations.map((location) =>
               <a key={location.id} href={pageHref(location.id, channel)} className={location.id === point.id ? "active" : ""} aria-current={location.id === point.id ? "page" : undefined}>
                 {location.name}{location.city ? ` · ${location.city}` : ""}</a>)}</nav>}
             {pars.length === 0 ? <p className="admin-empty-note">Stocul inițial nu a fost configurat încă. Contactează Atelier Rebul.</p>
@@ -207,7 +209,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
             </li>)}</ul>
           </section>}
 
-          <section className="admin-card partner-list-section">
+          {!pointLogin && <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Facturi</h2></div>
             {invoices.length === 0 ? <p className="admin-empty-note">Nu ai încă facturi.</p>
               : <ul className="par-list partner-lines">{invoices.map(invoice => <li key={`${invoice.source}-${invoice.id}`}>
@@ -215,7 +217,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
                   <PaymentChip dueDate={invoice.due_date} rest={invoice.rest} audience="partner" /></span>
                 <a className="text-button" href={`/partner/invoice/${invoice.source}/${invoice.id}`} target="_blank" rel="noopener noreferrer">Descarcă</a>
               </li>)}</ul>}
-          </section>
+          </section>}
 
           <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Consumul tău</h2><p>Bucăți livrate pe lună, în ultimele {MONTHS} luni.</p></div>
