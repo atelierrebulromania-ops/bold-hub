@@ -50,7 +50,8 @@ export default async function PartnersPage({
     supabase.from("partners").select("id,company_id,business_name,location_name,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username,account_id,bocp_contact_id,billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip")
       .order("business_name").limit(500),
     supabase.from("partner_delivery_groups").select("partner_id,delivery_group_id").limit(2000),
-    supabase.from("partner_par_levels").select("partner_id,product_id,par_level_quantity,products(name,sku)").limit(2000),
+    // Admin sets the central resale stock; consumption and per-point stock are set by the agent.
+    supabase.from("partner_par_levels").select("partner_id,product_id,par_level_quantity,products(name,sku)").eq("channel", "resale").is("location_id", null).limit(2000),
     supabase.from("products").select("id", { count: "exact", head: true }).eq("active", true),
     supabase.from("app_users").select("id,full_name").eq("role", "account").eq("active", true).order("full_name"),
   ]);

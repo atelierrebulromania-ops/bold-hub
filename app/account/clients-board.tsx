@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
+import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
 import { describeRules, type DiscountRule } from "@/lib/pricing";
 import {
   addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
@@ -34,7 +35,7 @@ export type AgentClient = {
   // central: one stock and one order for the firm (to the main point); per_location: each point its own.
   stock_mode: "central" | "per_location";
   partner_locations: ClientLocation[];
-  partner_par_levels: { product_id: string; location_id: string | null; par_level_quantity: number; products: { name: string; sku: string } | null }[];
+  partner_par_levels: { product_id: string; location_id: string | null; channel: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
     invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
@@ -375,14 +376,22 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const perPoint = client.stock_mode === "per_location";
   const [pointId, setPointId] = useState<string | null>(perPoint ? points[0]?.id ?? null : null);
-  const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null));
-  return <ParLevelList key={pointId ?? "central"} client={client} catalog={catalog} levels={levels} pointId={pointId} onDone={onDone}
-    header={perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
-      <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null} />;
+  // Resale (shelf for its customers) or own consumption (e.g. a hotel): each has its own initial stock.
+  const [channel, setChannel] = useState<Channel>("resale");
+  const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === channel);
+  const count = (id: Channel) => client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === id).length;
+  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
+    header={<>
+      <div className="point-tabs channel-switch" role="tablist" aria-label="Tip stoc">{channels.map((item) =>
+        <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>
+          {item.label} ({count(item.id)})</button>)}</div>
+      {perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
+        <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null}
+    </>} />;
 }
 
-function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
-  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
+function ParLevelList({ client, catalog, levels, pointId, channel, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
@@ -413,12 +422,12 @@ function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
 
   function save(productId: string) {
     const quantity = Number(values[productId] ?? "0");
-    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId)));
+    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId, channel)));
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Stoc inițial pe raftul clientului</h3>
-      <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{levels.length} produse</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3>
+      <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{channelLabel(channel).toLowerCase()} · {levels.length} produse</span></div>
       {header}
       <div className="item-list">{rows.map((row) => (
         <div className="order-item" key={row.id}>
@@ -438,7 +447,7 @@ function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
           <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
         </div>
       ))}</div>}
-      <p className="muted small">0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
+      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
     </section>
   );
 }
@@ -447,16 +456,18 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const choosePoint = client.stock_mode === "per_location" && points.length > 1;
   const [pointId, setPointId] = useState<string | null>(points[0]?.id ?? null);
+  const clientChannels = usedChannels(client.partner_par_levels);
+  const [channel, setChannel] = useState<Channel>(clientChannels[0] ?? "resale");
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
   const [source, setSource] = useState<"whatsapp" | "telefon">("telefon");
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
-  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null)).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
+  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null) && level.channel === channel).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
   const valid = lines.length > 0 && lines.every((line) => /^\d+$/.test(line.quantity) && Number(line.quantity) > 0);
 
   function send() {
     start(async () => {
-      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null);
+      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null, channel);
       onDone(result);
       if (result.ok) setLines([]);
     });
@@ -466,6 +477,8 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
     <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>ajunge la depozit</span></div>
       {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
         {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
+      {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
+        <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => setChannel(id)}>{channelLabel(id)}</button>)}</div>}
       {lines.length > 0 && <div className="item-list">{lines.map((line, index) => (
         <div className="order-item" key={line.item.id}>
           <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>

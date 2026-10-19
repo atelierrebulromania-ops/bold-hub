@@ -9,17 +9,22 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function submitCounts(form: FormData) {
   const { supabase, partner, preview } = await requirePartner();
-  const counts: { product_id: string; remaining: string }[] = [];
+  const channel = form.get("channel") === "consumption" ? "consumption" : form.get("channel") === "resale" ? "resale" : null;
+  const counts: { product_id: string; remaining: string; channel: string }[] = [];
   for (const [key, value] of form.entries()) {
     if (!key.startsWith("remaining_") || typeof value !== "string" || value.trim() === "") continue;
     const productId = key.slice("remaining_".length);
     if (!uuid.test(productId) || !/^\d{1,6}$/.test(value.trim())) redirect(`${page}?error=invalid`);
-    counts.push({ product_id: productId, remaining: value.trim() });
+    counts.push({ product_id: productId, remaining: value.trim(), channel: channel ?? "resale" });
   }
   // Per point of work: the counts are for the point picked at the top of the page.
   const point = form.get("point");
   const locationId = typeof point === "string" && uuid.test(point) ? point : null;
-  const back = locationId ? `${page}?point=${locationId}&` : `${page}?`;
+  // Back to the same point and channel tab.
+  const query = new URLSearchParams();
+  if (locationId) query.set("point", locationId);
+  if (channel) query.set("channel", channel);
+  const back = query.size ? `${page}?${query}&` : `${page}?`;
   if (counts.length === 0) redirect(`${back}error=empty`);
   // In dev mode the admin previews the location: the request is sent on the partner's behalf.
   const { data, error } = preview

@@ -6,6 +6,7 @@ import { accountErrorMessages, createLogin, deleteLogin } from "@/lib/account-ad
 import { lookupAnafCompany, normalizeCui } from "@/lib/anaf";
 import { listBocpInvoices } from "@/lib/bocp/invoices";
 import { requireRole } from "@/lib/auth";
+import { parseChannel, type Channel } from "@/lib/channels";
 import type { Json } from "@/lib/database.types";
 import { cancelProformaInBocp, issueProformaInBocp, linkIssuedProforma } from "@/lib/proforma-bocp";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -87,19 +88,21 @@ export async function saveDiscounts(clientId: string, rules: { category: string 
   return { ok: true, message: "Discounturile au fost salvate." };
 }
 
-// The par level for the whole client (central stock) or for one point of work (locationId).
-export async function setClientParLevel(clientId: string, productId: string, quantity: number, locationId: string | null = null): Promise<Result> {
+// The par level for the whole client (central stock) or for one point of work (locationId), on one order channel.
+export async function setClientParLevel(clientId: string, productId: string, quantity: number, locationId: string | null = null, channel: Channel = "resale"): Promise<Result> {
   const { supabase } = await agent();
   if (!uuid.test(clientId) || !uuid.test(productId) || (locationId !== null && !uuid.test(locationId)) || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 100000) {
     return { ok: false, message: "Cantitate invalidă." };
   }
-  const { data, error } = await supabase.rpc("set_partner_par_level", { p_partner_id: clientId, p_product_id: productId, p_quantity: quantity, p_location_id: locationId });
+  const { data, error } = await supabase.rpc("set_partner_par_level", {
+    p_partner_id: clientId, p_product_id: productId, p_quantity: quantity, p_location_id: locationId, p_channel: parseChannel(channel),
+  });
   if (error || !data) return { ok: false, message: "Nu am putut salva stocul inițial." };
   revalidatePath("/account");
   return { ok: true, message: quantity === 0 ? "Produsul a fost scos din stocul inițial." : "Stocul inițial a fost salvat." };
 }
 
-export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], source: "whatsapp" | "telefon", locationId: string | null = null): Promise<Result> {
+export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], source: "whatsapp" | "telefon", locationId: string | null = null, channel: Channel = "resale"): Promise<Result> {
   const { supabase } = await agent();
   if (!uuid.test(clientId) || (locationId !== null && !uuid.test(locationId)) || !lines.length || lines.length > 100
     || lines.some((line) => !uuid.test(line.productId) || !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 100000)) {
@@ -107,7 +110,7 @@ export async function addClientRequest(clientId: string, lines: { productId: str
   }
   const { error } = await supabase.rpc("staff_add_refill", {
     p_partner_id: clientId,
-    p_items: lines.map((line) => ({ product_id: line.productId, quantity: line.quantity })) as Json,
+    p_items: lines.map((line) => ({ product_id: line.productId, quantity: line.quantity, channel: parseChannel(channel) })) as Json,
     p_source: source,
     p_location_id: locationId,
   });

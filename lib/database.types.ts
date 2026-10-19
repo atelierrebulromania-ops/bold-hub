@@ -56,6 +56,7 @@ export type Database = {
       partner_backorders: {
         Row: {
           location_id: string | null
+          channel: string
           id: string; partner_id: string; product_id: string; quantity: number; status: string; source_cart_id: string | null
           delivered_cart_id: string | null; created_by: string | null; shelved_at: string | null; shelved_by: string | null
           cancelled_at: string | null; cancelled_by: string | null; cancel_reason: string | null; stock_notified_at: string | null; created_at: string
@@ -541,6 +542,7 @@ export type Database = {
           product_id: string
           quantity_needed: number
           refill_request_id: string | null
+          channel: string
         }
         Insert: {
           cart_id: string
@@ -738,6 +740,7 @@ export type Database = {
       partner_par_levels: {
         Row: {
           location_id: string | null
+          channel: string
           created_at: string
           id: string
           par_level_quantity: number
@@ -1025,7 +1028,7 @@ export type Database = {
       save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }
       save_sales_document: { Args: { p_doc: Json; p_id: string | null; p_items: Json }; Returns: string | null }
       send_sales_document: { Args: { p_id: string }; Returns: string | null }
-      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number; p_location_id?: string | null }; Returns: boolean }
+      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number; p_location_id?: string | null; p_channel?: string }; Returns: boolean }
       save_partner_location: { Args: { p_partner_id: string; p_location_id: string | null; p_data: Json }; Returns: string | null }
       set_partner_stock_mode: { Args: { p_partner_id: string; p_mode: string }; Returns: boolean }
       link_partner_account: {

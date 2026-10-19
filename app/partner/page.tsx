@@ -6,6 +6,7 @@ import { RoleSwitcher } from "@/components/role-switcher";
 import { requirePartner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/orders";
+import { channelLabel, parseChannel, usedChannels } from "@/lib/channels";
 import { markNewsRead, removeOwnItem, submitCounts } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -19,7 +20,7 @@ const errors: Record<string, string> = {
 };
 
 type Product = { name: string; variant_label: string | null } | null;
-type Line = { id: string; quantity_needed: number; products: Product };
+type Line = { id: string; quantity_needed: number; channel: string; products: Product };
 type Cart = { id: string; status: string; location_id: string | null; created_at: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null;
   invoice_number: string | null; partner_cart_items: Line[] };
 
@@ -51,12 +52,12 @@ function steps(cart: Cart) {
   ];
 }
 
-export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string; point?: string }> }) {
+export default async function PartnerPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; units?: string; point?: string; channel?: string }> }) {
   const { supabase, partner, preview } = await requirePartner();
   const params = await searchParams;
   const since = new Date();
   since.setMonth(since.getMonth() - (MONTHS - 1), 1);
-  const cartFields = "id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,products(name,variant_label))";
+  const cartFields = "id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,channel,products(name,variant_label))";
   // Points of work: in per-point mode the manager picks the point he counts and orders for.
   const [{ data: client }, { data: locationRows }] = await Promise.all([
     supabase.from("partners").select("stock_mode").eq("id", partner.id).maybeSingle(),
@@ -67,8 +68,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const point = perPoint ? locations.find((location) => location.id === params.point) ?? locations[0] ?? null : null;
   const pointName = new Map(locations.map((location) => [location.id, location.name]));
   const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult] = await Promise.all([
-    (point ? supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).eq("location_id", point.id)
-      : supabase.from("partner_par_levels").select("product_id,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).is("location_id", null)).limit(500),
+    (point ? supabase.from("partner_par_levels").select("product_id,channel,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).eq("location_id", point.id)
+      : supabase.from("partner_par_levels").select("product_id,channel,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).is("location_id", null)).limit(500),
     // In progress: requested, on the shelf, or delivered and still waiting for the invoice.
     supabase.from("partner_carts").select(cartFields).eq("partner_id", partner.id)
       .or("status.in.(open,prepared),and(status.eq.delivered,invoiced_at.is.null)").order("created_at"),
@@ -78,12 +79,25 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     preview ? Promise.resolve(null)
       : supabase.from("notifications").select("id,message,created_at").eq("recipient_partner_id", partner.id).is("read_at", null)
         .order("created_at", { ascending: false }).limit(5),
-    supabase.from("partner_backorders").select("id,quantity,status,location_id,created_at,products(name,variant_label)")
+    supabase.from("partner_backorders").select("id,quantity,status,location_id,channel,created_at,products(name,variant_label)")
       .eq("partner_id", partner.id).in("status", ["open", "shelved"]).order("created_at"),
   ]);
   const loadError = parsResult.error ?? activeResult.error ?? deliveredResult.error;
-  const pars = (parsResult.data ?? []).filter(par => par.products?.active)
+  const allPars = (parsResult.data ?? []).filter(par => par.products?.active);
+  // A partner that both resells and uses our products (e.g. a hotel) orders on two channels, each with its own initial stock.
+  const orderChannels = usedChannels(allPars);
+  const twoChannels = orderChannels.length > 1;
+  const channel = orderChannels.includes(parseChannel(params.channel)) ? parseChannel(params.channel) : orderChannels[0] ?? "resale";
+  const pars = allPars.filter(par => par.channel === channel)
     .sort((a, b) => productLabel(a.products).localeCompare(productLabel(b.products), "ro"));
+  const pageHref = (pointId: string | null, channelId: string) => {
+    const query = new URLSearchParams();
+    if (pointId) query.set("point", pointId);
+    if (twoChannels) query.set("channel", channelId);
+    const text = query.toString();
+    return text ? `/partner?${text}` : "/partner";
+  };
+  const channelTag = (value: string) => twoChannels ? ` · ${channelLabel(value)}` : "";
   const active = (activeResult.data ?? []) as Cart[];
   const delivered = (deliveredResult.data ?? []) as Cart[];
   const invoices = invoicesResult.data ?? [];
@@ -91,12 +105,13 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const backorders = backordersResult.data ?? [];
   const inProgress = new Map<string, number>();
   for (const cart of active) if (cart.status !== "delivered" && (!point || cart.location_id === point.id)) for (const line of cart.partner_cart_items) {
+    if (line.channel !== channel) continue;
     const key = productLabel(line.products);
     inProgress.set(key, (inProgress.get(key) ?? 0) + line.quantity_needed);
   }
   // What we still owe counts as already ordered, so the partner does not ask for it again.
   for (const back of backorders) {
-    if (point && back.location_id !== point.id) continue;
+    if ((point && back.location_id !== point.id) || back.channel !== channel) continue;
     const key = productLabel(back.products);
     inProgress.set(key, (inProgress.get(key) ?? 0) + back.quantity);
   }
@@ -131,6 +146,9 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
         <form action={signOut}><SubmitButton className="text-button">Ieșire</SubmitButton></form>
       </header>
       <div className="partner-content">
+        {twoChannels && <nav className="channel-tabs" aria-label="Tip comandă">{orderChannels.map((id) =>
+          <a key={id} href={pageHref(point?.id ?? null, id)} className={id === channel ? "active" : ""} aria-current={id === channel ? "page" : undefined}>
+            {channelLabel(id)}</a>)}</nav>}
         {params.notice === "added" && <p className="preview-alert success" role="status">Am adăugat {params.units} buc. în comandă. Depozitul pregătește produsele.</p>}
         {params.notice === "nothing" && <p className="preview-alert warning" role="status">Nu e nevoie de refill: ai stocul inițial complet (inclusiv ce e deja comandat).</p>}
         {params.notice === "removed" && <p className="preview-alert success" role="status">Produsul a fost scos din comandă.</p>}
@@ -143,13 +161,16 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
 
         {loadError ? <p className="notice error" role="alert">Datele nu pot fi încărcate acum.</p> : <>
           <section className="admin-card">
-            <div className="admin-card-heading"><h2>Cerere aprovizionare</h2><p>Scrie câte bucăți mai ai pe raft. Calculăm automat cât lipsește până la stocul tău inițial.</p></div>
+            <div className="admin-card-heading"><h2>Cerere aprovizionare</h2><p>{channel === "consumption"
+              ? "Scrie câte bucăți mai ai din produsele pentru uzul tău. Calculăm automat cât lipsește până la stocul inițial pentru consum."
+              : "Scrie câte bucăți mai ai pe raft. Calculăm automat cât lipsește până la stocul tău inițial."}</p></div>
             {point && locations.length > 1 && <nav className="point-tabs partner-points" aria-label="Punct de lucru"><span>Comanzi pentru:</span>{locations.map((location) =>
-              <a key={location.id} href={`/partner?point=${location.id}`} className={location.id === point.id ? "active" : ""} aria-current={location.id === point.id ? "page" : undefined}>
+              <a key={location.id} href={pageHref(location.id, channel)} className={location.id === point.id ? "active" : ""} aria-current={location.id === point.id ? "page" : undefined}>
                 {location.name}{location.city ? ` · ${location.city}` : ""}</a>)}</nav>}
             {pars.length === 0 ? <p className="admin-empty-note">Stocul inițial nu a fost configurat încă. Contactează Atelier Rebul.</p>
               : <form action={submitCounts} className="refill-count-form">
                 {point && <input type="hidden" name="point" value={point.id} />}
+                {twoChannels && <input type="hidden" name="channel" value={channel} />}
                 <div className="refill-count-head" aria-hidden="true"><span>Produs</span><span className="refill-count-inputs"><span>Rămase</span><span>Stoc inițial</span></span></div>
                 {pars.map(par => <label key={par.product_id} className="refill-count-row">
                   <span><strong>{productLabel(par.products)}</strong>{inProgress.get(productLabel(par.products)) ? <small>{inProgress.get(productLabel(par.products))} buc. deja comandate</small> : null}</span>
@@ -170,7 +191,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
                 <ol className="order-steps">{steps(cart).map(step => <li key={step.label} className={step.done ? "done" : ""}>
                   <strong>{step.label}</strong><small>{step.done && step.at ? formatDateTime(step.at) : "—"}</small></li>)}</ol>
                 <ul className="par-list partner-lines">{cart.partner_cart_items.map(line => <li key={line.id}>
-                  <span>{productLabel(line.products)}</span>
+                  <span>{productLabel(line.products)}{twoChannels && <small> · {channelLabel(line.channel)}</small>}</span>
                   <span className="line-end"><strong>{line.quantity_needed} buc.</strong>
                     {cart.status === "open" && <form action={removeOwnItem}><input type="hidden" name="item_id" value={line.id}/><SubmitButton className="text-button">Scoate</SubmitButton></form>}</span>
                 </li>)}</ul>
@@ -181,7 +202,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
           {backorders.length > 0 && <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Restanțe</h2><p>Produse pe care încă ți le datorăm. Le aducem la următoarea livrare, când revin în stoc.</p></div>
             <ul className="par-list partner-lines">{backorders.map((back) => <li key={back.id}>
-              <span>{productLabel(back.products)}<small>{back.status === "shelved" ? " · pregătit, vine la următoarea livrare" : " · urmează când revine în stoc"}</small></span>
+              <span>{productLabel(back.products)}<small>{channelTag(back.channel)}{back.status === "shelved" ? " · pregătit, vine la următoarea livrare" : " · urmează când revine în stoc"}</small></span>
               <span className="line-end"><strong>{back.quantity} buc.</strong></span>
             </li>)}</ul>
           </section>}

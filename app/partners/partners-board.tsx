@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ElapsedTimer } from "@/components/elapsed-timer";
 import type { Database } from "@/lib/database.types";
 import { formatDateTime } from "@/lib/orders";
+import { channelLabel, usedChannels, type Channel } from "@/lib/channels";
 import { addPartnerRequest, cancelBackorder, deleteDeliveryGroup, handCartsToBilling, prepareCart, saveDeliveryGroup, shelveBackorder } from "./actions";
 
 type Product = { name: string; sku: string; variant_label: string | null; warehouse_stock?: { quantity_bocp_global: number } | null } | null;
@@ -21,7 +22,7 @@ export type Partner = {
   contact_phone: string;
   contact_email: string | null;
   is_important_client: boolean;
-  partner_par_levels: { id: string; product_id: string; par_level_quantity: number; products: Product }[];
+  partner_par_levels: { id: string; product_id: string; channel: string; par_level_quantity: number; products: Product }[];
   partner_carts: {
     id: string;
     status: Database["public"]["Enums"]["cart_status"];
@@ -30,19 +31,19 @@ export type Partner = {
     reserved_in_bocp_at: string | null;
     bocp_order_id: string | null;
     bocp_order_error: string | null;
-    partner_cart_items: { id: string; product_id: string; quantity_needed: number; products: Product }[];
+    partner_cart_items: { id: string; product_id: string; channel: string; quantity_needed: number; products: Product }[];
   }[];
 };
 
 // What the warehouse could not put at preparation (restanță): open until stock returns, then on the
 // partner's shelf until it leaves with the next delivery.
-export type Backorder = { id: string; partner_id: string; location_id: string | null; product_id: string; quantity: number; status: "open" | "shelved"; created_at: string; products: Product };
+export type Backorder = { id: string; partner_id: string; location_id: string | null; product_id: string; channel: string; quantity: number; status: "open" | "shelved"; created_at: string; products: Product };
 
 export type DeliveryGroup = { id: string; name: string; partner_delivery_groups: { partner_id: string }[] };
 
 export type CatalogProduct = { id: string; name: string; sku: string; variant_label: string | null };
 
-type RequestDraft = { partnerId: string; partnerSearch: string; lines: { productId: string; quantity: string }[]; productSearch: string; source: "whatsapp" | "telefon" };
+type RequestDraft = { partnerId: string; partnerSearch: string; lines: { productId: string; quantity: string }[]; productSearch: string; source: "whatsapp" | "telefon"; channel: Channel };
 
 type GroupDraft = { id: string | null; name: string; members: string[]; search: string };
 
@@ -59,15 +60,24 @@ function productLabel(product: Product) {
 
 // Shelf stock is estimated: the par level minus what still has to be prepared or is on the way.
 // Once the warehouse marks a cart prepared, its products count as back on the shelf.
+// Resale and consumption stock are separate, so a product counts per channel.
+const stockKey = (row: { product_id: string; channel: string }) => `${row.product_id}|${row.channel}`;
+
+// Cart lines split by channel (resale first); one group when the partner orders on one channel.
+function channelGroups<T extends { channel: string }>(items: T[], split: boolean): [Channel, T[]][] {
+  if (!split) return [["resale", items]];
+  return (["resale", "consumption"] as Channel[]).map((channel): [Channel, T[]] => [channel, items.filter((item) => item.channel === channel)]).filter(([, rows]) => rows.length > 0);
+}
+
 function summarize(partner: Partner, backorders: Backorder[]) {
   const pending = new Map<string, number>();
-  for (const back of backorders) pending.set(back.product_id, (pending.get(back.product_id) ?? 0) + back.quantity);
+  for (const back of backorders) pending.set(stockKey(back), (pending.get(stockKey(back)) ?? 0) + back.quantity);
   for (const cart of partner.partner_carts) {
     if (cart.status === "prepared") continue;
-    for (const item of cart.partner_cart_items) pending.set(item.product_id, (pending.get(item.product_id) ?? 0) + item.quantity_needed);
+    for (const item of cart.partner_cart_items) pending.set(stockKey(item), (pending.get(stockKey(item)) ?? 0) + item.quantity_needed);
   }
   const levels = partner.partner_par_levels.map((level) => {
-    const onShelf = Math.max(0, level.par_level_quantity - (pending.get(level.product_id) ?? 0));
+    const onShelf = Math.max(0, level.par_level_quantity - (pending.get(stockKey(level)) ?? 0));
     return { ...level, onShelf, missing: level.par_level_quantity - onShelf };
   }).sort((a, b) => b.missing - a.missing || productLabel(a.products).localeCompare(productLabel(b.products)));
   const openCart = partner.partner_carts.find((cart) => cart.status === "open") ?? null;
@@ -81,6 +91,10 @@ function summarize(partner: Partner, backorders: Backorder[]) {
     openUnits: openCart ? units(openCart.partner_cart_items) : 0,
     // Something still has to be picked for the partner's open cart.
     needsRefill: (openCart?.partner_cart_items.length ?? 0) > 0,
+    // The partner orders both for resale and for its own consumption: lines show their channel.
+    twoChannels: partner.partner_par_levels.some((level) => level.channel === "consumption")
+      || partner.partner_carts.some((cart) => cart.partner_cart_items.some((item) => item.channel === "consumption"))
+      || backorders.some((back) => back.channel === "consumption"),
   };
 }
 
@@ -177,7 +191,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
     setSelectedId(null);
     setDraft(null);
     setFeedback(null);
-    setRequest({ partnerId: "", partnerSearch: "", lines: [], productSearch: "", source: "whatsapp" });
+    setRequest({ partnerId: "", partnerSearch: "", lines: [], productSearch: "", source: "whatsapp", channel: "resale" });
   }
 
   function addLine(productId: string, quantity = 1) {
@@ -188,12 +202,12 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
   function saveRequest() {
     if (!request) return;
     const items = request.lines.map((line) => ({ productId: line.productId, quantity: Number(line.quantity) }));
-    const { partnerId, source } = request;
+    const { partnerId, source, channel } = request;
     const unit = partners.find((partner) => partner.id === partnerId);
     if (!unit) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await addPartnerRequest(unit.client_id, items, source, unit.location_id);
+      const result = await addPartnerRequest(unit.client_id, items, source, unit.location_id, channel);
       setFeedback(result);
       if (result.ok) setRequest(null);
       router.refresh();
@@ -336,7 +350,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
         <div className="admin-card-heading"><h2>{productLabel(entry.product)} {owed > 0 && <span className="product-block-total">{owed} buc. restante</span>}</h2>
           <p>SKU {entry.product?.sku ?? "—"} · {bocp > 0 ? `stoc BOCP ${bocp}` : "fără stoc în BOCP (la ultima sincronizare)"}</p></div>
         <ul className="admin-simple-list dashboard-list">{entry.rows.map((back) => <li key={back.id}>
-          <span>{backName(back)}<small>{back.status === "shelved" ? "pe raft · pleacă la următoarea livrare" : `restant din ${formatDateTime(back.created_at)}`}</small></span>
+          <span>{backName(back)}<small>{back.channel === "consumption" ? "consum · " : ""}{back.status === "shelved" ? "pe raft · pleacă la următoarea livrare" : `restant din ${formatDateTime(back.created_at)}`}</small></span>
           <span className="backorder-actions">
             <strong>×{back.quantity}</strong>
             {warehouse && back.status === "open" && <>
@@ -487,7 +501,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
               {summary.levels.length === 0 ? <p>Stocul inițial nu este setat pentru acest partener.</p>
                 : <div className="item-list">{summary.levels.map((level) => (
                   <div className="order-item" key={level.id}>
-                    <div><strong>{productLabel(level.products)}</strong><small>SKU {level.products?.sku ?? "—"}</small></div>
+                    <div><strong>{productLabel(level.products)}</strong><small>SKU {level.products?.sku ?? "—"}{summary.twoChannels ? ` · ${channelLabel(level.channel)}` : ""}</small></div>
                     <b className={level.missing > 0 ? "stock-short" : "stock-full"}>{level.onShelf}/{level.par_level_quantity}</b>
                   </div>
                 ))}</div>}
@@ -495,9 +509,11 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
 
             <section className="detail-section"><div className="section-line"><h3>{warehouse ? "De pregătit" : "Coș"}</h3>{summary.openCart && <ElapsedTimer since={summary.openCart.countdown_started_at} />}</div>
               {!summary.openCart ? <p>{warehouse ? "Nicio cerere nouă." : "Coșul este gol."}</p>
-                : <div className="item-list">{summary.openCart.partner_cart_items.map((item) => {
+                : channelGroups(summary.openCart.partner_cart_items, summary.twoChannels).map(([channel, items]) => <div key={channel}>
+                  {summary.twoChannels && <p className="channel-heading">{channelLabel(channel)}</p>}
+                  <div className="item-list">{items.map((item) => {
                   // The warehouse sees what the partner still has on the shelf and what to put, not the initial stock.
-                  const shelf = summary.levels.find((level) => level.product_id === item.product_id)?.onShelf;
+                  const shelf = summary.levels.find((level) => stockKey(level) === stockKey(item))?.onShelf;
                   return <div className="order-item" key={item.id}>
                     <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}{warehouse && shelf !== undefined ? ` · pe raft: ${shelf}` : ""}</small></div>
                     {warehouse ? <label className="put-quantity">de pus
@@ -505,13 +521,13 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
                         onChange={(event) => setPutQty({ ...putQty, [item.id]: event.target.value })} />
                       <span>/ {item.quantity_needed}</span></label> : <b>×{item.quantity_needed}</b>}
                   </div>;
-                })}</div>}
+                })}</div></div>)}
             </section>
 
             {summary.backorders.length > 0 && <section className="detail-section"><div className="section-line"><h3>Restanțe</h3><span>{summary.backorders.reduce((sum, back) => sum + back.quantity, 0)} buc.</span></div>
               <div className="item-list">{summary.backorders.map((back) => (
                 <div className="order-item" key={back.id}>
-                  <div><strong>{productLabel(back.products)}</strong><small>{back.status === "shelved" ? "Pe raft · pleacă la următoarea livrare" : `Restant din ${formatDateTime(back.created_at)}`}</small></div>
+                  <div><strong>{productLabel(back.products)}</strong><small>{summary.twoChannels ? `${channelLabel(back.channel)} · ` : ""}{back.status === "shelved" ? "Pe raft · pleacă la următoarea livrare" : `Restant din ${formatDateTime(back.created_at)}`}</small></div>
                   <span className="backorder-actions"><b className={back.status === "shelved" ? "stock-full" : "stock-short"}>×{back.quantity}</b>
                     {canCancel && <button type="button" className="text-button" disabled={pending} onClick={() => cancel(back)}>Anulează</button>}</span>
                 </div>
@@ -523,7 +539,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
               <section className="detail-section" key={cart.id}><div className="section-line"><h3>Pregătit de livrare</h3><span>{formatDateTime(cart.prepared_at)}</span></div>
                 <div className="item-list">{cart.partner_cart_items.map((item) => (
                   <div className="order-item" key={item.id}>
-                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}</small></div>
+                    <div><strong>{productLabel(item.products)}</strong><small>SKU {item.products?.sku ?? "—"}{summary.twoChannels ? ` · ${channelLabel(item.channel)}` : ""}</small></div>
                     <b className="stock-full">×{item.quantity_needed}</b>
                   </div>
                 ))}</div>
@@ -594,7 +610,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
                   <input className="group-member-search" type="search" autoFocus value={request.partnerSearch} onChange={(event) => setRequest({ ...request, partnerSearch: event.target.value })} placeholder="Caută partener" aria-label="Caută partener" />
                   <div className="group-member-list request-partner-list">
                     {partners.filter((item) => !partnerNeedle || item.business_name.toLocaleLowerCase("ro").includes(partnerNeedle)).slice(0, 50).map((item) => (
-                      <button key={item.id} type="button" className="request-option" onClick={() => setRequest({ ...request, partnerId: item.id, partnerSearch: "" })}>
+                      <button key={item.id} type="button" className="request-option" onClick={() => setRequest({ ...request, partnerId: item.id, partnerSearch: "", channel: usedChannels(item.partner_par_levels)[0] ?? "resale" })}>
                         <span>{item.business_name}</span><span className={`partner-kind ${item.type}`}>{typeLabel(item.type)}</span>
                       </button>
                     ))}
@@ -615,8 +631,10 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
                     </div>
                   );
                 })}</div>}
-                {partner.partner_par_levels.length > 0 && <div className="request-suggestions"><small>Din stocul inițial al partenerului</small>
-                  <div>{partner.partner_par_levels.filter((level) => !request.lines.some((line) => line.productId === level.product_id)).map((level) => (
+                {usedChannels(partner.partner_par_levels).length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{usedChannels(partner.partner_par_levels).map((id) =>
+                  <button key={id} type="button" role="tab" aria-selected={id === request.channel} className={id === request.channel ? "active" : ""} onClick={() => setRequest({ ...request, channel: id })}>{channelLabel(id)}</button>)}</div>}
+                {partner.partner_par_levels.some((level) => level.channel === request.channel) && <div className="request-suggestions"><small>Din stocul inițial al partenerului</small>
+                  <div>{partner.partner_par_levels.filter((level) => level.channel === request.channel && !request.lines.some((line) => line.productId === level.product_id)).map((level) => (
                     <button key={level.id} type="button" className="request-chip" onClick={() => addLine(level.product_id)}>+ {productLabel(level.products)}</button>
                   ))}</div>
                 </div>}

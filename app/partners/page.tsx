@@ -38,14 +38,14 @@ export default async function PartnersPage() {
   const [partnersResult, groupsResult, productsResult, backordersResult] = await Promise.all([supabase.from("partners")
     .select(`id,business_name,type,contact_phone,contact_email,is_important_client,stock_mode,
       partner_locations(id,name,city,address,contact_phone,is_main,active),
-      partner_par_levels(id,product_id,location_id,par_level_quantity,${product}),
-      partner_carts(id,status,location_id,countdown_started_at,prepared_at,reserved_in_bocp_at,bocp_order_id,bocp_order_error,partner_cart_items(id,product_id,quantity_needed,${cartProduct}))`)
+      partner_par_levels(id,product_id,location_id,channel,par_level_quantity,${product}),
+      partner_carts(id,status,location_id,countdown_started_at,prepared_at,reserved_in_bocp_at,bocp_order_id,bocp_order_error,partner_cart_items(id,product_id,channel,quantity_needed,${cartProduct}))`)
     .eq("active", true)
     .in("partner_carts.status", ["open", "prepared"])
     .order("business_name").limit(1000),
     supabase.from("delivery_groups").select("id,name,partner_delivery_groups(partner_id)").order("name").limit(500),
     supabase.from("products").select("id,name,sku,variant_label").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
-    supabase.from("partner_backorders").select(`id,partner_id,location_id,product_id,quantity,status,created_at,${cartProduct}`)
+    supabase.from("partner_backorders").select(`id,partner_id,location_id,product_id,channel,quantity,status,created_at,${cartProduct}`)
       .in("status", ["open", "shelved"]).order("created_at").limit(2000),
   ]);
   const error = partnersResult.error ?? groupsResult.error ?? productsResult.error ?? backordersResult.error;
