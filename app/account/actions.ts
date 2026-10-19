@@ -73,7 +73,8 @@ export async function saveClient(clientId: string | null, input: ClientInput): P
   return { ok: true, message: clientId ? "Clientul a fost actualizat." : "Clientul a fost adăugat.", id: data };
 }
 
-export async function saveDiscounts(clientId: string, rules: { category: string | null; percent: number }[]): Promise<Result> {
+// Rules for one order channel. For consumption, own = false means "same discounts as resale".
+export async function saveDiscounts(clientId: string, rules: { category: string | null; percent: number }[], channel: Channel = "resale", own = true): Promise<Result> {
   const { supabase } = await agent();
   if (!uuid.test(clientId)) return { ok: false, message: "Clientul nu este valid." };
   if (rules.length > 100 || rules.some((rule) => !(rule.percent > 0 && rule.percent < 100))) return { ok: false, message: "Discountul trebuie să fie între 0 și 100%." };
@@ -82,6 +83,8 @@ export async function saveDiscounts(clientId: string, rules: { category: string 
   const { data, error } = await supabase.rpc("save_partner_discounts", {
     p_partner_id: clientId,
     p_rules: rules.map((rule) => ({ category: rule.category, percent: String(Math.round(rule.percent * 100) / 100) })) as Json,
+    p_channel: parseChannel(channel),
+    p_own: own,
   });
   if (error || !data) return { ok: false, message: "Nu am putut salva discounturile." };
   revalidatePath("/account");

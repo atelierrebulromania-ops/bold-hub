@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
 import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
-import { describeRules, type DiscountRule } from "@/lib/pricing";
+import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
   addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type InvoiceSuggestion,
@@ -31,7 +31,9 @@ export type AgentClient = {
   billing_city: string | null;
   billing_county: string | null;
   billing_zip: string | null;
-  partner_discounts: { category: string | null; percent: number }[];
+  partner_discounts: { category: string | null; percent: number; channel: string }[];
+  // Consumption orders use the resale discounts unless the client has its own consumption rules.
+  own_consumption_discounts: boolean;
   // central: one stock and one order for the firm (to the main point); per_location: each point its own.
   stock_mode: "central" | "per_location";
   partner_locations: ClientLocation[];
@@ -141,7 +143,7 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
                     {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
                     {!client.vat_id && <span className="item-flag no-ean">Fără date de facturare</span>}
                   </span></td>
-                  <td>{describeRules(client.partner_discounts as DiscountRule[])}</td>
+                  <td>{describeRules(channelRules(client.partner_discounts, "resale"))}</td>
                   <td><span className={`agent-status ${status.tone}`}>{status.label}</span></td>
                 </tr>
               );
@@ -321,7 +323,32 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
 }
 
 function DiscountEditor({ client, categories, onDone }: { client: AgentClient; categories: string[]; onDone: (result: { ok: boolean; message: string }) => void }) {
-  const initial = client.partner_discounts as DiscountRule[];
+  // The Consum tab shows for clients that order for their own consumption (or already have consumption rules).
+  const consumption = client.own_consumption_discounts || client.partner_par_levels.some((level) => level.channel === "consumption");
+  const [channel, setChannel] = useState<Channel>("resale");
+  const [own, setOwn] = useState(client.own_consumption_discounts);
+  const switcher = consumption ? <div className="point-tabs channel-switch" role="tablist" aria-label="Discount pentru">{channels.map((item) =>
+    <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>{item.label}</button>)}</div> : null;
+  if (channel === "consumption" && !own) {
+    return (
+      <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>consum</span></div>
+        {switcher}
+        <label className="check-line"><input type="checkbox" checked onChange={() => setOwn(true)} /> Aceleași discounturi ca la revânzare</label>
+        <p className="muted small">Acum: {describeRules(channelRules(client.partner_discounts, "resale"))}. Debifează ca să setezi alte discounturi pentru consum.</p>
+        {client.own_consumption_discounts && <div className="partner-billing-actions">
+          <button type="button" className="button button-outline" onClick={() => saveSame()}>Salvează</button></div>}
+      </section>
+    );
+  }
+  function saveSame() {
+    void saveDiscounts(client.id, [], "consumption", false).then(onDone);
+  }
+  return <DiscountRules key={channel} client={client} categories={categories} channel={channel} header={<>{switcher}
+    {channel === "consumption" && <label className="check-line"><input type="checkbox" checked={false} onChange={() => setOwn(false)} /> Aceleași discounturi ca la revânzare</label>}</>} onDone={onDone} />;
+}
+
+function DiscountRules({ client, categories, channel, header, onDone }: { client: AgentClient; categories: string[]; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const initial = channel === "consumption" && !client.own_consumption_discounts ? channelRules(client.partner_discounts, "resale") : channelRules(client.partner_discounts, channel, true);
   const [general, setGeneral] = useState(String(initial.find((rule) => rule.category === null)?.percent ?? ""));
   const [rows, setRows] = useState(initial.filter((rule) => rule.category !== null).map((rule) => ({ category: rule.category!, percent: String(rule.percent) })));
   const [pending, start] = useTransition();
@@ -331,11 +358,12 @@ function DiscountEditor({ client, categories, onDone }: { client: AgentClient; c
     const rules: DiscountRule[] = [];
     if (general.trim()) rules.push({ category: null, percent: Number(general.replace(",", ".")) });
     for (const row of rows) if (row.percent.trim()) rules.push({ category: row.category, percent: Number(row.percent.replace(",", ".")) });
-    start(async () => onDone(await saveDiscounts(client.id, rules)));
+    start(async () => onDone(await saveDiscounts(client.id, rules, channel, true)));
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>fără perioadă de valabilitate</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>{channel === "consumption" ? "consum · " : ""}fără perioadă de valabilitate</span></div>
+      {header}
       <div className="discount-rows">
         <label className="discount-row"><span>Toate produsele</span><span className="percent-input"><input inputMode="decimal" value={general} onChange={(event) => setGeneral(event.target.value)} placeholder="0" />%</span></label>
         {rows.map((row, index) => (

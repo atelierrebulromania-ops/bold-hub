@@ -19,7 +19,7 @@ export default async function AgentCatalogPage({ searchParams }: { searchParams:
   const [productsResult, clientsResult, collectionsResult] = await Promise.all([
     supabase.from("products").select("id,name,sku,category,image_url,delisted,list_price,list_price_with_vat,vat_percent,warehouse_stock(quantity_bocp_global)")
       .eq("active", true).or(b2bSkuFilter).not("list_price", "is", null).gt("list_price", 0).order("name").limit(5000),
-    supabase.from("partners").select("id,business_name,partner_discounts(category,percent)").eq("account_id", profile.id).order("business_name").limit(500),
+    supabase.from("partners").select("id,business_name,partner_discounts(category,percent)").eq("partner_discounts.channel", "resale").eq("account_id", profile.id).order("business_name").limit(500),
     // Each agent's own collections (row security returns only theirs).
     supabase.from("product_collections").select("id,name,updated_at,product_collection_items(product_id,position)").order("name").limit(500),
   ]);

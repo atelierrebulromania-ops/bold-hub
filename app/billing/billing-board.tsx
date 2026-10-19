@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
-import { describeRules, discountFor } from "@/lib/pricing";
+import { channelRules, describeRules, discountFor } from "@/lib/pricing";
 import type { BocpInvoiceMatch } from "@/lib/bocp/invoice-lookup";
 import { findCartInvoice, markCartsInvoiced, retryCartReservation } from "./actions";
 
@@ -31,10 +31,10 @@ export type BillingCart = {
   bocp_order_error: string | null;
   bocp_order_attempted_at: string | null;
   partners: { business_name: string; location_name: string; type: string; is_important_client: boolean; contact_phone: string; contact_email: string | null;
-    partner_discounts: { category: string | null; percent: number }[] } | null;
+    own_consumption_discounts: boolean; partner_discounts: { category: string | null; percent: number; channel: string }[] } | null;
   // The offer/proforma the cart came from: its discount replaces the client's rules.
   sales_documents: { kind: string; number: string | null; discount_percent: number; sales_document_items: { sku: string; discount_percent: number | null }[] } | null;
-  partner_cart_items: { id: string; quantity_needed: number; products: { name: string; sku: string; variant_label: string | null; category: string | null } | null }[];
+  partner_cart_items: { id: string; quantity_needed: number; channel: string; products: { name: string; sku: string; variant_label: string | null; category: string | null } | null }[];
 };
 
 const typeLabels: Record<string, string> = { reseller: "Revânzător", horeca: "HoReCa", altul: "Altul" };
@@ -52,19 +52,20 @@ function units(cart: BillingCart) {
 // The lines to invoice: the same product (by code) from several carts adds up into one line, as long as
 // it has the same discount (a proforma's price can differ from the client's rules; then it stays apart).
 function invoiceLines(carts: BillingCart[]) {
-  const lines = new Map<string, { key: string; name: string; variant: string | null; sku: string; category: string | null; discount: number; quantity: number; parts: number[] }>();
+  const lines = new Map<string, { key: string; name: string; variant: string | null; sku: string; category: string | null; discount: number; quantity: number; parts: number[]; channels: Set<string> }>();
   for (const cart of carts) {
     for (const item of cart.partner_cart_items) {
       const source = cart.sales_documents;
       const discount = source
         ? source.sales_document_items.find((line) => line.sku === item.products?.sku)?.discount_percent ?? source.discount_percent
-        : discountFor(cart.partners?.partner_discounts ?? [], item.products?.category ?? null);
+        : discountFor(channelRules(cart.partners?.partner_discounts ?? [], item.channel, cart.partners?.own_consumption_discounts), item.products?.category ?? null);
       const sku = item.products?.sku ?? "—";
       const key = `${sku}|${discount}`;
       const line = lines.get(key) ?? { key, name: item.products?.name ?? "Produs", variant: item.products?.variant_label ?? null, sku,
-        category: item.products?.category ?? null, discount, quantity: 0, parts: [] };
+        category: item.products?.category ?? null, discount, quantity: 0, parts: [], channels: new Set<string>() };
       line.quantity += item.quantity_needed;
       line.parts.push(item.quantity_needed);
+      line.channels.add(item.channel);
       lines.set(key, line);
     }
   }
@@ -199,7 +200,8 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
             <section className="detail-section"><div className="section-line"><h3>Produse</h3><span>{selectedGroup!.reduce((sum, cart) => sum + units(cart), 0)} buc.</span></div>
               <div className="item-list">{invoiceLines(selectedGroup!).map((line) => <div className="order-item" key={line.key}>
                 <div><strong>{line.name}</strong><small>{line.variant ? `${line.variant} · ` : ""}SKU {line.sku}{line.category ? ` · ${line.category}` : ""}
-                  {line.parts.length > 1 ? ` · ${line.parts.join(" + ")} din ${line.parts.length} comenzi` : ""}</small></div>
+                  {line.parts.length > 1 ? ` · ${line.parts.join(" + ")} din ${line.parts.length} comenzi` : ""}
+                  {line.channels.has("consumption") ? (line.channels.size > 1 ? " · revânzare + consum" : " · consum") : ""}</small></div>
                 {line.discount > 0 && <span className="item-flag gift">−{line.discount}%</span>}<b>×{line.quantity}</b></div>)}</div>
             </section>
             {selectedGroup!.length > 1 && <section className="detail-section"><h3>Comenzi incluse</h3>
@@ -213,7 +215,9 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
             <section className="detail-section"><h3>Condiții de preț</h3>
               {selected.sales_documents
                 ? <p className="detail-primary">Din {selected.sales_documents.kind === "offer" ? "oferta" : "proforma"} {selected.sales_documents.number} · discount general {selected.sales_documents.discount_percent}%{selected.sales_documents.sales_document_items.some((line) => line.discount_percent !== null) ? ", unele produse cu discount propriu (vezi lista)" : ""}</p>
-                : <p className="detail-primary">{describeRules(selected.partners?.partner_discounts ?? [])}</p>}
+                : <p className="detail-primary">{selectedGroup!.some((cart) => cart.partner_cart_items.some((item) => item.channel === "consumption")) && selected.partners?.own_consumption_discounts
+                  ? <>Revânzare: {describeRules(channelRules(selected.partners.partner_discounts, "resale"))}<br />Consum: {describeRules(channelRules(selected.partners.partner_discounts, "consumption", true))}</>
+                  : describeRules(channelRules(selected.partners?.partner_discounts ?? [], "resale"))}</p>}
               <p>Prețuri de listă din BOCP; discountul se aplică la emiterea facturii.</p>
             </section>
             <section className="detail-section"><h3>Parcurs</h3>

@@ -795,6 +795,7 @@ export type Database = {
       partners: {
         Row: {
           stock_mode: string
+          own_consumption_discounts: boolean
           account_id: string | null
           bocp_contact_id: string | null
           billing_name: string | null
@@ -884,7 +885,7 @@ export type Database = {
         ]
       }
       partner_discounts: {
-        Row: { category: string | null; created_at: string; id: string; partner_id: string; percent: number }
+        Row: { category: string | null; channel: string; created_at: string; id: string; partner_id: string; percent: number }
         Insert: { category?: string | null; created_at?: string; id?: string; partner_id: string; percent: number }
         Update: { category?: string | null; created_at?: string; id?: string; partner_id?: string; percent?: number }
         Relationships: [
@@ -1024,7 +1025,7 @@ export type Database = {
         Returns: { account_id: string | null; account_name: string | null; active: boolean; business_name: string; id: string; location_name: string
           delivery_groups: string[]; type: string }[]
       }
-      save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json }; Returns: boolean }
+      save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json; p_channel?: string; p_own?: boolean }; Returns: boolean }
       save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }
       save_sales_document: { Args: { p_doc: Json; p_id: string | null; p_items: Json }; Returns: string | null }
       send_sales_document: { Args: { p_id: string }; Returns: string | null }
