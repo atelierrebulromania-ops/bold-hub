@@ -435,7 +435,9 @@ function ProductPicker({ catalog, exclude, onPick, placeholder }: { catalog: Cat
 function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const perPoint = client.stock_mode === "per_location";
-  const [pointId, setPointId] = useState<string | null>(perPoint ? points[0]?.id ?? null : null);
+  // The picked point; after a switch to per-point stock it falls back to the main point.
+  const [picked, setPointId] = useState<string | null>(null);
+  const pointId = perPoint ? points.find((point) => point.id === picked)?.id ?? points[0]?.id ?? null : null;
   // Resale (shelf for its customers) or own consumption (e.g. a hotel): each has its own initial stock.
   const [channel, setChannel] = useState<Channel>("resale");
   const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === channel);
@@ -477,7 +479,8 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
   }
   const rows = [
     ...levels.map((level) => ({ id: level.product_id, name: level.products?.name ?? "Produs", sku: level.products?.sku ?? "—" })),
-    ...added.map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
+    // A product added here and then saved comes back as a level: show it once.
+    ...added.filter((item) => !levels.some((level) => level.product_id === item.id)).map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
   ];
 
   function save(productId: string) {

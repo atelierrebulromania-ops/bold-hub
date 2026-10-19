@@ -1109,7 +1109,11 @@ p.push-toggle { display: block; }
 .crm-deadline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #dcd3ff; border-radius: 8px; background: #f7f5ff; font-size: .76rem; }
 .crm-deadline.late { border-color: #f2c4c6; background: #fff4f4; color: #a13032; }
 .crm-deadline-actions { display: flex; align-items: center; gap: 8px; color: #65676b; }
-.settings-days { display: flex; align-items: center; gap: 8px; flex-shrink: 0; } .settings-days input { width: 80px; }
+.settings-days { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.settings-days input { width: 80px; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; font-size: .85rem; }
+.settings-days span { color: #65676b; font-size: .78rem; }
+/* A card whose controls sit under the text (several fields). */
+.auto-import-card.stacked { flex-direction: column; align-items: stretch; }
 .settings-alerts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; flex-shrink: 0; }
 .settings-alerts label { display: grid; gap: 6px; color: #65676b; font-size: .74rem; font-weight: 700; }
 
@@ -1159,6 +1163,10 @@ p.push-toggle { display: block; }
 .put-quantity input { width: 56px; padding: .3rem .4rem; border: 1px solid #c9d6ee; border-radius: 6px; font: inherit; font-size: .8rem; text-align: center; }
 .put-quantity span { color: #8a8d91; font-weight: 600; }
 .backorder-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* Backorders tab: the partner keeps its line; the shelving controls wrap below when the card is narrow. */
+.backorder-block .dashboard-list li { flex-wrap: wrap; }
+.backorder-block .dashboard-list li > span:first-child { flex: 1 1 140px; min-width: 0; }
+.backorder-block .backorder-actions { margin-left: auto; }
 .backorder-actions input { width: 56px; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: .78rem; text-align: center; }
 .backorder-actions .button { padding: .35rem .7rem; font-size: .72rem; }
 .backorder-hint { margin: 8px 0 0; color: #8a8d91; font-size: .72rem; }
@@ -1177,7 +1185,7 @@ p.push-toggle { display: block; }
 .point-tabs button.active { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
 .point-select { display: grid; gap: 4px; margin-bottom: 10px; color: #65676b; font-size: .72rem; font-weight: 700; }
 .point-label { display: block; color: #6b4fd1; font-size: .7rem; font-weight: 700; }
-.partner-points { align-items: center; margin: 4px 0 14px; }
+.partner-points { align-items: center; margin: 4px 22px 14px; }
 .partner-points > span { color: #65676b; font-size: .74rem; font-weight: 700; }
 .partner-points a { padding: .4rem .75rem; border: 1px solid var(--line); border-radius: 999px; color: #4b4f56; font-size: .74rem; font-weight: 700; text-decoration: none; }
 .partner-points a.active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }

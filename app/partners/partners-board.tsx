@@ -346,7 +346,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
     return <div className="product-blocks">{entries.map(([id, entry]) => {
       const owed = entry.rows.filter((back) => back.status === "open").reduce((sum, back) => sum + back.quantity, 0);
       const bocp = entry.product?.warehouse_stock?.quantity_bocp_global ?? 0;
-      return <section key={id} className="admin-card product-block">
+      return <section key={id} className="admin-card product-block backorder-block">
         <div className="admin-card-heading"><h2>{productLabel(entry.product)} {owed > 0 && <span className="product-block-total">{owed} buc. restante</span>}</h2>
           <p>SKU {entry.product?.sku ?? "—"} · {bocp > 0 ? `stoc BOCP ${bocp}` : "fără stoc în BOCP (la ultima sincronizare)"}</p></div>
         <ul className="admin-simple-list dashboard-list">{entry.rows.map((back) => <li key={back.id}>

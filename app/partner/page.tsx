@@ -99,12 +99,14 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     const text = query.toString();
     return text ? `/partner?${text}` : "/partner";
   };
-  const channelTag = (value: string) => twoChannels ? ` · ${channelLabel(value)}` : "";
   const active = (activeResult.data ?? []) as Cart[];
   const delivered = (deliveredResult.data ?? []) as Cart[];
   const invoices = invoicesResult.data ?? [];
   const news = newsResult?.data ?? [];
   const backorders = backordersResult.data ?? [];
+  // Orders and backorders keep their channel label whenever the client orders on both channels (any point).
+  const labelChannels = twoChannels || active.some(cart => cart.partner_cart_items.some(line => line.channel === "consumption"))
+    || backorders.some(back => back.channel === "consumption");
   const inProgress = new Map<string, number>();
   for (const cart of active) if (cart.status !== "delivered" && (!point || cart.location_id === point.id)) for (const line of cart.partner_cart_items) {
     if (line.channel !== channel) continue;
@@ -193,7 +195,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
                 <ol className="order-steps">{steps(cart).map(step => <li key={step.label} className={step.done ? "done" : ""}>
                   <strong>{step.label}</strong><small>{step.done && step.at ? formatDateTime(step.at) : "—"}</small></li>)}</ol>
                 <ul className="par-list partner-lines">{cart.partner_cart_items.map(line => <li key={line.id}>
-                  <span>{productLabel(line.products)}{twoChannels && <small> · {channelLabel(line.channel)}</small>}</span>
+                  <span>{productLabel(line.products)}{labelChannels && <small>{channelLabel(line.channel)}</small>}</span>
                   <span className="line-end"><strong>{line.quantity_needed} buc.</strong>
                     {cart.status === "open" && <form action={removeOwnItem}><input type="hidden" name="item_id" value={line.id}/><SubmitButton className="text-button">Scoate</SubmitButton></form>}</span>
                 </li>)}</ul>
@@ -204,7 +206,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
           {backorders.length > 0 && <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Restanțe</h2><p>Produse pe care încă ți le datorăm. Le aducem la următoarea livrare, când revin în stoc.</p></div>
             <ul className="par-list partner-lines">{backorders.map((back) => <li key={back.id}>
-              <span>{productLabel(back.products)}<small>{channelTag(back.channel)}{back.status === "shelved" ? " · pregătit, vine la următoarea livrare" : " · urmează când revine în stoc"}</small></span>
+              <span>{productLabel(back.products)}<small>{[locations.length > 1 && back.location_id ? pointName.get(back.location_id) : null, labelChannels ? channelLabel(back.channel) : null,
+                back.status === "shelved" ? "pregătit, vine la următoarea livrare" : "urmează când revine în stoc"].filter(Boolean).join(" · ")}</small></span>
               <span className="line-end"><strong>{back.quantity} buc.</strong></span>
             </li>)}</ul>
           </section>}

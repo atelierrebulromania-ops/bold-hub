@@ -23,7 +23,7 @@ export default async function InvoicingDashboard() {
   const count = { count: "exact", head: true } as const;
 
   const [carts, failed, proformas, cancels, invoicedCarts, invoicedDocs, returnsToday, myReturnsToday, cancelledToday] = await Promise.all([
-    supabase.from("partner_carts").select("id,delivered_at,partners(business_name,location_name),partner_cart_items(quantity_needed)")
+    supabase.from("partner_carts").select("id,delivered_at,partners(business_name,location_name),partner_locations(name),partner_cart_items(quantity_needed)")
       .eq("status", "delivered").is("invoiced_at", null).order("delivered_at").limit(100),
     supabase.from("partner_carts").select("id", count).in("status", ["prepared", "delivered"]).not("prepared_at", "is", null).is("reserved_in_bocp_at", null),
     supabase.from("sales_documents").select("id,client_name,bocp_proforma_number:number,invoice_requested_at,bocp_proforma_total")
@@ -41,7 +41,7 @@ export default async function InvoicingDashboard() {
   const waiting: Waiting[] = [
     ...(carts.data ?? []).map(cart => ({
       key: `cart-${cart.id}`, kind: "B2B" as const, client: cart.partners?.business_name ?? "Client", since: cart.delivered_at ?? "",
-      detail: `${cart.partners?.location_name ?? ""} · ${number.format(cart.partner_cart_items.reduce((sum, line) => sum + line.quantity_needed, 0))} buc.`,
+      detail: `${cart.partner_locations?.name ?? cart.partners?.location_name ?? ""} · ${number.format(cart.partner_cart_items.reduce((sum, line) => sum + line.quantity_needed, 0))} buc.`,
     })),
     ...(proformas.data ?? []).map(document => ({
       key: `doc-${document.id}`, kind: "Proformă" as const, client: document.client_name, since: document.invoice_requested_at ?? "",

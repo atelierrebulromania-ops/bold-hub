@@ -44,7 +44,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </table></div>
       </section>
 
-      <section className="admin-card auto-import-card" aria-label="Alerte lead-uri">
+      <section className="admin-card auto-import-card stacked" aria-label="Alerte lead-uri">
         <div><h2>Alerte pentru lead-uri care așteaptă</h2>
           <p>Lead nepreluat: anunță pe toți cei care lucrează în Lead. Lead preluat, dar necontactat: anunță agentul care l-a preluat. Fiecare lead dă o singură alertă. Alertele pleacă doar între 08:00 și 20:00. 0 oprește alerta.</p></div>
         <form action={setLeadAlertHours} className="settings-alerts">
