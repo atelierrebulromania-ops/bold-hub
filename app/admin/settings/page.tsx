@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { SubmitButton } from "@/components/submit-button";
 import { roleLabels } from "@/lib/accounts";
 import { requireRole } from "@/lib/auth";
-import { rotateLeadsKey, setCrmAccess, setLeadOfferDays } from "./actions";
+import { rotateLeadsKey, setCrmAccess, setLeadAlertHours, setLeadOfferDays } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const [{ data: users }, { data: settings }] = await Promise.all([
     supabase.from("app_users").select("id,full_name,role,active,crm_access").eq("active", true).order("full_name"),
-    supabase.from("app_settings").select("leads_webhook_key,lead_offer_days").eq("id", 1).maybeSingle(),
+    supabase.from("app_settings").select("leads_webhook_key,lead_offer_days,lead_unclaimed_hours,lead_uncontacted_hours").eq("id", 1).maybeSingle(),
   ]);
   const host = (await headers()).get("host") ?? "www.boldhub.ro";
   const origin = `${host.startsWith("localhost") ? "http" : "https"}://${host}`;
@@ -27,6 +27,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <AppShell profile={profile} active="/admin/settings" section="Administrare" title="Setări"
       note={{ title: "Setări", text: "Cine are acces la Lead și de unde vin lead-urile." }}>
       {params.notice === "days" && <p className="preview-alert success admin-feedback" role="status">Termenul a fost salvat. Se aplică ofertelor marcate de acum înainte.</p>}
+      {params.notice === "alerts" && <p className="preview-alert success admin-feedback" role="status">Alertele au fost salvate.</p>}
       {params.notice === "rotated" && <p className="preview-alert success admin-feedback" role="status">Cheia a fost schimbată. Actualizează linkurile în Make, Zapier și MailerLite.</p>}
 
       <section className="board-panel" aria-label="Acces Lead">
@@ -41,6 +42,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <SubmitButton className={user.crm_access ? "button button-outline" : "button button-primary"}>{user.crm_access ? "Scoate accesul" : "Dă acces"}</SubmitButton></form>}</td>
           </tr>)}</tbody>
         </table></div>
+      </section>
+
+      <section className="admin-card auto-import-card" aria-label="Alerte lead-uri">
+        <div><h2>Alerte pentru lead-uri care așteaptă</h2>
+          <p>Lead nepreluat: anunță pe toți cei care lucrează în Lead. Lead preluat, dar necontactat: anunță agentul care l-a preluat. Fiecare lead dă o singură alertă. Alertele pleacă doar între 08:00 și 20:00. 0 oprește alerta.</p></div>
+        <form action={setLeadAlertHours} className="settings-alerts">
+          <label>Nepreluat după<span className="settings-days"><input type="number" name="unclaimed" min={0} max={168} defaultValue={settings?.lead_unclaimed_hours ?? 2} aria-label="Ore până la alerta pentru lead nepreluat" /><span>ore</span></span></label>
+          <label>Necontactat după<span className="settings-days"><input type="number" name="uncontacted" min={0} max={168} defaultValue={settings?.lead_uncontacted_hours ?? 24} aria-label="Ore până la alerta pentru lead necontactat" /><span>ore</span></span></label>
+          <SubmitButton className="button button-primary">Salvează</SubmitButton>
+        </form>
       </section>
 
       <section className="admin-card auto-import-card" aria-label="Termen ofertă">

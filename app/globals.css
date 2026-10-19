@@ -1110,6 +1110,8 @@ p.push-toggle { display: block; }
 .crm-deadline.late { border-color: #f2c4c6; background: #fff4f4; color: #a13032; }
 .crm-deadline-actions { display: flex; align-items: center; gap: 8px; color: #65676b; }
 .settings-days { display: flex; align-items: center; gap: 8px; flex-shrink: 0; } .settings-days input { width: 80px; }
+.settings-alerts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; flex-shrink: 0; }
+.settings-alerts label { display: grid; gap: 6px; color: #65676b; font-size: .74rem; font-weight: 700; }
 
 .crm-stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0 0 14px; padding: 0; list-style: none; }
 .crm-stepper li { position: relative; }
