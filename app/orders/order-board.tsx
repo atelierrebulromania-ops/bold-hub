@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Order, OrderStatus } from "@/lib/orders";
@@ -119,7 +119,7 @@ export function OrderBoard({ orders, userId, operatorNames }: { orders: Order[];
               </button>
             ))}
           </div>
-          {visibleOrders.length ? <div className="board" aria-label="Board comenzi online" style={{ gridTemplateColumns: `repeat(${visibleColumns.length}, minmax(210px, 1fr))` }}>
+          {visibleOrders.length ? <div className="board" aria-label="Board comenzi online" style={{ "--board-columns": visibleColumns.length } as CSSProperties}>
             {visibleColumns.map((column) => {
               const cards = visibleOrders.filter((order) => boardStatus(order.status) === column.status);
               return (
