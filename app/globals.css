@@ -541,6 +541,10 @@ a { color: inherit; text-decoration: none; }
 .partner-app { min-height: 100svh; background: var(--canvas); }
 .partner-header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--line); }
 .partner-header .brand { padding: 0; min-width: 0; }
+.power-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: #65676b; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.power-button:hover { border-color: #e0b4b4; background: #fdf3f3; color: #c0392b; }
+.power-button svg { width: 18px; height: 18px; }
+.power-button.is-busy svg { display: none; }
 .partner-header .brand strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .partner-content { display: grid; gap: 14px; width: min(100%, 720px); margin: 0 auto; padding: 18px 16px 40px; }
 .partner-content > .partner-list-section { margin-top: 0; }

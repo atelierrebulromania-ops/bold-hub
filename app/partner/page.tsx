@@ -160,7 +160,9 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
       <header className="partner-header">
         <div className="brand"><Image src="/icon.png" alt="" width={300} height={300} className="brand-icon-image" /><div><strong>{partner.business_name}</strong>{pointLogin && <small className="partner-point-name">{pointLogin.name}</small>}</div></div>
         {preview && <PreviewSwitcher partnerId={partner.id} />}
-        <form action={signOut}><SubmitButton className="text-button">Ieșire</SubmitButton></form>
+        <form action={signOut}><SubmitButton className="power-button" aria-label="Ieșire din cont" title="Ieșire din cont">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>
+        </SubmitButton></form>
       </header>
       <div className="partner-content">
         {twoChannels && <nav className="channel-tabs" aria-label="Tip comandă">{orderChannels.map((id) =>
