@@ -9,6 +9,7 @@ function linkFor(entity: string | null, role: UserRole | null) {
   if (entity === "order_return") return "/returns";
   if (entity === "lead") return "/crm";
   if (entity === "backorder") return "/partners";
+  if (entity === "contract" || entity === "custody") return role === "admin" ? "/admin/partners" : "/account";
   if (entity === "sales_document") return role === "operator_facturare" ? "/billing" : "/account/offers";
   return "/";
 }

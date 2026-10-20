@@ -13,6 +13,8 @@ const entityLinks: Record<string, string> = {
   partner_cart: "/partners",
   order_return: "/returns",
   lead: "/crm",
+  contract: "/account",
+  custody: "/account",
   backorder: "/partners",
 };
 

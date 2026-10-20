@@ -15,6 +15,8 @@ export default async function AccountClientsPage({ searchParams }: { searchParam
         own_consumption_discounts,partner_discounts(category,percent,channel),
         stock_mode,partner_locations(id,name,city,address,contact_name,contact_phone,is_main,active,account_username),
         partner_par_levels(product_id,location_id,channel,par_level_quantity,products(name,sku)),
+        partner_contracts(id,title,status,supplier_uploaded_at,signed_uploaded_at),
+        partner_custody_items(id,location_id,kind,product_id,name,quantity,unit_value,handed_on,trial_ends_on,status,closed_on,note),
         partner_carts(id,status,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,partner_cart_items(quantity_needed))`)
       .eq("account_id", profile.id).order("business_name").limit(500),
     supabase.rpc("partner_directory"),

@@ -9,6 +9,8 @@ import { formatDateTime } from "@/lib/orders";
 import { channelLabel, parseChannel, usedChannels } from "@/lib/channels";
 import { markNewsRead, removeOwnItem, submitCounts } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { custodyKindLabel, formatDay as formatCustodyDay } from "@/lib/custody";
+import { ContractsSection, type PartnerContract } from "./contracts-section";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +84,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const point = pointLogin ? locations.find((location) => location.id === pointLogin.id) ?? null
     : perPoint ? locations.find((location) => location.id === params.point) ?? locations[0] ?? null : null;
   const pointName = new Map(locations.map((location) => [location.id, location.name]));
-  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult] = await Promise.all([
+  const [parsResult, activeResult, deliveredResult, invoicesResult, newsResult, backordersResult, contractsResult, custodyResult] = await Promise.all([
     (point ? supabase.from("partner_par_levels").select("product_id,channel,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).eq("location_id", point.id)
       : supabase.from("partner_par_levels").select("product_id,channel,par_level_quantity,products(name,sku,variant_label,active)").eq("partner_id", partner.id).is("location_id", null)).limit(500),
     // In progress: requested, on the shelf, or delivered and still waiting for the invoice.
@@ -96,6 +98,11 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
         .order("created_at", { ascending: false }).limit(5),
     supabase.from("partner_backorders").select("id,quantity,status,location_id,channel,created_at,products(name,variant_label)")
       .eq("partner_id", partner.id).in("status", ["open", "shelved"]).order("created_at"),
+    // Contracts are per company: only the manager login sees them (row security too).
+    pointLogin ? Promise.resolve({ data: [] }) : supabase.from("partner_contracts").select("id,title,status,supplier_uploaded_at,signed_uploaded_at")
+      .eq("partner_id", partner.id).order("supplier_uploaded_at", { ascending: false }),
+    supabase.from("partner_custody_items").select("id,location_id,kind,name,quantity,handed_on,trial_ends_on")
+      .eq("partner_id", partner.id).eq("status", "at_client").order("kind").order("name"),
   ]);
   const loadError = parsResult.error ?? activeResult.error ?? deliveredResult.error;
   const allPars = (parsResult.data ?? []).filter(par => par.products?.active);
@@ -117,6 +124,8 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const invoices = invoicesResult.data ?? [];
   const news = newsResult?.data ?? [];
   const backorders = backordersResult.data ?? [];
+  const contracts = (contractsResult.data ?? []) as PartnerContract[];
+  const custody = (custodyResult.data ?? []).filter(item => !point || !item.location_id || item.location_id === point.id);
   // Orders and backorders keep their channel label whenever the client orders on both channels (any point).
   const labelChannels = twoChannels || active.some(cart => cart.partner_cart_items.some(line => line.channel === "consumption"))
     || backorders.some(back => back.channel === "consumption");
@@ -226,6 +235,17 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
               <span className="line-end"><strong>{back.quantity} buc.</strong></span>
             </li>)}</ul>
           </section>}
+
+          {custody.length > 0 && <section className="admin-card partner-list-section">
+            <div className="admin-card-heading"><h2>Produse în custodie</h2><p>Bunuri Atelier Rebul aflate la tine: nu se vând și nu se facturează, se returnează la încheierea colaborării.</p></div>
+            <ul className="par-list partner-lines">{custody.map(item => <li key={item.id}>
+              <span>{item.name}<small>{[custodyKindLabel(item.kind, item.trial_ends_on), locations.length > 1 && item.location_id ? pointName.get(item.location_id) : null,
+                `primit pe ${formatCustodyDay(item.handed_on)}`].filter(Boolean).join(" · ")}</small></span>
+              <span className="line-end"><strong>{item.quantity} buc.</strong></span>
+            </li>)}</ul>
+          </section>}
+
+          {contracts.length > 0 && <ContractsSection contracts={contracts} canUpload={!preview} />}
 
           {!pointLogin && <section className="admin-card partner-list-section">
             <div className="admin-card-heading"><h2>Facturi</h2></div>

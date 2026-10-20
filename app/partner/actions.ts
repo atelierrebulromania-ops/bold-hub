@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePartner } from "@/lib/auth";
+import { contractUploadUrl, removeContractFiles, type ContractUpload } from "@/lib/contracts";
 
 const page = "/partner";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,4 +55,23 @@ export async function markNewsRead() {
   const { supabase, preview } = await requirePartner();
   if (!preview) await supabase.rpc("mark_notifications_read", { p_ids: null });
   revalidatePath(page);
+}
+
+// The client's manager uploads the contract signed by both parties.
+export async function startSignedContractUpload(contractId: string): Promise<ContractUpload> {
+  const { supabase, partner, point, preview } = await requirePartner();
+  if (preview || point) return { ok: false, message: "Contractul se încarcă din contul firmei." };
+  if (!uuid.test(contractId)) return { ok: false, message: "Contractul nu este valid." };
+  const { data: contract } = await supabase.from("partner_contracts").select("id").eq("id", contractId).eq("partner_id", partner.id).maybeSingle();
+  if (!contract) return { ok: false, message: "Contractul nu mai există." };
+  return contractUploadUrl(partner.id, contractId, "semnat");
+}
+
+export async function finishSignedContractUpload(contractId: string, path: string): Promise<{ ok: boolean; message: string }> {
+  const { supabase, preview, point } = await requirePartner();
+  if (preview || point || !uuid.test(contractId)) return { ok: false, message: "Contractul nu este valid." };
+  const { data, error } = await supabase.rpc("record_signed_contract", { p_id: contractId, p_file: path });
+  if (error || !data) { await removeContractFiles([path]); return { ok: false, message: "Nu am putut salva contractul semnat." }; }
+  revalidatePath(page);
+  return { ok: true, message: "Mulțumim! Contractul semnat a fost trimis la Atelier Rebul." };
 }

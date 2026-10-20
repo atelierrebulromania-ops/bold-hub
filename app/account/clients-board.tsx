@@ -8,9 +8,12 @@ import { formatDateTime } from "@/lib/orders";
 import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
 import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, createPointLogin, deletePointLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
-  type ClientInput, type InvoiceSuggestion,
+  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
+  saveCustodyItem, setCustodyStatus, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
+  type ClientInput, type CustodyInput, type InvoiceSuggestion,
 } from "./actions";
+import { uploadContractFile } from "@/components/contract-file";
+import { custodyKindLabel, custodyStatusLabel, formatDay } from "@/lib/custody";
 import { LinkPending } from "@/components/link-pending";
 
 export type AgentClient = {
@@ -35,6 +38,8 @@ export type AgentClient = {
   // Loaded for the admin's client list only.
   account_id?: string | null;
   bocp_contact_id?: string | null;
+  partner_contracts: ClientContract[];
+  partner_custody_items: CustodyItem[];
   // Consumption orders use the resale discounts unless the client has its own consumption rules.
   own_consumption_discounts: boolean;
   // central: one stock and one order for the firm (to the main point); per_location: each point its own.
@@ -45,6 +50,10 @@ export type AgentClient = {
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
     invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
 };
+
+export type ClientContract = { id: string; title: string; status: string; supplier_uploaded_at: string; signed_uploaded_at: string | null };
+export type CustodyItem = { id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null;
+  handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null };
 
 export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; account_username?: string | null };
 
@@ -261,6 +270,8 @@ export function ClientPanel({ client, catalog, categories, onClose, onSaved, adm
         {client && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <ContractsEditor key={`k-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <LoginEditor key={`l-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
@@ -603,6 +614,144 @@ function ClientInvoices({ client }: { client: AgentClient }) {
           <PaymentChip dueDate={cart.invoice_due_date} rest={cart.invoice_rest} />
           <a className="text-button" href={`/billing/invoice/${cart.id}`} target="_blank" rel="noopener noreferrer">Descarcă</a></div>
       ))}</div>
+    </section>
+  );
+}
+
+const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Bucharest" }).format(new Date());
+const emptyCustody = (): CustodyInput => ({ kind: "pos", productId: null, name: "", quantity: 1, unitValue: "", handedOn: today(), trialDays: 30, locationId: null, note: "" });
+
+// Custody: testers, POS materials (shelf, glass, bells) and products on trial that stay ours at the client.
+function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+  // The item being added (id null) or edited.
+  const [editing, setEditing] = useState<{ id: string | null; input: CustodyInput } | null>(null);
+  const draft = editing?.input ?? null;
+  const setDraft = (input: CustodyInput) => setEditing((current) => current && { ...current, input });
+  const [pending, start] = useTransition();
+  const points = sortLocations(client.partner_locations.filter((location) => location.active));
+  const pointName = new Map(client.partner_locations.map((location) => [location.id, location.name]));
+  const open = client.partner_custody_items.filter((item) => item.status === "at_client")
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, "ro"));
+  const closed = client.partner_custody_items.filter((item) => item.status !== "at_client");
+  const total = open.reduce((sum, item) => sum + (item.unit_value ?? 0) * item.quantity, 0);
+  const set = <K extends keyof CustodyInput>(key: K, value: CustodyInput[K]) => { if (draft) setDraft({ ...draft, [key]: value }); };
+  const run = (action: () => Promise<{ ok: boolean; message: string }>, after?: () => void) => start(async () => { const result = await action(); onDone(result); if (result.ok) after?.(); });
+
+  function status(item: CustodyItem, next: "returned" | "missing" | "converted" | "at_client") {
+    const ask = { returned: `Marchezi ${item.name} ca returnat?`, missing: `Marchezi ${item.name} ca lipsă? Se poate factura la valoarea de inventar.`,
+      converted: `Proba ${item.name} s-a convertit în vânzare?`, at_client: `Readuci ${item.name} la client?` }[next];
+    if (window.confirm(ask)) run(() => setCustodyStatus(item.id, next));
+  }
+
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Custodie</h3>
+      <span>{open.length} la client{total > 0 ? ` · valoare ${total.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei` : ""}</span></div>
+      <p className="muted small">Testere, materiale POS (raft, geamuri, clopote) și produse date în probă. Rămân ale noastre și nu se facturează.</p>
+      {open.length > 0 && <div className="item-list">{open.map((item) => {
+        const ends = item.kind === "trial" && item.trial_ends_on ? item.trial_ends_on : null;
+        const late = !!ends && ends < today();
+        return <div className="order-item custody-row" key={item.id}>
+          <div><strong>{item.name}</strong>
+            <small>{[custodyKindLabel(item.kind, ends), points.length > 1 && item.location_id ? pointName.get(item.location_id) : null,
+              `din ${formatDay(item.handed_on)}`, item.unit_value !== null ? `${item.unit_value.toLocaleString("ro-RO")} lei/buc.` : null, item.note].filter(Boolean).join(" · ")}</small>
+            {late && <span className="item-flag no-ean">Proba a expirat</span>}</div>
+          <b>×{item.quantity}</b>
+          <span className="custody-actions">
+            {item.kind === "trial" && <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "converted")}>Convertit</button>}
+            <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "returned")}>Returnat</button>
+            {item.kind !== "trial" && <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "missing")}>Lipsă</button>}
+            <button type="button" className="text-button" disabled={pending} onClick={() => setEditing({ id: item.id, input: { kind: item.kind as CustodyInput["kind"], productId: item.product_id,
+              name: item.name, quantity: item.quantity, unitValue: item.unit_value !== null ? String(item.unit_value) : "", handedOn: item.handed_on,
+              trialDays: ends ? Math.max(1, Math.round((Date.parse(ends) - Date.parse(item.handed_on)) / 86400000)) : 30, locationId: item.location_id, note: item.note ?? "" } })}>Editează</button>
+          </span>
+        </div>;
+      })}</div>}
+      {closed.length > 0 && <details className="custody-history"><summary>Istoric ({closed.length})</summary>
+        <div className="item-list">{closed.map((item) => <div className="order-item custody-row" key={item.id}>
+          <div><strong>{item.name}</strong><small>{custodyKindLabel(item.kind, null)} · {custodyStatusLabel(item.status)}{item.closed_on ? ` pe ${formatDay(item.closed_on)}` : ""}</small></div>
+          <b>×{item.quantity}</b>
+          <span className="custody-actions">
+            <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "at_client")}>Readu la client</button>
+            <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { if (window.confirm(`Ștergi definitiv ${item.name} din evidență?`)) run(() => deleteCustodyItem(item.id)); }}>Șterge</button>
+          </span>
+        </div>)}</div></details>}
+
+      {editing && draft ? <div className="point-form">
+        <div className="point-tabs" role="group" aria-label="Tip">{(["pos", "tester", "trial"] as const).map((kind) =>
+          <button key={kind} type="button" className={draft.kind === kind ? "active" : ""} onClick={() => set("kind", kind)}>{custodyKindLabel(kind, null)}</button>)}</div>
+        {!draft.productId && <ProductPicker catalog={catalog} exclude={new Set()} onPick={(item) => setDraft({ ...draft, productId: item.id, name: item.name })} placeholder="Produs din catalog (difuzor, tester…) sau scrie mai jos" />}
+        <div className="partner-billing-grid">
+          <label>Denumire<input value={draft.name} maxLength={200} onChange={(event) => setDraft({ ...draft, name: event.target.value, productId: null })} placeholder="ex. Raft 120 cm" /></label>
+          <label>Cantitate<input inputMode="numeric" value={String(draft.quantity)} onChange={(event) => set("quantity", Number(event.target.value.replace(/\D/g, "")) || 0)} /></label>
+          <label>Valoare de inventar / buc. (lei)<input inputMode="decimal" value={draft.unitValue} onChange={(event) => set("unitValue", event.target.value)} placeholder="opțional" /></label>
+          <label>Data predării<input type="date" value={draft.handedOn} onChange={(event) => set("handedOn", event.target.value)} /></label>
+          {draft.kind === "trial" && <label>Zile de probă<input inputMode="numeric" value={String(draft.trialDays)} onChange={(event) => set("trialDays", Number(event.target.value.replace(/\D/g, "")) || 0)} /></label>}
+          {points.length > 1 && <label>Punct de lucru<select value={draft.locationId ?? ""} onChange={(event) => set("locationId", event.target.value || null)}>
+            <option value="">Toată firma</option>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>}
+          <label>Notă<input value={draft.note} maxLength={500} onChange={(event) => set("note", event.target.value)} placeholder="opțional, ex. gratuit cât comandă rezerva lunar" /></label>
+        </div>
+        <div className="partner-billing-actions">
+          {editing.id && <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { const id = editing.id!; if (window.confirm("Ștergi definitiv din evidență?")) run(() => deleteCustodyItem(id), () => setEditing(null)); }}>Șterge</button>}
+          <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
+          <button type="button" className="button button-primary" disabled={pending || !draft.name.trim() || draft.quantity < 1}
+            onClick={() => run(() => saveCustodyItem(client.id, editing.id, draft), () => setEditing(null))}>{editing.id ? "Salvează" : "Trece în custodie"}</button>
+        </div>
+      </div> : <button type="button" className="button button-outline" onClick={() => setEditing({ id: null, input: emptyCustody() })}>+ Produs în custodie</button>}
+    </section>
+  );
+}
+
+// Contracts: the PDF signed by us, then the copy signed by both parties (uploaded by the client or the agent).
+function ContractsEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const [title, setTitle] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [pending, start] = useTransition();
+  const contracts = [...client.partner_contracts].sort((a, b) => b.supplier_uploaded_at.localeCompare(a.supplier_uploaded_at));
+
+  function upload() {
+    if (!file) return;
+    start(async () => {
+      const ready = await startContractUpload(client.id, null);
+      if (!ready.ok || !ready.contractId) { onDone({ ok: false, message: ready.ok ? "Nu am putut pregăti încărcarea." : ready.message }); return; }
+      const failed = await uploadContractFile(file, ready.path, ready.token);
+      if (failed) { onDone({ ok: false, message: failed }); return; }
+      const result = await finishContractUpload(client.id, ready.contractId, title, ready.path);
+      onDone(result);
+      if (result.ok) { setTitle(""); setFile(null); }
+    });
+  }
+
+  function uploadSigned(contract: ClientContract, signed: File) {
+    start(async () => {
+      const ready = await startContractUpload(client.id, contract.id);
+      if (!ready.ok) { onDone({ ok: false, message: ready.message }); return; }
+      const failed = await uploadContractFile(signed, ready.path, ready.token);
+      onDone(failed ? { ok: false, message: failed } : await finishSignedByAgent(contract.id, ready.path));
+    });
+  }
+
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Contracte</h3><span>{contracts.length}</span></div>
+      {contracts.length > 0 && <div className="item-list">{contracts.map((contract) => (
+        <div className="order-item contract-row" key={contract.id}>
+          <div><strong>{contract.title}</strong>
+            <small>Încărcat {formatDateTime(contract.supplier_uploaded_at)}{contract.signed_uploaded_at ? ` · semnat de client ${formatDateTime(contract.signed_uploaded_at)}` : ""}</small></div>
+          <span className={`contract-status ${contract.status === "both_signed" ? "done" : "waiting"}`}>{contract.status === "both_signed" ? "Semnat de ambele părți" : "Semnat de furnizor"}</span>
+          <span className="custody-actions">
+            <a className="text-button" href={`/contracts/${contract.id}/furnizor`} target="_blank" rel="noopener noreferrer">Descarcă</a>
+            {contract.status === "both_signed"
+              ? <a className="text-button" href={`/contracts/${contract.id}/semnat`} target="_blank" rel="noopener noreferrer">Descarcă semnat</a>
+              : <label className="text-button file-button">Încarcă semnat<input type="file" accept="application/pdf" disabled={pending} onChange={(event) => { const picked = event.target.files?.[0]; event.target.value = ""; if (picked) uploadSigned(contract, picked); }} /></label>}
+            <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { if (window.confirm(`Ștergi contractul „${contract.title}”?`)) start(async () => onDone(await deleteContract(contract.id))); }}>Șterge</button>
+          </span>
+        </div>
+      ))}</div>}
+      <div className="contract-upload">
+        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="Nume, ex. Contract de consignație nr. 2 / 19.10.2026" aria-label="Numele contractului" />
+        <label className="button button-outline file-button">{file ? file.name : "Alege PDF-ul"}<input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        <button type="button" className="button button-primary" disabled={pending || !file || !title.trim()} onClick={upload}>{pending ? "Se încarcă…" : "Încarcă contractul"}</button>
+      </div>
+      <p className="muted small">Încarcă PDF-ul semnat de noi. Clientul îl descarcă din aplicația lui, îl semnează și îl încarcă înapoi; poți încărca și tu varianta semnată.</p>
     </section>
   );
 }

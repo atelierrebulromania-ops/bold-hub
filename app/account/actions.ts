@@ -9,6 +9,7 @@ import { requireRole } from "@/lib/auth";
 import { parseChannel, type Channel } from "@/lib/channels";
 import type { Json } from "@/lib/database.types";
 import { cancelProformaInBocp, issueProformaInBocp, linkIssuedProforma } from "@/lib/proforma-bocp";
+import { contractUploadUrl, removeContractFiles, type ContractUpload } from "@/lib/contracts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Result = { ok: boolean; message: string };
@@ -404,4 +405,97 @@ export async function suggestFromInvoices(clientId: string): Promise<Result & { 
     return { productId: product.id, name: product.name, sku: product.sku, quantity: Math.max(1, Math.round(entry.quantity / entry.invoices)), invoices: entry.invoices, lastDate: entry.lastDate };
   }).sort((a, b) => b.invoices - a.invoices || a.name.localeCompare(b.name, "ro"));
   return { ok: true, message: items.length ? `${items.length} ${items.length === 1 ? "produs cumpărat nu e" : "produse cumpărate nu sunt"} încă în stocul inițial.` : "Tot ce a cumpărat clientul e deja în stocul inițial.", items };
+}
+
+// Contracts: the agent uploads the PDF signed by us, the client (or the agent, on its behalf) the copy signed by both.
+export async function startContractUpload(clientId: string, contractId: string | null): Promise<ContractUpload & { contractId?: string }> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || (contractId !== null && !uuid.test(contractId))) return { ok: false, message: "Clientul nu este valid." };
+  const { data: client } = await supabase.from("partners").select("id").eq("id", clientId).maybeSingle();
+  if (!client) return { ok: false, message: "Nu ai acces la acest client." };
+  if (contractId) {
+    const { data: contract } = await supabase.from("partner_contracts").select("id").eq("id", contractId).eq("partner_id", clientId).maybeSingle();
+    if (!contract) return { ok: false, message: "Contractul nu mai există." };
+  }
+  const id = contractId ?? crypto.randomUUID();
+  const upload = await contractUploadUrl(clientId, id, contractId ? "semnat" : "furnizor");
+  return upload.ok ? { ...upload, contractId: id } : upload;
+}
+
+export async function finishContractUpload(clientId: string, contractId: string, title: string, path: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || !uuid.test(contractId)) return { ok: false, message: "Contractul nu este valid." };
+  if (!title.trim()) return { ok: false, message: "Scrie numele contractului." };
+  const { data, error } = await supabase.rpc("record_partner_contract", { p_id: contractId, p_partner_id: clientId, p_title: title.trim(), p_file: path });
+  if (error || !data) { await removeContractFiles([path]); return { ok: false, message: "Nu am putut salva contractul." }; }
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: "Contractul a fost încărcat. Clientul îl vede în aplicație, să-l semneze și să-l încarce înapoi." };
+}
+
+export async function finishSignedByAgent(contractId: string, path: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(contractId)) return { ok: false, message: "Contractul nu este valid." };
+  const { data, error } = await supabase.rpc("record_signed_contract", { p_id: contractId, p_file: path });
+  if (error || !data) { await removeContractFiles([path]); return { ok: false, message: "Nu am putut salva contractul semnat." }; }
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: "Contractul semnat de ambele părți a fost salvat." };
+}
+
+export async function deleteContract(contractId: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(contractId)) return { ok: false, message: "Contractul nu este valid." };
+  const { data, error } = await supabase.rpc("delete_partner_contract", { p_id: contractId });
+  if (error || !data) return { ok: false, message: "Nu am putut șterge contractul." };
+  await removeContractFiles(data);
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: "Contractul a fost șters." };
+}
+
+export type CustodyInput = { kind: "tester" | "pos" | "trial"; productId: string | null; name: string; quantity: number; unitValue: string;
+  handedOn: string; trialDays: number; locationId: string | null; note: string };
+
+// Custody: what stays ours at the client (testers, POS materials, products on trial).
+export async function saveCustodyItem(clientId: string, itemId: string | null, input: CustodyInput): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || (itemId !== null && !uuid.test(itemId)) || (input.productId !== null && !uuid.test(input.productId))
+    || (input.locationId !== null && !uuid.test(input.locationId))) return { ok: false, message: "Selecția nu este validă." };
+  if (!input.name.trim() || input.name.trim().length > 200) return { ok: false, message: "Scrie denumirea produsului." };
+  if (!Number.isSafeInteger(input.quantity) || input.quantity < 1 || input.quantity > 10000) return { ok: false, message: "Cantitatea trebuie să fie între 1 și 10.000." };
+  const value = input.unitValue.trim().replace(",", ".");
+  if (value && !/^\d{1,9}(\.\d{1,2})?$/.test(value)) return { ok: false, message: "Valoarea trebuie să fie un număr, ex. 250 sau 250,50." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.handedOn)) return { ok: false, message: "Alege data predării." };
+  if (input.kind === "trial" && (!Number.isSafeInteger(input.trialDays) || input.trialDays < 1 || input.trialDays > 365)) return { ok: false, message: "Perioada de probă are între 1 și 365 de zile." };
+  const { data, error } = await supabase.rpc("save_custody_item", {
+    p_id: itemId, p_partner_id: clientId,
+    p_data: { kind: input.kind, product_id: input.productId ?? "", name: input.name.trim(), quantity: input.quantity, unit_value: value,
+      handed_on: input.handedOn, trial_days: input.trialDays, location_id: input.locationId ?? "", note: input.note.slice(0, 500) } as Json,
+  });
+  if (error || !data) return { ok: false, message: "Nu am putut salva produsul în custodie." };
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: itemId ? "Produsul în custodie a fost actualizat." : "Produsul a fost trecut în custodie." };
+}
+
+export async function setCustodyStatus(itemId: string, status: "at_client" | "returned" | "missing" | "converted"): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(itemId)) return { ok: false, message: "Produsul nu este valid." };
+  const { data, error } = await supabase.rpc("set_custody_status", { p_id: itemId, p_status: status });
+  if (error || !data) return { ok: false, message: "Nu am putut salva starea." };
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  const messages = { at_client: "Produsul este din nou la client.", returned: "Produsul a fost marcat returnat.", missing: "Produsul a fost marcat lipsă.", converted: "Proba a fost marcată convertită." };
+  return { ok: true, message: messages[status] };
+}
+
+export async function deleteCustodyItem(itemId: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(itemId)) return { ok: false, message: "Produsul nu este valid." };
+  const { data, error } = await supabase.rpc("delete_custody_item", { p_id: itemId });
+  if (error || !data) return { ok: false, message: "Nu am putut șterge." };
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: "Produsul a fost șters din custodie." };
 }

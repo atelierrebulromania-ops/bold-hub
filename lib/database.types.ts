@@ -71,6 +71,27 @@ export type Database = {
           { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
         ]
       }
+      partner_contracts: {
+        Row: { id: string; partner_id: string; title: string; status: string; supplier_file: string; supplier_uploaded_at: string; supplier_uploaded_by: string | null
+          signed_file: string | null; signed_uploaded_at: string | null; signed_uploaded_by: string | null; created_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_contracts_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_custody_items: {
+        Row: { id: string; partner_id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null
+          handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; trial_notified_at: string | null
+          created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_custody_items_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_custody_items_location_id_fkey"; columns: ["location_id"]; isOneToOne: false; referencedRelation: "partner_locations"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_custody_items_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
       partner_locations: {
         Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string; auth_user_id: string | null; account_username: string | null }
         Insert: { id?: string }
@@ -1125,6 +1146,12 @@ export type Database = {
       set_lead_offer_days: { Args: { p_days: number }; Returns: boolean }
       set_lead_alert_hours: { Args: { p_unclaimed: number; p_uncontacted: number }; Returns: boolean }
       point_login_paused: { Args: Record<PropertyKey, never>; Returns: boolean }
+      record_partner_contract: { Args: { p_id: string; p_partner_id: string; p_title: string; p_file: string }; Returns: boolean }
+      record_signed_contract: { Args: { p_id: string; p_file: string }; Returns: boolean }
+      delete_partner_contract: { Args: { p_id: string }; Returns: string[] | null }
+      save_custody_item: { Args: { p_id: string | null; p_partner_id: string; p_data: Json }; Returns: string | null }
+      set_custody_status: { Args: { p_id: string; p_status: string }; Returns: boolean }
+      delete_custody_item: { Args: { p_id: string }; Returns: boolean }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
