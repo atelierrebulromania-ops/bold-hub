@@ -27,7 +27,7 @@ export default async function AccountClientsPage({ searchParams }: { searchParam
   const error = clientsResult.error ?? catalogResult.error;
 
   return (
-    <AppShell profile={profile} active="/account" section="Account" title="Clienți"
+    <AppShell profile={profile} active="/account" section="Vânzări" title="Clienți"
       note={{ title: "Clienți", text: "Clienții tăi îi gestionezi complet; ceilalți clienți apar doar ca listă, cu agentul lor." }}>
       {error ? <p className="notice error" role="alert">Clienții nu pot fi încărcați acum. Reîncarcă pagina.</p>
         : <ClientsBoard view={view} clients={clients} directory={directory} catalog={catalog} userId={profile.id} />}

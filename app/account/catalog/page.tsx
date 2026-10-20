@@ -31,7 +31,7 @@ export default async function AgentCatalogPage({ searchParams }: { searchParams:
   }));
 
   return (
-    <AppShell profile={profile} active="/account/catalog" section="Account" title="Catalog produse"
+    <AppShell profile={profile} active="/account/catalog" section="Vânzări" title="Catalog produse"
       note={{ title: "Prețuri și colecții", text: "Prețurile de listă vin din BOCP. Colecțiile tale sunt liste de produse pe care le adaugi dintr-un click în oferte și proforme; doar tu le vezi." }}>
       {productsResult.error ? <p className="notice error" role="alert">Catalogul nu poate fi încărcat acum. Reîncarcă pagina.</p>
         : <section className="board-panel" aria-label="Catalog produse">

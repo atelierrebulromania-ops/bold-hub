@@ -81,14 +81,13 @@ export default async function PartnersPage({
   return (
     <AppShell profile={profile} active="/admin/partners" section="Administrare" title="Revânzători"
       note={{ title: "Configurare refill", text: "Setează mai întâi firmele și grupurile." }}>
-          <div className="page-heading"><div><p className="eyebrow">CONFIGURARE REFILL</p><h1>Revânzători</h1><p className="muted">Firme, locații, Delivery Groups și stocuri inițiale per produs.</p></div><span className="page-heading-chip preview-chip">Administrare</span></div>
           {params.notice && notices[params.notice] && <p className="preview-alert success admin-feedback" role="status">{notices[params.notice]}</p>}
           {params.error && errors[params.error] && <p className="notice error admin-feedback" role="alert">{errors[params.error]}</p>}
           {loadError ? <p className="notice error" role="alert">Datele de configurare nu pot fi încărcate acum.</p> : <>
             <div className="partner-summary" aria-label="Rezumat configurare">
               <div><strong>{companies.length}</strong><span>firme</span></div>
               <div><strong>{partners.length}</strong><span>locații</span></div>
-              <div><strong>{groups.length}</strong><span>Delivery Groups</span></div>
+              <div><strong>{groups.length}</strong><span>grupuri de livrare</span></div>
               <div><strong>{productCount}</strong><span>produse active</span></div>
             </div>
 
@@ -103,7 +102,7 @@ export default async function PartnersPage({
               </section>
 
               <section className="admin-card" aria-labelledby="groups-title">
-                <div className="admin-card-heading"><h2 id="groups-title">Delivery Groups</h2><p>O locație poate aparține mai multor trasee.</p></div>
+                <div className="admin-card-heading"><h2 id="groups-title">Grupuri de livrare</h2><p>O locație poate aparține mai multor trasee.</p></div>
                 <form action={createDeliveryGroup} className="admin-form compact-form">
                   <label htmlFor="group-name">Nume grup</label><input id="group-name" name="name" maxLength={120} required placeholder="Ex. București Nord"/>
                   <label htmlFor="group-description">Descriere (opțional)</label><input id="group-description" name="description" maxLength={500} placeholder="Zona / traseul"/>
@@ -133,7 +132,7 @@ export default async function PartnersPage({
                   const assigned = membershipsByPartner.get(partner.id) ?? [];
                   const levels = levelsByPartner.get(partner.id) ?? [];
                   return <article className="partner-card" key={partner.id}>
-                    <div className="partner-card-heading"><div><h3>{partner.business_name}</h3><p>{companyNames.get(partner.company_id ?? "") ?? "Firmă neasociată"} · {partner.location_name}</p><small>{partner.contact_phone}{partner.contact_email ? ` · ${partner.contact_email}` : ""}</small></div><div className="partner-tags">{partner.is_important_client && <span className="partner-tag important">Important</span>}{!partner.active && <span className="partner-tag">Inactiv</span>}<span className={partner.auth_user_id ? "partner-tag linked" : "partner-tag"}>{partner.auth_user_id ? "Cont activ" : "Fără cont"}</span></div></div>
+                    <div className="partner-card-heading"><div><h3>{partner.business_name}</h3><p>{companyNames.get(partner.company_id ?? "") ?? "Firmă neasociată"} · {partner.location_name}</p><small>{partner.contact_phone}{partner.contact_email ? ` · ${partner.contact_email}` : ""}</small></div><div className="partner-tags">{partner.is_important_client && <span className="partner-tag important">Prioritar</span>}{!partner.active && <span className="partner-tag">Inactiv</span>}<span className={partner.auth_user_id ? "partner-tag linked" : "partner-tag"}>{partner.auth_user_id ? "Cont activ" : "Fără cont"}</span></div></div>
                     {partner.auth_user_id ? <div className="account-link-form account-row">
                       <span className="account-name">Cont: <strong>{partner.account_username ?? "vechi (email)"}</strong></span>
                       <form action={setPartnerPassword} className="admin-inline admin-mini-form">
@@ -164,10 +163,10 @@ export default async function PartnersPage({
                       county: partner.billing_county ?? "", zip: partner.billing_zip ?? "",
                     }} />
                     <div className="partner-card-grid">
-                      <div><h4>Delivery Groups</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><SubmitButton className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></SubmitButton></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
+                      <div><h4>Grupuri de livrare</h4><div className="group-chip-list">{assigned.length ? assigned.map(group => <form action={removeDeliveryGroup} key={group.id}><input type="hidden" name="partner_id" value={partner.id}/><input type="hidden" name="delivery_group_id" value={group.id}/><SubmitButton className="group-chip" aria-label={`Scoate ${partner.business_name} din grupul ${group.name}`} title={`Scoate din ${group.name}`}>{group.name}<span aria-hidden="true">×</span></SubmitButton></form>) : <span className="admin-empty-inline">Niciun grup</span>}</div>
                         {groups.length > 0 && <form action={assignDeliveryGroup} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><select name="delivery_group_id" aria-label={`Adaugă ${partner.business_name} în Delivery Group`} required defaultValue=""><option value="" disabled>Alege un grup</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><SubmitButton className="button button-outline">Adaugă</SubmitButton></form>}
                       </div>
-                      <div><h4>Stoc inițial (par level)</h4>{levels.length ? <ul className="par-list">{levels.map(level => <li key={level.product_id}><span>{level.products?.name ?? "Produs"}<small>SKU {level.products?.sku ?? "—"}</small></span><strong>{level.par_level_quantity} buc.</strong></li>)}</ul> : <p className="admin-empty-inline">Niciun produs configurat</p>}
+                      <div><h4>Stoc inițial</h4>{levels.length ? <ul className="par-list">{levels.map(level => <li key={level.product_id}><span>{level.products?.name ?? "Produs"}<small>SKU {level.products?.sku ?? "—"}</small></span><strong>{level.par_level_quantity} buc.</strong></li>)}</ul> : <p className="admin-empty-inline">Niciun produs configurat</p>}
                         {productCount > 0 ? <form action={setParLevel} className="admin-inline admin-mini-form"><input type="hidden" name="partner_id" value={partner.id}/><input name="sku" maxLength={100} required placeholder="SKU produs" aria-label={`SKU pentru ${partner.business_name}`}/><input name="par_level_quantity" type="number" min={0} max={100000} step={1} required placeholder="Buc." aria-label={`Stoc inițial pentru ${partner.business_name}`}/><SubmitButton className="button button-outline">Salvează</SubmitButton></form> : <p className="admin-empty-inline">Par levels devin disponibile după sincronizarea catalogului BOCP.</p>}
                       </div>
                     </div>

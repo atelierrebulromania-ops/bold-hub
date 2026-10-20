@@ -12,10 +12,12 @@ const entityLinks: Record<string, string> = {
   delivery: "/partners",
   partner_cart: "/partners",
   order_return: "/returns",
+  lead: "/crm",
+  backorder: "/partners",
 };
 
 export default async function NotificationsPage() {
-  const { supabase, profile } = await requireRole(["admin", "owner", "operator_depozit", "operator_facturare"]);
+  const { supabase, profile } = await requireRole(["admin", "owner", "operator_depozit", "operator_facturare", "account"]);
   const { data, error } = await supabase.from("notifications")
     .select("id,type,message,related_entity_type,read_at,created_at,recipient_role")
     .or(`recipient_user_id.eq.${profile.id},recipient_role.eq.${profile.role}`)

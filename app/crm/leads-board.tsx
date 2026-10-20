@@ -104,7 +104,10 @@ export function LeadsBoard({ leads, names, currentUserId, canWork, canImport }: 
             <span className="crm-switch" aria-hidden="true" />Doar ale mele</label>}
         </div>
         <div className="crm-filters">
-          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Caută nume, firmă, telefon, email, campanie…" aria-label="Caută lead" />
+          <label className="partners-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg>
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Caută nume, firmă, telefon, email, campanie…" aria-label="Caută lead" />
+          </label>
         </div>
         {feedback && !openId && <p className={`action-feedback ${feedback.ok ? "success" : "error"} crm-feedback`} role="status">{feedback.message}</p>}
         {visible.length === 0 ? <p className="admin-empty-note crm-empty">{tab === "new" ? "Niciun lead nou de preluat." : "Niciun lead aici."}</p>

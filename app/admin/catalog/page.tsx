@@ -40,7 +40,6 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   return (
     <AppShell profile={profile} active="/admin/catalog" section="Administrare" title="Catalog & EAN"
       note={{ title: "Trecere la EAN", text: "Activează EAN doar după test pe scannerele Zebra." }}>
-      <div className="page-heading"><div><p className="eyebrow">ADMINISTRARE</p><h1>Catalog & EAN</h1><p className="muted">Completează EAN-urile lipsă și trece produsele de la confirmarea temporară după SKU la scanarea fizică a EAN-ului.</p></div></div>
       {params.notice === "synced" && <div className="preview-alert success admin-feedback" role="status">
         <strong>Catalog sincronizat din BOCP.</strong>
         <span>{params.total} produse active în BOCP, dintre care {params.withEan} cu EAN valid în „Cod bare”. {params.created} produse noi, {params.eanSet} EAN-uri completate, stoc BOCP actualizat pentru {params.stockSet} produse.</span>

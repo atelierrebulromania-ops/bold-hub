@@ -165,7 +165,7 @@ export function BillingBoard({ carts, view, canInvoice, operatorNames, bocpReser
           {groups.map((group) => { const cart = group[0]; return (
             <button key={cart.id} type="button" className={`order-card ${selectedGroup?.[0].id === cart.id ? "selected" : ""}`} onClick={() => open(cart.id)}>
               <div className="card-top"><span className="invoice">{cart.partners?.business_name ?? "Partener"}</span></div>
-              <div className="billing-card-chips">{partnerChips(cart)}{view === "reserve" && <span className={`item-flag ${cart.bocp_order_error ? "no-ean" : "gift"}`}>{cart.bocp_order_error ? "Eroare BOCP" : "Se rezervă…"}</span>}
+              <div className="billing-card-chips">{partnerChips(cart)}{view === "reserve" && <span className={`item-flag ${cart.bocp_order_error ? "no-ean" : "gift"}`}>{cart.bocp_order_error ? "Eroare BOCP" : "Nerezervat încă"}</span>}
                 {view === "invoice" && group.some((one) => !one.reserved_in_bocp_at) && <span className="item-flag no-ean" title="Stocul nu este rezervat în BOCP.">Nerezervat în BOCP</span>}
                 {group.length > 1 && <span className="item-flag gift" title="Comenzile acestui partener se facturează împreună.">{group.length} comenzi · o factură</span>}</div>
               <p className="card-subtitle">{group.reduce((sum, one) => sum + units(one), 0)} buc. · {group.reduce((sum, one) => sum + one.partner_cart_items.length, 0)} {group.reduce((sum, one) => sum + one.partner_cart_items.length, 0) === 1 ? "produs" : "produse"}</p>
