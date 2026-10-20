@@ -42,6 +42,19 @@ function formatDay(value: string) {
   return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
 }
 
+// Several requests for the same product (and channel) in one order show as one line.
+function mergedLines(lines: Line[]) {
+  const merged = new Map<string, { ids: string[]; quantity: number; channel: string; products: Product }>();
+  for (const line of lines) {
+    const key = `${productLabel(line.products)}|${line.channel}`;
+    const row = merged.get(key) ?? { ids: [], quantity: 0, channel: line.channel, products: line.products };
+    row.ids.push(line.id);
+    row.quantity += line.quantity_needed;
+    merged.set(key, row);
+  }
+  return [...merged.values()];
+}
+
 // Where an order is: request received → prepared in the warehouse → delivered → invoiced.
 function steps(cart: Cart) {
   return [
@@ -194,10 +207,10 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
                 {locations.length > 1 && cart.location_id && <p className="point-label">{pointName.get(cart.location_id) ?? ""}</p>}
                 <ol className="order-steps">{steps(cart).map(step => <li key={step.label} className={step.done ? "done" : ""}>
                   <strong>{step.label}</strong><small>{step.done && step.at ? formatDateTime(step.at) : "—"}</small></li>)}</ol>
-                <ul className="par-list partner-lines">{cart.partner_cart_items.map(line => <li key={line.id}>
+                <ul className="par-list partner-lines">{mergedLines(cart.partner_cart_items).map(line => <li key={line.ids[0]}>
                   <span>{productLabel(line.products)}{labelChannels && <small>{channelLabel(line.channel)}</small>}</span>
-                  <span className="line-end"><strong>{line.quantity_needed} buc.</strong>
-                    {cart.status === "open" && <form action={removeOwnItem}><input type="hidden" name="item_id" value={line.id}/><SubmitButton className="text-button">Scoate</SubmitButton></form>}</span>
+                  <span className="line-end"><strong>{line.quantity} buc.</strong>
+                    {cart.status === "open" && <form action={removeOwnItem}>{line.ids.map(id => <input key={id} type="hidden" name="item_id" value={id}/>)}<SubmitButton className="text-button">Scoate</SubmitButton></form>}</span>
                 </li>)}</ul>
               </article>)}
             </div>}

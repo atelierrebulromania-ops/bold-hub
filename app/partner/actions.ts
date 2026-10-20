@@ -36,13 +36,18 @@ export async function submitCounts(form: FormData) {
   redirect(units > 0 ? `${back}notice=added&units=${units}` : `${back}notice=nothing`);
 }
 
+// A line can hold several requests for the same product: all of them are removed.
 export async function removeOwnItem(form: FormData) {
   const { supabase } = await requirePartner();
-  const itemId = form.get("item_id");
-  if (typeof itemId !== "string" || !uuid.test(itemId)) redirect(`${page}?error=invalid`);
-  const { data, error } = await supabase.rpc("remove_cart_item", { p_item_id: itemId });
+  const itemIds = form.getAll("item_id");
+  if (!itemIds.length || itemIds.length > 50 || !itemIds.every((id) => typeof id === "string" && uuid.test(id))) redirect(`${page}?error=invalid`);
+  let removed = 0;
+  for (const itemId of itemIds as string[]) {
+    const { data, error } = await supabase.rpc("remove_cart_item", { p_item_id: itemId });
+    if (!error && data === true) removed += 1;
+  }
   revalidatePath(page);
-  redirect(!error && data === true ? `${page}?notice=removed` : `${page}?error=stale`);
+  redirect(removed > 0 ? `${page}?notice=removed` : `${page}?error=stale`);
 }
 
 export async function markNewsRead() {

@@ -1124,6 +1124,7 @@ export type Database = {
       postpone_lead_follow_up: { Args: { p_id: string; p_days: number }; Returns: boolean }
       set_lead_offer_days: { Args: { p_days: number }; Returns: boolean }
       set_lead_alert_hours: { Args: { p_unclaimed: number; p_uncontacted: number }; Returns: boolean }
+      point_login_paused: { Args: Record<PropertyKey, never>; Returns: boolean }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
