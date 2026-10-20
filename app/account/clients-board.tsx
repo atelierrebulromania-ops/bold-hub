@@ -32,6 +32,9 @@ export type AgentClient = {
   billing_county: string | null;
   billing_zip: string | null;
   partner_discounts: { category: string | null; percent: number; channel: string }[];
+  // Loaded for the admin's client list only.
+  account_id?: string | null;
+  bocp_contact_id?: string | null;
   // Consumption orders use the resale discounts unless the client has its own consumption rules.
   own_consumption_discounts: boolean;
   // central: one stock and one order for the firm (to the main point); per_location: each point its own.
@@ -89,6 +92,12 @@ function orderStatus(client: AgentClient) {
 
 export type ClientsView = "mine" | "all";
 
+export function productCategories(catalog: CatalogItem[]) {
+  return [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro"));
+}
+
+export { orderStatus, typeLabel };
+
 export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   view: ClientsView; clients: AgentClient[]; directory: OtherClient[]; catalog: CatalogItem[]; userId: string;
 }) {
@@ -101,7 +110,7 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   const mine = clients.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.vat_id ?? ""}`));
   const everyone = directory.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.account_name ?? ""}`));
   const own = new Set(clients.map((client) => client.id));
-  const categories = useMemo(() => [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro")), [catalog]);
+  const categories = useMemo(() => productCategories(catalog), [catalog]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -173,8 +182,9 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   );
 }
 
-function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
-  client: AgentClient | null; catalog: CatalogItem[]; categories: string[]; onClose: () => void; onSaved: (id?: string) => void;
+// The client file, shared by the agent's and the admin's client lists; `admin` adds the admin-only section.
+export function ClientPanel({ client, catalog, categories, onClose, onSaved, admin }: {
+  client: AgentClient | null; catalog: CatalogItem[]; categories: string[]; onClose: () => void; onSaved: (id?: string) => void; admin?: ReactNode;
 }) {
   const [input, setInput] = useState<ClientInput>(client ? toInput(client) : emptyClient);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -214,6 +224,7 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
         <button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll">
         {client && <p className={`agent-status ${orderStatus(client).tone} block`}>{orderStatus(client).label}</p>}
+        {client && admin}
         {client && <ClientInvoices client={client} />}
 
         <section className="detail-section"><h3>Date firmă și facturare</h3>

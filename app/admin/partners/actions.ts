@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { accountErrorMessages, createLogin, deleteLogin, setLoginPassword, type AccountError } from "@/lib/account-admin";
+import { accountErrorMessages, deleteLogin, setLoginPassword } from "@/lib/account-admin";
 import { lookupAnafCompany, normalizeCui } from "@/lib/anaf";
 import { bocpGetList } from "@/lib/bocp/client";
 import { createClient } from "@/lib/supabase/server";
@@ -10,21 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 const page = "/admin/partners";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function value(form: FormData, key: string, max: number): string | null {
-  const raw = form.get(key);
-  if (typeof raw !== "string") return null;
-  const text = raw.trim();
-  return text && text.length <= max ? text : null;
-}
-
-function fail(code: string): never {
-  redirect(`${page}?error=${encodeURIComponent(code)}`);
-}
-
-function done(code: string): never {
-  revalidatePath(page);
-  redirect(`${page}?notice=${encodeURIComponent(code)}`);
-}
+type Result = { ok: boolean; message: string };
 
 async function adminContext() {
   const supabase = await createClient();
@@ -35,140 +21,6 @@ async function adminContext() {
     .select("role,active").eq("id", userId).maybeSingle();
   if (!profile?.active || profile.role !== "admin") redirect("/access");
   return { supabase, userId };
-}
-
-export async function createCompany(form: FormData) {
-  const { supabase } = await adminContext();
-  const companyName = value(form, "company_name", 160);
-  if (!companyName) fail("company_invalid");
-  const { error } = await supabase.from("partner_companies").insert({ company_name: companyName });
-  if (error) fail("save_failed");
-  done("company_created");
-}
-
-export async function createDeliveryGroup(form: FormData) {
-  const { supabase } = await adminContext();
-  const name = value(form, "name", 120);
-  const descriptionRaw = form.get("description");
-  const description = typeof descriptionRaw === "string" ? descriptionRaw.trim() : "";
-  if (!name || description.length > 500) fail("group_invalid");
-  const { error } = await supabase.from("delivery_groups").insert({ name, description: description || null });
-  if (error) fail("save_failed");
-  done("group_created");
-}
-
-export async function createPartner(form: FormData) {
-  const { supabase } = await adminContext();
-  const companyId = value(form, "company_id", 36);
-  const businessName = value(form, "business_name", 160);
-  const locationName = value(form, "location_name", 160);
-  const phone = value(form, "contact_phone", 30);
-  const rawEmail = form.get("contact_email");
-  const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
-  if (!companyId || !uuid.test(companyId) || !businessName || !locationName || !phone
-    || !/^[+0-9 ()-]{7,30}$/.test(phone) || email.length > 254
-    || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) fail("partner_invalid");
-
-  const { error } = await supabase.from("partners").insert({
-    company_id: companyId,
-    business_name: businessName,
-    location_name: locationName,
-    contact_phone: phone,
-    contact_email: email || null,
-    is_important_client: form.get("is_important_client") === "on",
-  });
-  if (error?.code === "23505") fail("phone_exists");
-  if (error) fail("save_failed");
-  done("partner_created");
-}
-
-export async function assignDeliveryGroup(form: FormData) {
-  const { supabase } = await adminContext();
-  const partnerId = value(form, "partner_id", 36);
-  const groupId = value(form, "delivery_group_id", 36);
-  if (!partnerId || !groupId || !uuid.test(partnerId) || !uuid.test(groupId)) fail("selection_invalid");
-  const { error } = await supabase.from("partner_delivery_groups")
-    .upsert({ partner_id: partnerId, delivery_group_id: groupId },
-      { onConflict: "partner_id,delivery_group_id", ignoreDuplicates: true });
-  if (error) fail("save_failed");
-  done("group_assigned");
-}
-
-export async function removeDeliveryGroup(form: FormData) {
-  const { supabase } = await adminContext();
-  const partnerId = value(form, "partner_id", 36);
-  const groupId = value(form, "delivery_group_id", 36);
-  if (!partnerId || !groupId || !uuid.test(partnerId) || !uuid.test(groupId)) fail("selection_invalid");
-  const { error } = await supabase.from("partner_delivery_groups").delete()
-    .eq("partner_id", partnerId).eq("delivery_group_id", groupId);
-  if (error) fail("save_failed");
-  done("group_removed");
-}
-
-export async function setParLevel(form: FormData) {
-  const { supabase } = await adminContext();
-  const partnerId = value(form, "partner_id", 36);
-  const sku = value(form, "sku", 100);
-  const rawQuantity = form.get("par_level_quantity");
-  const quantity = typeof rawQuantity === "string" ? Number(rawQuantity) : NaN;
-  if (!partnerId || !uuid.test(partnerId) || !sku || !Number.isSafeInteger(quantity)
-    || quantity < 0 || quantity > 100000) fail("par_invalid");
-
-  const { data: product, error: productError } = await supabase.from("products")
-    .select("id").eq("sku", sku).eq("active", true).maybeSingle();
-  if (productError) fail("save_failed");
-  if (!product) fail("product_missing");
-
-  // The client's central stock; per point of work it is set from the client's page (Clienți).
-  const { data, error } = await supabase.rpc("set_partner_par_level", { p_partner_id: partnerId, p_product_id: product.id, p_quantity: quantity });
-  if (error || !data) fail("save_failed");
-  done("par_saved");
-}
-
-function accountFail(error: AccountError): never {
-  fail(`account_${error}`);
-}
-
-async function partnerForAccount(form: FormData) {
-  const { supabase } = await adminContext();
-  const partnerId = value(form, "partner_id", 36);
-  if (!partnerId || !uuid.test(partnerId)) fail("selection_invalid");
-  const { data: partner } = await supabase.from("partners").select("id,auth_user_id").eq("id", partnerId).maybeSingle();
-  if (!partner) fail("selection_invalid");
-  return { supabase, partner };
-}
-
-// Partner logins use a username and password, like staff accounts.
-export async function createPartnerAccount(form: FormData) {
-  const { supabase, partner } = await partnerForAccount(form);
-  if (partner.auth_user_id) fail("account_taken");
-  const login = await createLogin(String(form.get("username") ?? ""), String(form.get("password") ?? ""));
-  if ("error" in login) accountFail(login.error);
-  const { error } = await supabase.from("partners")
-    .update({ auth_user_id: login.id, account_username: login.username }).eq("id", partner.id).is("auth_user_id", null);
-  if (error) {
-    await deleteLogin(login.id);
-    fail(error.code === "23505" ? "account_username_taken" : "save_failed");
-  }
-  done("account_linked");
-}
-
-export async function setPartnerPassword(form: FormData) {
-  const { partner } = await partnerForAccount(form);
-  if (!partner.auth_user_id) fail("selection_invalid");
-  const error = await setLoginPassword(partner.auth_user_id, String(form.get("password") ?? ""));
-  if (error) accountFail(error);
-  done("account_password");
-}
-
-export async function removePartnerAccount(form: FormData) {
-  const { supabase, partner } = await partnerForAccount(form);
-  if (!partner.auth_user_id) fail("selection_invalid");
-  const { error } = await supabase.from("partners").update({ auth_user_id: null, account_username: null }).eq("id", partner.id);
-  if (error) fail("save_failed");
-  const removed = await deleteLogin(partner.auth_user_id);
-  if (removed) accountFail(removed);
-  done("account_unlinked");
 }
 
 export type PartnerBilling = {
@@ -260,18 +112,52 @@ export async function savePartnerBilling(partnerId: string, billing: PartnerBill
   return { ok: true, message: "Datele de facturare au fost salvate." };
 }
 
-// The sales agent (account) responsible for a partner.
-export async function setPartnerAgent(form: FormData) {
+// The sales agent (account) responsible for a client; null leaves it unassigned.
+export async function setClientAgent(partnerId: string, agentId: string | null): Promise<Result> {
   const { supabase } = await adminContext();
-  const partnerId = value(form, "partner_id", 36);
-  const rawAgent = form.get("account_id");
-  const agentId = typeof rawAgent === "string" && rawAgent ? rawAgent : null;
-  if (!partnerId || !uuid.test(partnerId) || (agentId !== null && !uuid.test(agentId))) fail("selection_invalid");
+  if (!uuid.test(partnerId) || (agentId !== null && !uuid.test(agentId))) return { ok: false, message: "Selecția nu este validă." };
   if (agentId) {
-    const { data: agent } = await supabase.from("app_users").select("id").eq("id", agentId).eq("role", "account").maybeSingle();
-    if (!agent) fail("selection_invalid");
+    const { data: agent } = await supabase.from("app_users").select("id").eq("id", agentId).eq("role", "account").eq("active", true).maybeSingle();
+    if (!agent) return { ok: false, message: "Agentul nu mai este activ." };
   }
   const { error } = await supabase.from("partners").update({ account_id: agentId }).eq("id", partnerId);
-  if (error) fail("save_failed");
-  done("agent_saved");
+  if (error) return { ok: false, message: "Nu am putut salva agentul." };
+  revalidatePath(page);
+  revalidatePath("/account");
+  return { ok: true, message: agentId ? "Agentul a fost salvat." : "Clientul nu mai are agent." };
+}
+
+// The client's manager login: a new password, or the login removed (the client can get a new one).
+export async function setClientPassword(partnerId: string, password: string): Promise<Result> {
+  const { supabase } = await adminContext();
+  if (!uuid.test(partnerId)) return { ok: false, message: "Clientul nu este valid." };
+  const { data: partner } = await supabase.from("partners").select("auth_user_id").eq("id", partnerId).maybeSingle();
+  if (!partner?.auth_user_id) return { ok: false, message: "Clientul nu are cont." };
+  const error = await setLoginPassword(partner.auth_user_id, password);
+  return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată. Dă-i clientului parola nouă." };
+}
+
+export async function deleteClientLogin(partnerId: string): Promise<Result> {
+  const { supabase } = await adminContext();
+  if (!uuid.test(partnerId)) return { ok: false, message: "Clientul nu este valid." };
+  const { data: partner } = await supabase.from("partners").select("auth_user_id").eq("id", partnerId).maybeSingle();
+  if (!partner?.auth_user_id) return { ok: false, message: "Clientul nu are cont." };
+  const { error } = await supabase.from("partners").update({ auth_user_id: null, account_username: null }).eq("id", partnerId);
+  if (error) return { ok: false, message: "Nu am putut șterge contul." };
+  const removed = await deleteLogin(partner.auth_user_id);
+  revalidatePath(page);
+  revalidatePath("/account");
+  return removed ? { ok: false, message: accountErrorMessages[removed] } : { ok: true, message: "Contul clientului a fost șters." };
+}
+
+// A client deactivated keeps its history but disappears from the boards and cannot sign in.
+export async function setClientActive(partnerId: string, active: boolean): Promise<Result> {
+  const { supabase } = await adminContext();
+  if (!uuid.test(partnerId)) return { ok: false, message: "Clientul nu este valid." };
+  const { error } = await supabase.from("partners").update({ active }).eq("id", partnerId);
+  if (error) return { ok: false, message: "Nu am putut salva." };
+  revalidatePath(page);
+  revalidatePath("/account");
+  revalidatePath("/partners");
+  return { ok: true, message: active ? "Clientul este din nou activ." : "Clientul a fost dezactivat." };
 }
