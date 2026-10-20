@@ -13,6 +13,8 @@ export type BocpInvoiceMatch = {
   pdfUrl: string | null;
   dueDate: string | null;
   totalAmount: number | null;
+  // Value without VAT (consignment commissions are worked out on it).
+  netAmount: number | null;
   // What is left to pay (0 when paid).
   rest: number | null;
   lastPaymentDate: string | null;
@@ -61,6 +63,7 @@ function toMatch(row: Record<string, unknown>): BocpInvoiceMatch | null {
     pdfUrl: pdf(row.pdf_invoice_url),
     dueDate: /^\d{4}-\d{2}-\d{2}/.test(text(row.doc_due_date)) ? text(row.doc_due_date).slice(0, 10) : null,
     totalAmount: amount(row.document_value_with_vat),
+    netAmount: amount(row.document_value),
     rest: amount(row.rest),
     lastPaymentDate: /^\d{4}-\d{2}-\d{2}/.test(text(row.last_payment_date)) ? text(row.last_payment_date).slice(0, 10) : null,
   };

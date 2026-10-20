@@ -24,7 +24,7 @@ const errors: Record<string, string> = {
 type Product = { name: string; variant_label: string | null } | null;
 type Line = { id: string; quantity_needed: number; channel: string; products: Product };
 type Cart = { id: string; status: string; location_id: string | null; created_at: string; prepared_at: string | null; delivered_at: string | null; invoiced_at: string | null;
-  invoice_number: string | null; partner_cart_items: Line[] };
+  invoice_number: string | null; bocp_transfer_number: string | null; partner_cart_items: Line[] };
 
 const MONTHS = 6;
 
@@ -63,7 +63,8 @@ function steps(cart: Cart) {
     { label: "Cerere primită", at: cart.created_at, done: true },
     { label: "Pregătită în depozit", at: cart.prepared_at, done: cart.status !== "open" },
     { label: "Livrată", at: cart.delivered_at, done: cart.status === "delivered" },
-    { label: "Facturată", at: cart.invoiced_at, done: !!cart.invoiced_at },
+    // Consignment: the goods stay ours on the client's shelf (transfer voucher), they are invoiced when sold.
+    { label: cart.bocp_transfer_number ? "În consignație" : "Facturată", at: cart.invoiced_at, done: !!cart.invoiced_at },
   ];
 }
 
@@ -73,7 +74,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
   const params = await searchParams;
   const since = new Date();
   since.setMonth(since.getMonth() - (MONTHS - 1), 1);
-  const cartFields = "id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,partner_cart_items(id,quantity_needed,channel,products(name,variant_label))";
+  const cartFields = "id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,bocp_transfer_number,partner_cart_items(id,quantity_needed,channel,products(name,variant_label))";
   // Points of work: in per-point mode the manager picks the point he counts and orders for.
   const [{ data: client }, { data: locationRows }] = await Promise.all([
     supabase.from("partners").select("stock_mode").eq("id", partner.id).maybeSingle(),

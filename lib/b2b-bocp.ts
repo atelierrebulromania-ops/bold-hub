@@ -44,7 +44,7 @@ function bucharestDay() {
 // records the outcome on the cart. The order id is the cart id, so a retry never duplicates it.
 export async function reserveCartInBocp(supabase: Client, cartId: string): Promise<{ ok: boolean; message: string }> {
   const { data: cart } = await supabase.from("partner_carts")
-    .select("id,status,reserved_in_bocp_at,sales_documents!partner_carts_source_document_id_fkey(kind,status,bocp_order_id,sales_document_items(sku,quantity)),partners(business_name,location_name,contact_phone,contact_email,billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip,billing_country),partner_cart_items(quantity_needed,products(sku,name))")
+    .select("id,status,reserved_in_bocp_at,sales_documents!partner_carts_source_document_id_fkey(kind,status,bocp_order_id,sales_document_items(sku,quantity)),partners(business_name,location_name,contact_phone,contact_email,billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip,billing_country,sales_mode),partner_cart_items(quantity_needed,products(sku,name))")
     .eq("id", cartId).maybeSingle();
   if (!cart || !["prepared", "delivered"].includes(cart.status)) return { ok: false, message: "Coșul nu mai este pe raft. Reîncarcă pagina." };
   if (cart.reserved_in_bocp_at) return { ok: true, message: "Coșul este deja rezervat în BOCP." };
@@ -56,6 +56,8 @@ export async function reserveCartInBocp(supabase: Client, cartId: string): Promi
 
   const partner = cart.partners;
   if (!partner) return fail("Partenerul coșului nu mai există.");
+  // Consignment: the goods leave on a BOCP transfer voucher (to CONSIGNATIE), so no order reserves them.
+  if (partner.sales_mode === "consignment") return { ok: true, message: "Client în consignație: marfa pleacă prin bon de transfer, fără rezervare." };
   const address = { street: partner.billing_street ?? "", city: partner.billing_city ?? "", county: partner.billing_county ?? "", zip: partner.billing_zip ?? "", country: partner.billing_country || "Romania" };
   if (!partner.vat_id?.trim()) {
     return fail(`${partner.business_name} nu are CUI. Completează datele de facturare în Administrare → Revânzători.`);

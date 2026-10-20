@@ -71,6 +71,21 @@ export type Database = {
           { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
         ]
       }
+      consignment_settlements: {
+        Row: { id: string; partner_id: string; period_from: string | null; period_to: string; lines: Json; invoice_number: string; bocp_invoice_id: string; invoice_date: string | null
+          invoice_pdf_url: string | null; invoice_total: number | null; invoice_net: number | null; commission_percent: number; commission_amount: number | null; created_by: string | null; created_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "consignment_settlements_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_stock_counts: {
+        Row: { id: string; partner_id: string; location_id: string | null; channel: string; product_id: string; remaining: number; counted_at: string; counted_by: string | null }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: []
+      }
       partner_contracts: {
         Row: { id: string; partner_id: string; title: string; status: string; supplier_file: string; supplier_uploaded_at: string; supplier_uploaded_by: string | null
           signed_file: string | null; signed_uploaded_at: string | null; signed_uploaded_by: string | null; created_at: string }
@@ -619,6 +634,7 @@ export type Database = {
           source_document_id: string | null
           bocp_order_id: string | null
           bocp_order_error: string | null
+          bocp_transfer_number: string | null
           bocp_order_attempted_at: string | null
           countdown_started_at: string | null
           created_at: string
@@ -1155,6 +1171,9 @@ export type Database = {
       set_custody_status: { Args: { p_id: string; p_status: string }; Returns: boolean }
       delete_custody_item: { Args: { p_id: string }; Returns: boolean }
       set_partner_sales_mode: { Args: { p_partner_id: string; p_mode: string; p_commission: number | null }; Returns: boolean }
+      mark_partner_carts_transferred: { Args: { p_cart_ids: string[]; p_transfer_number: string }; Returns: boolean }
+      consignment_sales: { Args: { p_partner_id: string; p_to?: string }; Returns: { product_id: string; sold: number; delivered: number; on_shelf: number; last_count_at: string | null }[] }
+      record_consignment_settlement: { Args: { p_partner_id: string; p_period_to: string; p_invoice_number: string; p_bocp_invoice_id: string; p_invoice_date: string | null; p_invoice_pdf_url: string | null; p_invoice_total: number | null; p_invoice_net: number | null }; Returns: string | null }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
