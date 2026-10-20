@@ -9,7 +9,7 @@ import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channe
 import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
   addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
-  saveCustodyItem, setCustodyStatus, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
+  saveCustodyItem, setCustodyStatus, setSalesMode, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type CustodyInput, type InvoiceSuggestion,
 } from "./actions";
 import { uploadContractFile } from "@/components/contract-file";
@@ -39,6 +39,9 @@ export type AgentClient = {
   account_id?: string | null;
   bocp_contact_id?: string | null;
   partner_contracts: ClientContract[];
+  // purchase: invoiced at delivery; consignment: invoiced on what was sold, with the client's commission.
+  sales_mode: "purchase" | "consignment";
+  consignment_commission: number | null;
   partner_custody_items: CustodyItem[];
   // Consumption orders use the resale discounts unless the client has its own consumption rules.
   own_consumption_discounts: boolean;
@@ -53,7 +56,7 @@ export type AgentClient = {
 
 export type ClientContract = { id: string; title: string; status: string; supplier_uploaded_at: string; signed_uploaded_at: string | null };
 export type CustodyItem = { id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null;
-  handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null };
+  handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; document_number: string | null };
 
 export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; account_username?: string | null };
 
@@ -268,6 +271,7 @@ export function ClientPanel({ client, catalog, categories, onClose, onSaved, adm
         </section>
 
         {client && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <SalesModeEditor key={`m-${client.id}-${client.sales_mode}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
@@ -619,7 +623,7 @@ function ClientInvoices({ client }: { client: AgentClient }) {
 }
 
 const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Bucharest" }).format(new Date());
-const emptyCustody = (): CustodyInput => ({ kind: "pos", productId: null, name: "", quantity: 1, unitValue: "", handedOn: today(), trialDays: 30, locationId: null, note: "" });
+const emptyCustody = (): CustodyInput => ({ kind: "pos", productId: null, name: "", quantity: 1, unitValue: "", handedOn: today(), trialDays: 30, locationId: null, note: "", documentNumber: "" });
 
 // Custody: testers, POS materials (shelf, glass, bells) and products on trial that stay ours at the client.
 function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
@@ -653,7 +657,7 @@ function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catal
         return <div className="order-item custody-row" key={item.id}>
           <div><strong>{item.name}</strong>
             <small>{[custodyKindLabel(item.kind, ends), points.length > 1 && item.location_id ? pointName.get(item.location_id) : null,
-              `din ${formatDay(item.handed_on)}`, item.unit_value !== null ? `${item.unit_value.toLocaleString("ro-RO")} lei/buc.` : null, item.note].filter(Boolean).join(" · ")}</small>
+              `din ${formatDay(item.handed_on)}`, item.document_number ? `bon custodie ${item.document_number}` : null, item.unit_value !== null ? `${item.unit_value.toLocaleString("ro-RO")} lei/buc.` : null, item.note].filter(Boolean).join(" · ")}</small>
             {late && <span className="item-flag no-ean">Proba a expirat</span>}</div>
           <b>×{item.quantity}</b>
           <span className="custody-actions">
@@ -662,7 +666,8 @@ function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catal
             {item.kind !== "trial" && <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "missing")}>Lipsă</button>}
             <button type="button" className="text-button" disabled={pending} onClick={() => setEditing({ id: item.id, input: { kind: item.kind as CustodyInput["kind"], productId: item.product_id,
               name: item.name, quantity: item.quantity, unitValue: item.unit_value !== null ? String(item.unit_value) : "", handedOn: item.handed_on,
-              trialDays: ends ? Math.max(1, Math.round((Date.parse(ends) - Date.parse(item.handed_on)) / 86400000)) : 30, locationId: item.location_id, note: item.note ?? "" } })}>Editează</button>
+              trialDays: ends ? Math.max(1, Math.round((Date.parse(ends) - Date.parse(item.handed_on)) / 86400000)) : 30, locationId: item.location_id, note: item.note ?? "",
+              documentNumber: item.document_number ?? "" } })}>Editează</button>
           </span>
         </div>;
       })}</div>}
@@ -688,6 +693,7 @@ function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catal
           {draft.kind === "trial" && <label>Zile de probă<input inputMode="numeric" value={String(draft.trialDays)} onChange={(event) => set("trialDays", Number(event.target.value.replace(/\D/g, "")) || 0)} /></label>}
           {points.length > 1 && <label>Punct de lucru<select value={draft.locationId ?? ""} onChange={(event) => set("locationId", event.target.value || null)}>
             <option value="">Toată firma</option>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>}
+          <label>Nr. bon de custodie (BOCP)<input value={draft.documentNumber} maxLength={60} onChange={(event) => set("documentNumber", event.target.value)} placeholder="opțional, ex. 101" /></label>
           <label>Notă<input value={draft.note} maxLength={500} onChange={(event) => set("note", event.target.value)} placeholder="opțional, ex. gratuit cât comandă rezerva lunar" /></label>
         </div>
         <div className="partner-billing-actions">
@@ -752,6 +758,29 @@ function ContractsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         <button type="button" className="button button-primary" disabled={pending || !file || !title.trim()} onClick={upload}>{pending ? "Se încarcă…" : "Încarcă contractul"}</button>
       </div>
       <p className="muted small">Încarcă PDF-ul semnat de noi. Clientul îl descarcă din aplicația lui, îl semnează și îl încarcă înapoi; poți încărca și tu varianta semnată.</p>
+    </section>
+  );
+}
+
+// Purchase or consignment: decides how the client's deliveries are invoiced.
+function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const [mode, setMode] = useState(client.sales_mode);
+  const [commission, setCommission] = useState(client.consignment_commission !== null ? String(client.consignment_commission) : "30");
+  const [pending, start] = useTransition();
+  const changed = mode !== client.sales_mode || (mode === "consignment" && commission !== String(client.consignment_commission ?? ""));
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3><span>{client.sales_mode === "consignment" ? `consignație · comision ${client.consignment_commission ?? 0}%` : "cumpărare"}</span></div>
+      <div className="stock-mode" role="group" aria-label="Regim comercial">
+        <button type="button" className={mode === "purchase" ? "active" : ""} onClick={() => setMode("purchase")}>Cumpărare</button>
+        <button type="button" className={mode === "consignment" ? "active" : ""} onClick={() => setMode("consignment")}>Consignație</button>
+      </div>
+      <div className="sales-mode-row">
+        {mode === "consignment" && <label className="commission-input">Comision<span className="percent-input"><input inputMode="decimal" value={commission} onChange={(event) => setCommission(event.target.value)} aria-label="Comision" />%</span></label>}
+        {changed && <button type="button" className="button button-primary" disabled={pending} onClick={() => start(async () => onDone(await setSalesMode(client.id, mode, commission)))}>Salvează regimul</button>}
+      </div>
+      <p className="muted small">{mode === "consignment"
+        ? "Marfa pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămâne a noastră până o vinde clientul; se facturează periodic ce a vândut, iar comisionul se calculează separat."
+        : "Clientul cumpără marfa: fiecare livrare se facturează."}</p>
     </section>
   );
 }

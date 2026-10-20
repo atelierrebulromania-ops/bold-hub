@@ -1234,7 +1234,10 @@ p.push-toggle { display: block; }
 .file-button { position: relative; overflow: hidden; cursor: pointer; }
 .file-button input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .contract-line { align-items: center; }
+.sales-mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0; }
+.sales-mode-row:empty { display: none; }
+.commission-input { display: inline-flex; align-items: center; gap: 8px; color: #4b4f56; font-size: .76rem; font-weight: 700; }
 .access-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .point-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; }
-.point-login { color: #65676b; font-size: .74rem; }
+.point-login { color: #65676b; font-size: .74rem; white-space: nowrap; }
 .check-line { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; color: #4b4f56; font-size: .8rem; font-weight: 700; cursor: pointer; }

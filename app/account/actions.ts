@@ -455,7 +455,7 @@ export async function deleteContract(contractId: string): Promise<Result> {
 }
 
 export type CustodyInput = { kind: "tester" | "pos" | "trial"; productId: string | null; name: string; quantity: number; unitValue: string;
-  handedOn: string; trialDays: number; locationId: string | null; note: string };
+  handedOn: string; trialDays: number; locationId: string | null; note: string; documentNumber: string };
 
 // Custody: what stays ours at the client (testers, POS materials, products on trial).
 export async function saveCustodyItem(clientId: string, itemId: string | null, input: CustodyInput): Promise<Result> {
@@ -471,7 +471,8 @@ export async function saveCustodyItem(clientId: string, itemId: string | null, i
   const { data, error } = await supabase.rpc("save_custody_item", {
     p_id: itemId, p_partner_id: clientId,
     p_data: { kind: input.kind, product_id: input.productId ?? "", name: input.name.trim(), quantity: input.quantity, unit_value: value,
-      handed_on: input.handedOn, trial_days: input.trialDays, location_id: input.locationId ?? "", note: input.note.slice(0, 500) } as Json,
+      handed_on: input.handedOn, trial_days: input.trialDays, location_id: input.locationId ?? "", note: input.note.slice(0, 500),
+      document_number: input.documentNumber.slice(0, 60) } as Json,
   });
   if (error || !data) return { ok: false, message: "Nu am putut salva produsul în custodie." };
   revalidatePath("/account");
@@ -498,4 +499,17 @@ export async function deleteCustodyItem(itemId: string): Promise<Result> {
   revalidatePath("/account");
   revalidatePath("/admin/partners");
   return { ok: true, message: "Produsul a fost șters din custodie." };
+}
+
+// Purchase (invoiced at delivery) or consignment (invoiced on what the client sold, with its commission).
+export async function setSalesMode(clientId: string, mode: "purchase" | "consignment", commission: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId)) return { ok: false, message: "Clientul nu este valid." };
+  const value = commission.trim().replace(",", ".");
+  if (mode === "consignment" && !/^\d{1,2}(\.\d{1,2})?$|^100$/.test(value)) return { ok: false, message: "Comisionul este un procent între 0 și 100." };
+  const { data, error } = await supabase.rpc("set_partner_sales_mode", { p_partner_id: clientId, p_mode: mode, p_commission: mode === "consignment" ? Number(value) : null });
+  if (error || !data) return { ok: false, message: "Nu am putut salva regimul." };
+  revalidatePath("/account");
+  revalidatePath("/admin/partners");
+  return { ok: true, message: mode === "consignment" ? `Clientul e în consignație, cu comision ${value}%.` : "Clientul cumpără: se facturează la livrare." };
 }

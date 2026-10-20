@@ -82,7 +82,7 @@ export type Database = {
       }
       partner_custody_items: {
         Row: { id: string; partner_id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null
-          handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; trial_notified_at: string | null
+          handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; document_number: string | null; trial_notified_at: string | null
           created_by: string | null; created_at: string; updated_at: string }
         Insert: { id?: string }
         Update: { id?: string }
@@ -819,6 +819,8 @@ export type Database = {
         Row: {
           stock_mode: string
           own_consumption_discounts: boolean
+          sales_mode: string
+          consignment_commission: number | null
           account_id: string | null
           bocp_contact_id: string | null
           billing_name: string | null
@@ -1152,6 +1154,7 @@ export type Database = {
       save_custody_item: { Args: { p_id: string | null; p_partner_id: string; p_data: Json }; Returns: string | null }
       set_custody_status: { Args: { p_id: string; p_status: string }; Returns: boolean }
       delete_custody_item: { Args: { p_id: string }; Returns: boolean }
+      set_partner_sales_mode: { Args: { p_partner_id: string; p_mode: string; p_commission: number | null }; Returns: boolean }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
