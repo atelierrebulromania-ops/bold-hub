@@ -120,7 +120,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
     inProgress.set(key, (inProgress.get(key) ?? 0) + back.quantity);
   }
 
-  // Consumption: what was delivered per product, per month (last months).
+  // Deliveries: what was delivered per product, per month (last months).
   const months = Array.from({ length: MONTHS }, (_, index) => {
     const date = new Date(since);
     date.setMonth(since.getMonth() + index);
@@ -223,7 +223,7 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
           </section>}
 
           <section className="admin-card partner-list-section">
-            <div className="admin-card-heading"><h2>Consumul tău</h2><p>Bucăți livrate pe lună, în ultimele {MONTHS} luni.</p></div>
+            <div className="admin-card-heading"><h2>Livrările tale</h2><p>Bucăți livrate pe lună, în ultimele {MONTHS} luni.</p></div>
             {usageRows.length === 0 ? <p className="admin-empty-note">Încă nu există livrări în această perioadă.</p>
               : <div className="handed-table-wrap"><table className="handed-table usage-table">
                 <thead><tr><th>Produs</th>{months.map(month => <th key={month}>{monthLabel(month)}</th>)}<th>Total</th></tr></thead>
