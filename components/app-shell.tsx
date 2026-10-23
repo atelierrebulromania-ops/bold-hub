@@ -48,6 +48,11 @@ const sections: { label: string; items: NavItem[] }[] = [
   { label: "ISTORIC", items: [
     { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "owner", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },
+  { label: "CONTABILITATE", items: [
+    { href: "/accounting/overview", label: "Prezentare generală", roles: ["admin", "contabilitate"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
+    { href: "/accounting", label: "Documente", roles: ["admin", "contabilitate"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
+    { href: "/accounting/integrations", label: "Integrări", roles: ["admin"], icon: <svg {...svg}><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg> },
+  ] },
   { label: "ADMINISTRARE", items: [
     { href: "/admin/users", label: "Utilizatori", roles: ["admin"], icon: <svg {...svg}><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg> },
     { href: "/admin/partners", label: "Clienți", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },

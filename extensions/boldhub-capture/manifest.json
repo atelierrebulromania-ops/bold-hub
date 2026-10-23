@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "BoldHub Capture",
+  "version": "1.0.0",
+  "description": "Trimite facturile furnizorilor (PDF, CSV, XLSX) în BoldHub → Contabilitate.",
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "action": { "default_title": "BoldHub Capture", "default_popup": "popup.html", "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" } },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.boldhub.ro/*",
+    "http://localhost:3001/*",
+    "https://shmjkhxpjtyvoessrnus.supabase.co/*"
+  ],
+  "externally_connectable": { "matches": ["https://www.boldhub.ro/*", "http://localhost:3001/*"] }
+}

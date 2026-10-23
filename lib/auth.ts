@@ -42,6 +42,7 @@ export function homeFor(role: UserRole): string {
   if (role === "account") return "/sales";
   if (role === "operator_facturare") return "/invoicing";
   if (role === "operator_depozit") return "/warehouse";
+  if (role === "contabilitate") return "/accounting/overview";
   return "/orders";
 }
 

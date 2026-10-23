@@ -71,6 +71,69 @@ export type Database = {
           { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
         ]
       }
+      accounting_companies: {
+        Row: { id: string; name: string; vat_id: string | null; active: boolean; created_at: string }
+        Insert: { id?: string; name: string; vat_id?: string | null; active?: boolean }
+        Update: { name?: string; vat_id?: string | null; active?: boolean }
+        Relationships: []
+      }
+      accounting_company_access: {
+        Row: { user_id: string; company_id: string; created_at: string }
+        Insert: { user_id: string; company_id: string }
+        Update: { user_id?: string; company_id?: string }
+        Relationships: [
+          { foreignKeyName: "accounting_company_access_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "accounting_companies"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_suppliers: {
+        Row: { id: string; slug: string; name: string; domains: string[]; default_doc_type: string; sort: number; active: boolean; created_at: string }
+        Insert: { id?: string; slug: string; name: string; domains?: string[]; default_doc_type?: string; sort?: number; active?: boolean }
+        Update: { slug?: string; name?: string; domains?: string[]; default_doc_type?: string; sort?: number; active?: boolean }
+        Relationships: []
+      }
+      accounting_integrations: {
+        Row: { id: string; supplier_id: string; method: string; status: string; supports_sync: boolean; last_sync_at: string | null; last_document_at: string | null
+          last_error: string | null; last_error_at: string | null; note: string | null; created_at: string }
+        Insert: { id?: string; supplier_id: string; method: string; status?: string; supports_sync?: boolean; note?: string | null }
+        Update: { method?: string; status?: string; supports_sync?: boolean; last_sync_at?: string | null; last_document_at?: string | null; last_error?: string | null; last_error_at?: string | null; note?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_integrations_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: true; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_documents: {
+        Row: { id: string; company_id: string; supplier_id: string; doc_type: string; invoice_number: string | null; issued_on: string | null; period: string
+          original_name: string; mime_type: string; size_bytes: number; sha256: string; storage_path: string | null; collection_method: string
+          collected_at: string; collected_by: string | null; expires_at: string; last_downloaded_at: string | null; download_count: number
+          external_id: string | null; file_deleted_at: string | null; notes: string | null }
+        Insert: { id?: string; company_id: string; supplier_id: string; doc_type: string; invoice_number?: string | null; issued_on?: string | null; period: string
+          original_name: string; mime_type: string; size_bytes: number; sha256: string; storage_path?: string | null; collection_method: string
+          collected_at?: string; collected_by?: string | null; expires_at: string; external_id?: string | null; notes?: string | null }
+        Update: { storage_path?: string | null; file_deleted_at?: string | null; last_downloaded_at?: string | null; download_count?: number; notes?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_documents_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "accounting_companies"; referencedColumns: ["id"] },
+          { foreignKeyName: "accounting_documents_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: false; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_document_events: {
+        Row: { id: string; document_id: string | null; supplier_id: string | null; action: string; method: string | null; user_id: string | null; detail: string | null; created_at: string }
+        Insert: { id?: string; document_id?: string | null; supplier_id?: string | null; action: string; method?: string | null; user_id?: string | null; detail?: string | null }
+        Update: { detail?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_document_events_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: false; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_sync_runs: {
+        Row: { id: string; integration_id: string; started_at: string; finished_at: string | null; status: string; collected: number; duplicates: number; error: string | null; triggered_by: string | null }
+        Insert: { id?: string; integration_id: string; status?: string; triggered_by?: string | null }
+        Update: { finished_at?: string | null; status?: string; collected?: number; duplicates?: number; error?: string | null }
+        Relationships: []
+      }
+      accounting_capture_tokens: {
+        Row: { id: string; user_id: string; label: string; token_hash: string; created_at: string; last_used_at: string | null; expires_at: string; revoked_at: string | null }
+        Insert: { id?: string; user_id: string; label?: string; token_hash: string; expires_at: string }
+        Update: { label?: string; last_used_at?: string | null; revoked_at?: string | null }
+        Relationships: []
+      }
       consignment_settlements: {
         Row: { id: string; partner_id: string; period_from: string | null; period_to: string; lines: Json; invoice_number: string; bocp_invoice_id: string; invoice_date: string | null
           invoice_pdf_url: string | null; invoice_total: number | null; invoice_net: number | null; commission_percent: number; commission_amount: number | null; created_by: string | null; created_at: string }
@@ -1171,6 +1234,7 @@ export type Database = {
       set_custody_status: { Args: { p_id: string; p_status: string }; Returns: boolean }
       delete_custody_item: { Args: { p_id: string }; Returns: boolean }
       set_partner_sales_mode: { Args: { p_partner_id: string; p_mode: string; p_commission: number | null }; Returns: boolean }
+      record_accounting_downloads: { Args: { p_ids: string[]; p_zip: boolean }; Returns: number }
       mark_partner_carts_transferred: { Args: { p_cart_ids: string[]; p_transfer_number: string }; Returns: boolean }
       consignment_sales: { Args: { p_partner_id: string; p_to?: string }; Returns: { product_id: string; sold: number; delivered: number; on_shelf: number; last_count_at: string | null }[] }
       record_consignment_settlement: { Args: { p_partner_id: string; p_period_to: string; p_invoice_number: string; p_bocp_invoice_id: string; p_invoice_date: string | null; p_invoice_pdf_url: string | null; p_invoice_total: number | null; p_invoice_net: number | null }; Returns: string | null }
@@ -1229,7 +1293,7 @@ export type Database = {
         | "produs_deteriorat"
         | "altul"
       return_status: "pending_restock" | "restocked"
-      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account"
+      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1381,7 +1445,7 @@ export const Constants = {
         "altul",
       ],
       return_status: ["pending_restock", "restocked"],
-      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account"],
+      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate"],
     },
   },
 } as const
