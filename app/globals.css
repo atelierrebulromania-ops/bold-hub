@@ -1408,3 +1408,20 @@ p.push-toggle { display: block; }
 .partner-header-actions .power-button { text-decoration: none; }
 .partner-header-actions .key-button:hover { border-color: #cbd9ec; background: #f5f9ff; color: var(--blue); }
 .settings-access-button { min-width: 128px; padding: .5rem .85rem; font-size: .78rem; }
+.catalog-stock-time { justify-self: end; margin-bottom: 13px; color: #8a8d91; font-size: .72rem; font-weight: 600; white-space: nowrap; }
+
+/* Windows: Arial Bold under ClearType looks far heavier than on macOS (where antialiased smoothing thins it).
+   Use the native Segoe UI there, with its Semibold for every bold weight. macOS and phones are unchanged. */
+@font-face { font-family: "BoldHub Windows"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 100 549; }
+@font-face { font-family: "BoldHub Windows"; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"); font-weight: 550 1000; }
+html.on-windows body, html.on-windows button, html.on-windows input, html.on-windows select, html.on-windows textarea { font-family: "BoldHub Windows", Arial, Helvetica, sans-serif; }
+
+/* BETA pill under the logo */
+.beta-pill { display: inline-block; margin: 8px 0 0 2px; padding: .16rem .5rem; border: 1px solid #3a4a6b; border-radius: 999px; color: #9fb7ff; background: #1c2742; font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.4; }
+@media (max-width: 600px) {
+  .panel-tabs-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 16px 15px 0; }
+  .panel-tabs-row > span[aria-hidden="true"] { display: none; }
+  .panel-tabs-row .panel-tabs-title { margin-bottom: 4px; }
+  .panel-tabs-row .panel-tabs { gap: 18px; overflow-x: auto; scrollbar-width: none; }
+  .catalog-stock-time { justify-self: start; margin: 0 0 8px; }
+}

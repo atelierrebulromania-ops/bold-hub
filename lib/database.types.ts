@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          catalog_synced_at: string | null
           id: number
           launched_on: string | null
           launched_at: string | null
@@ -31,8 +32,10 @@ export type Database = {
           lead_unclaimed_hours: number
           lead_uncontacted_hours: number
         }
-        Insert: { id?: number }
-        Update: { id?: number }
+        Insert: {
+          catalog_synced_at?: string | null; id?: number }
+        Update: {
+          catalog_synced_at?: string | null; id?: number }
         Relationships: []
       }
       leads: {

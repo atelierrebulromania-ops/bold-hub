@@ -4,10 +4,8 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import { parseBocpCatalog } from "@/lib/bocp/catalog";
-import { bocpGetList } from "@/lib/bocp/client";
+import { syncCatalogFromBocp } from "@/lib/bocp/catalog-sync";
 import { catalogScopeCookie } from "@/lib/b2b-products";
-import type { Json } from "@/lib/database.types";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -45,48 +43,18 @@ export async function setMode(form: FormData) {
   finish(form, error ? null : data);
 }
 
-const MAX_CATALOG_PAGES = 30;
-
-// Read-only GETs to BOCP; writes only to our catalog. Works only from the BOCP-allowlisted IP.
+// Read-only GETs to BOCP; writes only to our catalog. The same sync also runs every 15 minutes (cron).
 export async function syncCatalog(form: FormData) {
   const { supabase } = await requireRole(["admin"]);
-  const rows: unknown[] = [];
-  let page: number | null = 1;
-  let failed = false;
-  try {
-    for (let fetched = 0; page !== null && fetched < MAX_CATALOG_PAGES; fetched++) {
-      // With the pictures: the agents' catalog shows them.
-      const result = await bocpGetList("product/list/include:images", { page });
-      rows.push(...result.rows);
-      page = result.nextPage;
-    }
-  } catch {
-    failed = true;
-  }
-  if (failed) redirect(target(form, "error", "bocp_unreachable"));
-  // Never apply a partial catalog.
-  if (page !== null) redirect(target(form, "error", "catalog_too_large"));
-
-  const { products, summary } = parseBocpCatalog(rows);
-  let created = 0, eanSet = 0, stockSet = 0;
-  const conflicts: string[] = [];
-  for (let index = 0; index < products.length; index += 500) {
-    const { data, error } = await supabase.rpc("sync_bocp_catalog", { p_products: products.slice(index, index + 500) as unknown as Json });
-    if (error || !data) redirect(target(form, "error", "save_failed"));
-    const result = data as { created: number; eanSet: number; stockSet: number; eanConflicts: { sku: string }[] };
-    created += result.created;
-    eanSet += result.eanSet;
-    stockSet += result.stockSet;
-    conflicts.push(...result.eanConflicts.map(conflict => conflict.sku));
-  }
+  const result = await syncCatalogFromBocp(supabase);
+  if (!result.ok) redirect(target(form, "error", result.error));
 
   revalidatePath("/admin/catalog");
   const params = new URLSearchParams({
-    notice: "synced", total: String(summary.activeProducts), withEan: String(summary.withEan),
-    created: String(created), eanSet: String(eanSet), stockSet: String(stockSet),
+    notice: "synced", total: String(result.total), withEan: String(result.withEan),
+    created: String(result.created), eanSet: String(result.eanSet), stockSet: String(result.stockSet),
   });
-  const flagged = [...summary.duplicateEan.flatMap(entry => entry.skus), ...summary.invalidEan.map(entry => entry.sku), ...conflicts];
-  if (flagged.length) params.set("check", flagged.slice(0, 20).join(","));
+  if (result.flagged.length) params.set("check", result.flagged.slice(0, 20).join(","));
   redirect(`/admin/catalog?${params}`);
 }
 
