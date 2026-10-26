@@ -1407,3 +1407,4 @@ p.push-toggle { display: block; }
 .partner-header-actions { display: flex; align-items: center; gap: 8px; }
 .partner-header-actions .power-button { text-decoration: none; }
 .partner-header-actions .key-button:hover { border-color: #cbd9ec; background: #f5f9ff; color: var(--blue); }
+.settings-access-button { min-width: 128px; padding: .5rem .85rem; font-size: .78rem; }
