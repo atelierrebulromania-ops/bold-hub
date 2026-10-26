@@ -194,7 +194,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
         {answers.length > 0 && <section className="detail-section"><h3>Răspunsuri din formular</h3>
           <dl className="crm-fields">{answers.map(([question, answer]) => <Fragment key={question}><dt>{question}</dt><dd>{answer}</dd></Fragment>)}</dl></section>}
 
-        {lead.partner_id && <section className="detail-section"><h3>Client</h3><p>Lead câștigat. <Link href="/account" className="text-button">Vezi clienții</Link></p></section>}
+        {lead.partner_id && <section className="detail-section"><h3>Client</h3><p>Lead câștigat. <Link href={`/account/clients/${lead.partner_id}`} className="text-button">Deschide fișa clientului</Link></p></section>}
 
         {canWork && !closed && <section className="detail-section"><h3>Etapă</h3>
           {!lead.claimed_by ? <button type="button" className="button button-primary" disabled={pending} onClick={() => run(() => claimLead(lead.id))}>Preia lead-ul</button>

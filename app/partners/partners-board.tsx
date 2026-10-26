@@ -191,7 +191,7 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
     setSelectedId(null);
     setDraft(null);
     setFeedback(null);
-    setRequest({ partnerId: "", partnerSearch: "", lines: [], productSearch: "", source: "whatsapp", channel: "resale" });
+    setRequest({ partnerId: "", partnerSearch: "", lines: [], productSearch: "", source: "telefon", channel: "resale" });
   }
 
   function addLine(productId: string, quantity = 1) {
@@ -646,14 +646,6 @@ export function PartnersBoard({ partners, groups, catalog, backorders, warehouse
                 ))}</div>}
               </section>}
 
-              {partner && <section className="detail-section"><h3>Sursă</h3>
-                <div className="request-sources" role="group" aria-label="Sursa cererii">
-                  {(["whatsapp", "telefon"] as const).map((source) => (
-                    <button key={source} type="button" className={`partner-filter ${request.source === source ? "active reseller" : ""}`} aria-pressed={request.source === source}
-                      onClick={() => setRequest({ ...request, source })}>{source === "whatsapp" ? "WhatsApp" : "Telefon"}</button>
-                  ))}
-                </div>
-              </section>}
               {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
             </div>
             <div className="detail-actions">

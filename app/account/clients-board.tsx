@@ -8,7 +8,7 @@ import { formatDateTime } from "@/lib/orders";
 import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
 import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
+  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteLocation, setClientLoginActive, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
   saveCustodyItem, setCustodyStatus, setSalesMode, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type CustodyInput, type InvoiceSuggestion,
 } from "./actions";
@@ -51,7 +51,8 @@ export type AgentClient = {
   partner_par_levels: { product_id: string; location_id: string | null; channel: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
-    invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
+    invoice_due_date: string | null; invoice_rest: number | null; location_id?: string | null;
+    partner_cart_items: { quantity_needed: number; product_id?: string; channel?: string }[] }[];
 };
 
 export type ClientContract = { id: string; title: string; status: string; supplier_uploaded_at: string; signed_uploaded_at: string | null };
@@ -63,6 +64,8 @@ export type ClientLocation = { id: string; name: string; city: string | null; ad
 const sortLocations = (locations: ClientLocation[]) => [...locations].sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.name.localeCompare(b.name, "ro"));
 
 export type OtherClient = { id: string; business_name: string; location_name: string; type: string; account_id: string | null; account_name: string | null; delivery_groups: string[] };
+// The agent's own product collections (Catalog, Colecții), to fill an initial stock in one go.
+export type ProductCollection = { id: string; name: string; productIds: string[] };
 export type CatalogItem = { id: string; name: string; sku: string; category: string | null; list_price: number | null };
 
 type Feedback = { ok: boolean; message: string } | null;
@@ -104,32 +107,28 @@ function orderStatus(client: AgentClient) {
 
 export type ClientsView = "mine" | "all";
 
-export function productCategories(catalog: CatalogItem[]) {
-  return [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro"));
-}
 
 export { orderStatus, typeLabel };
 
-export function ClientsBoard({ view, clients, directory, catalog, userId }: {
-  view: ClientsView; clients: AgentClient[]; directory: OtherClient[]; catalog: CatalogItem[]; userId: string;
+export function ClientsBoard({ view, clients, directory, userId }: {
+  view: ClientsView; clients: AgentClient[]; directory: OtherClient[]; userId: string;
 }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
-  const selected = selectedId && selectedId !== "new" ? clients.find((client) => client.id === selectedId) ?? null : null;
+  const open = (id: string) => router.push(`/account/clients/${id}`);
   const needle = search.trim().toLocaleLowerCase("ro");
   const matches = (text: string) => !needle || text.toLocaleLowerCase("ro").includes(needle);
   const mine = clients.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.vat_id ?? ""}`));
   const everyone = directory.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.account_name ?? ""}`));
   const own = new Set(clients.map((client) => client.id));
-  const categories = useMemo(() => productCategories(catalog), [catalog]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setSelectedId(null); };
+    if (!creating) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setCreating(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId]);
+  }, [creating]);
 
   return (
     <>
@@ -146,7 +145,7 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
           <p>{view === "mine" ? "Un click pe client deschide fișa completă." : "Toți clienții, cu agentul fiecăruia. Ai acces complet doar la ai tăi."}</p>
           <div className="agent-heading-actions">
             <input className="group-member-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={view === "mine" ? "Caută client sau CUI" : "Caută client sau agent"} aria-label="Caută client" />
-            <button type="button" className="button button-primary" onClick={() => setSelectedId("new")}>+ Client nou</button>
+            <button type="button" className="button button-primary" onClick={() => setCreating(true)}>+ Client nou</button>
           </div>
         </div>
 
@@ -157,8 +156,8 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
             <tbody>{mine.map((client) => {
               const status = orderStatus(client);
               return (
-                <tr key={client.id} className={`handed-row ${selectedId === client.id ? "selected" : ""}`} onClick={() => setSelectedId(client.id)}>
-                  <td><button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); setSelectedId(client.id); }}>{client.business_name}</button><small>{client.location_name}</small></td>
+                <tr key={client.id} className="handed-row" onClick={() => open(client.id)}>
+                  <td><Link href={`/account/clients/${client.id}`} className="row-button strong" onClick={(event) => event.stopPropagation()}>{client.business_name}</Link><small>{client.location_name}</small></td>
                   <td><span className="partner-tile-chip-group">
                     <span className={`partner-kind ${client.type}`}>{typeLabel(client.type)}</span>
                     {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
@@ -176,8 +175,8 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
               <tbody>{everyone.map((client) => {
                 const isOwn = own.has(client.id) || client.account_id === userId;
                 return (
-                  <tr key={client.id} className={isOwn ? "handed-row" : ""} onClick={isOwn ? () => setSelectedId(client.id) : undefined}>
-                    <td className="strong">{isOwn ? <button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); setSelectedId(client.id); }}>{client.business_name}</button> : client.business_name}</td>
+                  <tr key={client.id} className={isOwn ? "handed-row" : ""} onClick={isOwn ? () => open(client.id) : undefined}>
+                    <td className="strong">{isOwn ? <Link href={`/account/clients/${client.id}`} className="row-button strong" onClick={(event) => event.stopPropagation()}>{client.business_name}</Link> : client.business_name}</td>
                     <td>{client.delivery_groups.length ? client.delivery_groups.join(", ") : <span className="muted">Fără grup</span>}</td>
                     <td>{typeLabel(client.type)}</td>
                     <td>{isOwn ? <span className="own-chip">Tu</span> : client.account_name ?? "Nealocat"}</td>
@@ -187,34 +186,25 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
             </table></div>)}
       </section>
 
-      {selectedId && <div className="detail-backdrop" onClick={() => setSelectedId(null)} aria-hidden="true" />}
-      {selectedId && <ClientPanel key={selectedId} client={selected} catalog={catalog} categories={categories}
-        onClose={() => setSelectedId(null)} onSaved={(id) => { router.refresh(); if (id) setSelectedId(id); }} />}
+      {creating && <div className="detail-backdrop" onClick={() => setCreating(false)} aria-hidden="true" />}
+      {creating && <NewClientPanel basePath="/account/clients" onClose={() => setCreating(false)} />}
     </>
   );
 }
 
-// The client file, shared by the agent's and the admin's client lists; `admin` adds the admin-only section.
-export function ClientPanel({ client, catalog, categories, onClose, onSaved, admin }: {
-  client: AgentClient | null; catalog: CatalogItem[]; categories: string[]; onClose: () => void; onSaved: (id?: string) => void; admin?: ReactNode;
-}) {
+// The company form (billing data from ANAF, location and contact): the whole "Client nou" panel, and the
+// "Date firmă" tab of the client file.
+function CompanyForm({ client, onSaved }: { client: AgentClient | null; onSaved: (result: { ok: boolean; message: string; id?: string }) => void }) {
   const [input, setInput] = useState<ClientInput>(client ? toInput(client) : emptyClient);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof ClientInput>(key: K, value: ClientInput[K]) => setInput({ ...input, [key]: value });
 
-  function run(action: () => Promise<{ ok: boolean; message: string; id?: string }>, afterSave?: (id?: string) => void) {
+  function fromAnaf() {
     setFeedback(null);
     start(async () => {
-      const result = await action();
-      setFeedback({ ok: result.ok, message: result.message });
-      if (result.ok) afterSave?.(result.id);
-    });
-  }
-
-  function fromAnaf() {
-    run(async () => {
       const result = await lookupCompany(input.vatId);
+      setFeedback({ ok: result.ok, message: result.message });
       if (result.company) {
         const company = result.company;
         setInput((current) => ({
@@ -223,7 +213,15 @@ export function ClientPanel({ client, catalog, categories, onClose, onSaved, adm
           businessName: current.businessName || company.name, locationName: current.locationName || company.city,
         }));
       }
-      return result;
+    });
+  }
+
+  function save() {
+    setFeedback(null);
+    start(async () => {
+      const result = await saveClient(client?.id ?? null, input);
+      if (!result.ok || client) setFeedback({ ok: result.ok, message: result.message });
+      onSaved(result);
     });
   }
 
@@ -231,56 +229,146 @@ export function ClientPanel({ client, catalog, categories, onClose, onSaved, adm
     && input.businessName.trim() && input.locationName.trim() && input.contactPhone.trim());
 
   return (
-    <aside className="detail-panel wide" aria-label={client ? client.business_name : "Client nou"}>
-      <div className="detail-header"><div>{client && <p className="eyebrow">{typeLabel(client.type)}</p>}<h2>{client?.business_name ?? "Client nou"}</h2></div>
-        <button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
-      <div className="detail-scroll">
-        {client && <p className={`agent-status ${orderStatus(client).tone} block`}>{orderStatus(client).label}</p>}
-        {client && admin}
-        {client && <ClientInvoices client={client} />}
-
-        <section className="detail-section"><h3>Date firmă și facturare</h3>
-          <div className="cui-lookup">
-            <label>CUI <span className="required">obligatoriu</span>
-              <input value={input.vatId} maxLength={20} onChange={(event) => set("vatId", event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); fromAnaf(); } }} placeholder="ex. RO42910222" /></label>
-            <button type="button" className="button button-outline" disabled={pending || input.vatId.trim().length < 2} onClick={fromAnaf}>Completează din ANAF</button>
-          </div>
-          <div className="partner-billing-grid">
-            <label>Denumire firmă<input value={input.billingName} maxLength={200} onChange={(event) => set("billingName", event.target.value)} /></label>
-            <label>Nr. Reg. Com.<input value={input.registrationNumber} maxLength={40} onChange={(event) => set("registrationNumber", event.target.value)} /></label>
-            <label>Stradă și număr<input value={input.street} maxLength={200} onChange={(event) => set("street", event.target.value)} /></label>
-            <label>Oraș<input value={input.city} maxLength={80} onChange={(event) => set("city", event.target.value)} /></label>
-            <label>Județ<input value={input.county} maxLength={80} onChange={(event) => set("county", event.target.value)} /></label>
-            <label>Cod poștal<input value={input.zip} maxLength={12} onChange={(event) => set("zip", event.target.value)} /></label>
-          </div>
-          <h3 className="subheading">Locație și contact</h3>
-          <div className="partner-billing-grid">
-            <label>Nume în aplicație<input value={input.businessName} maxLength={160} onChange={(event) => set("businessName", event.target.value)} placeholder="ex. Hotel Lipscani" /></label>
-            <label>Locație<input value={input.locationName} maxLength={160} onChange={(event) => set("locationName", event.target.value)} placeholder="ex. Centru Vechi" /></label>
-            <label>Telefon<input value={input.contactPhone} maxLength={30} onChange={(event) => set("contactPhone", event.target.value)} /></label>
-            <label>Email<input type="email" value={input.contactEmail} maxLength={254} onChange={(event) => set("contactEmail", event.target.value)} /></label>
-            <label>Tip<select value={input.type} onChange={(event) => set("type", event.target.value as ClientInput["type"])}>
-              {types.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
-          </div>
-          <label className="admin-checkbox"><input type="checkbox" checked={input.isImportantClient} onChange={(event) => set("isImportantClient", event.target.checked)} /> Client prioritar — livrare imediată</label>
-          <div className="partner-billing-actions">
-            <button type="button" className="button button-primary" disabled={pending || !complete} title={complete ? undefined : "Completează CUI, firma, adresa, numele, locația și telefonul"}
-              onClick={() => run(() => saveClient(client?.id ?? null, input), (id) => onSaved(id))}>{client ? "Salvează datele" : "Adaugă clientul"}</button>
-          </div>
-        </section>
-
-        {client && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <SalesModeEditor key={`m-${client.id}-${client.sales_mode}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <ContractsEditor key={`k-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
-        {client && <LoginEditor key={`l-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+    <div className="company-form">
+      <section className="detail-section"><h3>Date firmă și facturare</h3>
+        <div className="cui-lookup">
+          <label><span>CUI <span className="required">obligatoriu</span></span>
+            <input value={input.vatId} maxLength={20} onChange={(event) => set("vatId", event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); fromAnaf(); } }} placeholder="ex. RO42910222" /></label>
+          <button type="button" className="button button-outline" disabled={pending || input.vatId.trim().length < 2} onClick={fromAnaf}>Completează din ANAF</button>
+        </div>
+        <div className="partner-billing-grid">
+          <label>Denumire firmă<input value={input.billingName} maxLength={200} onChange={(event) => set("billingName", event.target.value)} /></label>
+          <label>Nr. Reg. Com.<input value={input.registrationNumber} maxLength={40} onChange={(event) => set("registrationNumber", event.target.value)} /></label>
+          <label>Stradă și număr<input value={input.street} maxLength={200} onChange={(event) => set("street", event.target.value)} /></label>
+          <label>Oraș<input value={input.city} maxLength={80} onChange={(event) => set("city", event.target.value)} /></label>
+          <label>Județ<input value={input.county} maxLength={80} onChange={(event) => set("county", event.target.value)} /></label>
+          <label>Cod poștal<input value={input.zip} maxLength={12} onChange={(event) => set("zip", event.target.value)} /></label>
+        </div>
+      </section>
+      <section className="detail-section"><h3>Locație și contact</h3>
+        <div className="partner-billing-grid">
+          <label>Nume în aplicație<input value={input.businessName} maxLength={160} onChange={(event) => set("businessName", event.target.value)} placeholder="ex. Hotel Lipscani" /></label>
+          <label>Locație<input value={input.locationName} maxLength={160} onChange={(event) => set("locationName", event.target.value)} placeholder="ex. Centru Vechi" /></label>
+          <label>Telefon<input value={input.contactPhone} maxLength={30} onChange={(event) => set("contactPhone", event.target.value)} /></label>
+          <label>Email<input type="email" value={input.contactEmail} maxLength={254} onChange={(event) => set("contactEmail", event.target.value)} /></label>
+          <label>Tip<select value={input.type} onChange={(event) => set("type", event.target.value as ClientInput["type"])}>
+            {types.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
+        </div>
+        <label className="admin-checkbox"><input type="checkbox" checked={input.isImportantClient} onChange={(event) => set("isImportantClient", event.target.checked)} /> Client prioritar — livrare imediată</label>
+        <div className="partner-billing-actions">
+          <button type="button" className="button button-primary" disabled={pending || !complete} title={complete ? undefined : "Completează CUI, firma, adresa, numele, locația și telefonul"}
+            onClick={save}>{client ? "Salvează datele" : "Adaugă clientul"}</button>
+        </div>
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
+      </section>
+    </div>
+  );
+}
+
+// "+ Client nou": only the company data. Once saved, the client file opens on its own page.
+export function NewClientPanel({ basePath, onClose }: { basePath: string; onClose: () => void }) {
+  const router = useRouter();
+  return (
+    <aside className="detail-panel wide" aria-label="Client nou">
+      <div className="detail-header"><div><h2>Client nou</h2></div><button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
+      <div className="detail-scroll">
+        <p className="muted small new-client-hint">După ce adaugi clientul se deschide fișa lui, unde setezi punctele de lucru, regimul, stocul inițial și contul.</p>
+        <CompanyForm client={null} onSaved={(result) => { if (result.ok && result.id) router.push(`${basePath}/${result.id}?tab=puncte`); }} />
       </div>
     </aside>
+  );
+}
+
+export const clientTabs = [
+  { id: "date", label: "Date firmă" },
+  { id: "puncte", label: "Puncte de lucru" },
+  { id: "discounturi", label: "Discounturi" },
+  { id: "stoc", label: "Stoc inițial" },
+  { id: "custodie", label: "Custodie" },
+  { id: "cerere", label: "Cerere nouă" },
+  { id: "cont", label: "Cont în aplicație" },
+] as const;
+export type ClientTab = (typeof clientTabs)[number]["id"] | "admin";
+
+const money = new Intl.NumberFormat("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// The client file on its own page: a summary on top and one tab per part. Shared by the agent's and the
+// admin's client lists; `admin` adds the admin-only tab.
+export function ClientFile({ client, catalog, categories, collections, loginBlocked, tab: initialTab, backHref, backLabel, admin }: {
+  client: AgentClient; catalog: CatalogItem[]; categories: string[]; collections: ProductCollection[]; loginBlocked: boolean;
+  tab: ClientTab; backHref: string; backLabel: string; admin?: ReactNode;
+}) {
+  const router = useRouter();
+  const [tab, setTab] = useState<ClientTab>(initialTab === "admin" && !admin ? "date" : initialTab);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+  const done = (result: { ok: boolean; message: string }) => { setFeedback(result); if (result.ok) router.refresh(); };
+  const tabs = admin ? [...clientTabs, { id: "admin" as const, label: "Administrare" }] : clientTabs;
+  const status = orderStatus(client);
+  const activePoints = client.partner_locations.filter((location) => location.active).length;
+  const unpaid = client.partner_carts.filter((cart) => cart.invoiced_at && (cart.invoice_rest ?? 0) > 0);
+  const unpaidTotal = unpaid.reduce((sum, cart) => sum + (cart.invoice_rest ?? 0), 0);
+  const openCustody = client.partner_custody_items.filter((item) => item.status === "at_client").length;
+
+  function choose(next: ClientTab) {
+    setTab(next);
+    setFeedback(null);
+    // Keep the tab in the address, so a refresh or a shared link opens the same tab.
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  }
+
+  return (
+    <div className="client-file">
+      <p className="client-file-back"><Link href={backHref} className="text-button">← {backLabel}</Link></p>
+      <header className="board-panel client-file-header">
+        <div className="client-file-title">
+          <p className="eyebrow">{typeLabel(client.type)}{client.location_name ? ` · ${client.location_name}` : ""}</p>
+          <h1>{client.business_name}</h1>
+          <div className="partner-tile-chip-group">
+            <span className={`agent-status ${status.tone}`}>{status.label}</span>
+            {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
+            {!client.active && <span className="item-flag">Inactiv</span>}
+            {!client.vat_id && <span className="item-flag no-ean">Fără date de facturare</span>}
+          </div>
+        </div>
+        <dl className="client-file-facts">
+          <div><dt>Revânzare</dt><dd>{client.sales_mode === "consignment" ? `Consignație · ${client.consignment_commission ?? 0}%` : "Cumpărare"}</dd></div>
+          <div><dt>Puncte de lucru</dt><dd>{activePoints} · {client.stock_mode === "per_location" ? "pe punct" : "centralizat"}</dd></div>
+          <div><dt>Discount</dt><dd>{describeRules(channelRules(client.partner_discounts, "resale"))}</dd></div>
+          <div><dt>De încasat</dt><dd className={unpaid.length ? "due" : ""}>{unpaid.length ? `${money.format(unpaidTotal)} lei · ${unpaid.length} ${unpaid.length === 1 ? "factură" : "facturi"}` : "—"}</dd></div>
+          <div><dt>Cont</dt><dd>{client.account_username ? `${client.account_username}${loginBlocked ? " · dezactivat" : ""}` : "fără cont"}</dd></div>
+        </dl>
+        <button type="button" className="button button-primary client-file-request" onClick={() => choose("cerere")}>Cerere nouă</button>
+      </header>
+
+      <section className="board-panel client-file-body">
+        <nav className="board-tabs client-file-tabs" role="tablist" aria-label="Fișa clientului">{tabs.map((item) => (
+          <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} onClick={() => choose(item.id)}>
+            {item.label}
+            {item.id === "puncte" && activePoints > 1 && <span>{activePoints}</span>}
+            {item.id === "custodie" && openCustody > 0 && <span>{openCustody}</span>}
+          </button>))}</nav>
+        <div className="client-file-content">
+          {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
+          {tab === "date" && <div className="client-file-columns">
+            <CompanyForm key={`f-${client.id}`} client={client} onSaved={(result) => { if (result.ok) router.refresh(); }} />
+            <div><ClientInvoices client={client} empty /></div>
+          </div>}
+          {tab === "puncte" && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={done} />}
+          {tab === "discounturi" && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={done} />}
+          {tab === "stoc" && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} collections={collections} onDone={done} />}
+          {tab === "custodie" && <div className="client-file-columns even">
+            <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={done} />
+            <ContractsEditor key={`k-${client.id}`} client={client} onDone={done} />
+          </div>}
+          {tab === "cerere" && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={done} />}
+          {tab === "cont" && <LoginEditor key={`l-${client.id}`} client={client} loginBlocked={loginBlocked} onDone={done} />}
+          {tab === "admin" && admin}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -314,6 +402,18 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
     if (!editing) return;
     start(async () => {
       const result = await saveLocation(client.id, editing.id, editing);
+      onDone(result);
+      if (result.ok) setEditing(null);
+    });
+  }
+
+  function remove() {
+    if (!editing?.id) return;
+    const id = editing.id;
+    const point = points.find((item) => item.id === id);
+    if (!window.confirm(`Ștergi punctul de lucru ${point?.name ?? ""}? Se șterg și stocul lui inițial și contul lui. Un punct cu comenzi în istoric nu se poate șterge; îl poți doar dezactiva.`)) return;
+    start(async () => {
+      const result = await deleteLocation(client.id, id);
       onDone(result);
       if (result.ok) setEditing(null);
     });
@@ -372,10 +472,11 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         {editing.id && !points.find((point) => point.id === editing.id)?.is_main && <label className="admin-checkbox">
           <input type="checkbox" checked={editing.active} onChange={(event) => set("active", event.target.checked)} /> Punct activ (primește comenzi)</label>}
         <div className="partner-billing-actions">
+          {editing.id && !points.find((point) => point.id === editing.id)?.is_main && <button type="button" className="text-button danger-text point-delete" disabled={pending} onClick={remove}>Șterge punctul</button>}
           <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
           <button type="button" className="button button-primary" disabled={pending || !editing.name.trim()} onClick={save}>{editing.id ? "Salvează punctul" : "Adaugă punctul"}</button>
         </div>
-      </div> : <button type="button" className="button button-outline" onClick={() => setEditing({ id: null, ...emptyPoint })}>+ Punct de lucru</button>}
+      </div> : <button type="button" className="button button-outline section-add" onClick={() => setEditing({ id: null, ...emptyPoint })}>+ Punct de lucru</button>}
     </section>
   );
 }
@@ -458,7 +559,7 @@ function ProductPicker({ catalog, exclude, onPick, placeholder }: { catalog: Cat
   );
 }
 
-function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+function ParLevelEditor({ client, catalog, collections, onDone }: { client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; onDone: (result: { ok: boolean; message: string }) => void }) {
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const perPoint = client.stock_mode === "per_location";
   // The picked point; after a switch to per-point stock it falls back to the main point.
@@ -468,18 +569,22 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
   const [channel, setChannel] = useState<Channel>("resale");
   const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === channel);
   const count = (id: Channel) => client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === id).length;
-  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
+  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} collections={collections} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
     header={<>
       <div className="point-tabs channel-switch" role="tablist" aria-label="Tip stoc">{channels.map((item) =>
         <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>
-          {item.label} ({count(item.id)})</button>)}</div>
+          {item.label} · {item.id === "resale" && client.sales_mode === "consignment" ? "consignație" : "cumpărare"} ({count(item.id)})</button>)}</div>
+      {channel === "resale"
+        ? <SalesModeEditor key={`m-${client.id}-${client.sales_mode}-${client.consignment_commission ?? ""}`} client={client} onDone={onDone} />
+        : <p className="muted small regime-box">Consum: produsele pe care clientul le folosește el (ex. hotel, salon). Se cumpără mereu: fiecare livrare se facturează, și la clienții în consignație.</p>}
       {perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
         <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null}
     </>} />;
 }
 
-function ParLevelList({ client, catalog, levels, pointId, channel, header, onDone }: {
-  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
+function ParLevelList({ client, catalog, collections, levels, pointId, channel, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode;
+  onDone: (result: { ok: boolean; message: string }) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
@@ -514,6 +619,32 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
     start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId, channel)));
   }
 
+  // Rows whose quantity differs from what is saved (new products with a quantity, or changed ones).
+  const saved = new Map(levels.map((level) => [level.product_id, level.par_level_quantity]));
+  const changed = rows.filter((row) => (values[row.id] ?? "") !== "" && Number(values[row.id]) !== (saved.get(row.id) ?? -1));
+  const missing = rows.filter((row) => !saved.has(row.id) && !values[row.id]);
+
+  function saveAll() {
+    start(async () => {
+      let failed: { ok: boolean; message: string } | null = null;
+      for (const row of changed) {
+        const result = await setClientParLevel(client.id, row.id, Math.max(0, Math.round(Number(values[row.id]))), pointId, channel);
+        if (!result.ok) { failed = result; break; }
+      }
+      onDone(failed ?? { ok: true, message: `Stocul inițial a fost salvat (${changed.length} ${changed.length === 1 ? "produs" : "produse"}).` });
+    });
+  }
+
+  // Adds every product of one of the agent's collections that is not on the list yet.
+  function addCollection(id: string) {
+    const collection = collections.find((item) => item.id === id);
+    if (!collection) return;
+    const have = new Set(rows.map((row) => row.id));
+    const byId = new Map(catalog.map((item) => [item.id, item]));
+    const fresh = collection.productIds.map((productId) => byId.get(productId)).filter((item): item is CatalogItem => !!item && !have.has(item.id));
+    setAdded([...added, ...fresh]);
+  }
+
   return (
     <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3>
       <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{channelLabel(channel).toLowerCase()} · {levels.length} produse</span></div>
@@ -525,7 +656,16 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
           <button type="button" className="text-button" disabled={pending} onClick={() => save(row.id)}>Salvează</button>
         </div>
       ))}</div>
-      <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.id))} onPick={(item) => setAdded([...added, item])} placeholder="Adaugă produs în stocul inițial (nume sau SKU)" />
+      {(changed.length > 0 || missing.length > 0) && <div className="par-save-all">
+        <span className="muted small">{missing.length > 0 ? `Completează cantitatea la ${missing.length} ${missing.length === 1 ? "produs adăugat" : "produse adăugate"}.` : `${changed.length} ${changed.length === 1 ? "modificare nesalvată" : "modificări nesalvate"}.`}</span>
+        <button type="button" className="button button-primary" disabled={pending || changed.length === 0} onClick={saveAll}>Salvează tot ({changed.length})</button>
+      </div>}
+      <div className="par-add">
+        <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.id))} onPick={(item) => setAdded([...added, item])} placeholder="Adaugă produs în stocul inițial (nume sau SKU)" />
+        {collections.length > 0 && <select value="" onChange={(event) => { if (event.target.value) addCollection(event.target.value); }} aria-label="Adaugă din colecție">
+          <option value="">+ Din colecție</option>
+          {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name} ({collection.productIds.length})</option>)}</select>}
+      </div>
       <div className="invoice-suggest">
         <button type="button" className="button button-outline" disabled={searching} onClick={suggest}>{searching ? "Caut în facturile BOCP (~30 sec.)…" : "Propune din facturi BOCP"}</button>
         {suggestMessage && <span className="muted small">{suggestMessage}</span>}
@@ -536,7 +676,7 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
           <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
         </div>
       ))}</div>}
-      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
+      <p className="muted small">{channel === "consumption" ? "Dacă are stoc doar pe Revânzare, clientul nu vede tab-urile în aplicația lui. " : ""}0 scoate produsul din stocul inițial. Salvează pe rând sau toate odată cu „Salvează tot”.</p>
     </section>
   );
 }
@@ -548,54 +688,117 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   const clientChannels = usedChannels(client.partner_par_levels);
   const [channel, setChannel] = useState<Channel>(clientChannels[0] ?? "resale");
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
-  const [source, setSource] = useState<"whatsapp" | "telefon">("telefon");
+  // What the client says is left on its shelf, per product (the right-hand table).
+  const [remaining, setRemaining] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
-  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null) && level.channel === channel).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
+  const location = client.stock_mode === "per_location" ? pointId ?? points[0]?.id ?? null : null;
+  const pars = client.partner_par_levels.filter((level) => level.location_id === location && level.channel === channel)
+    .sort((a, b) => (a.products?.name ?? "").localeCompare(b.products?.name ?? "", "ro"));
+  // Already on its way: open and prepared orders for this point and channel (not yet delivered).
+  const ordered = new Map<string, number>();
+  for (const cart of client.partner_carts) {
+    if (!["open", "prepared", "pending_delivery"].includes(cart.status) || (location && cart.location_id !== location)) continue;
+    for (const item of cart.partner_cart_items) {
+      if (!item.product_id || (item.channel ?? "resale") !== channel) continue;
+      ordered.set(item.product_id, (ordered.get(item.product_id) ?? 0) + item.quantity_needed);
+    }
+  }
+  const needed = (productId: string, par: number) => {
+    const left = remaining[productId];
+    if (left === undefined || left === "") return null;
+    return Math.max(0, par - Number(left) - (ordered.get(productId) ?? 0));
+  };
   const valid = lines.length > 0 && lines.every((line) => /^\d+$/.test(line.quantity) && Number(line.quantity) > 0);
+
+  function put(productId: string, quantity: number) {
+    const item = byId.get(productId);
+    if (!item || quantity <= 0) return;
+    setLines((current) => current.some((line) => line.item.id === productId)
+      ? current.map((line) => line.item.id === productId ? { ...line, quantity: String(quantity) } : line)
+      : [...current, { item, quantity: String(quantity) }]);
+  }
+
+  function putAll() {
+    for (const par of pars) {
+      const quantity = needed(par.product_id, par.par_level_quantity);
+      if (quantity) put(par.product_id, quantity);
+    }
+  }
 
   function send() {
     start(async () => {
-      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null, channel);
+      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), choosePoint ? pointId : null, channel);
       onDone(result);
-      if (result.ok) setLines([]);
+      if (result.ok) { setLines([]); setRemaining({}); }
     });
   }
 
+  const withNeed = pars.filter((par) => (needed(par.product_id, par.par_level_quantity) ?? 0) > 0);
+
   return (
-    <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>ajunge la depozit</span></div>
-      {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
-        {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
-      {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
-        <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => setChannel(id)}>{channelLabel(id)}</button>)}</div>}
-      {lines.length > 0 && <div className="item-list">{lines.map((line, index) => (
-        <div className="order-item" key={line.item.id}>
-          <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>
-          <input className="request-qty" inputMode="numeric" value={line.quantity} onChange={(event) => setLines(lines.map((item, i) => i === index ? { ...item, quantity: event.target.value.replace(/\D/g, "") } : item))} aria-label={`Cantitate ${line.item.name}`} />
-          <button type="button" className="remove-button" title="Scoate" aria-label="Scoate produsul" onClick={() => setLines(lines.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
+    <div className="client-file-columns request-columns">
+      <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>comandă în numele clientului</span></div>
+        {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => { setPointId(event.target.value); setRemaining({}); }}>
+          {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
+        {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
+          <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => { setChannel(id); setLines([]); setRemaining({}); }}>{channelLabel(id)}</button>)}</div>}
+        {lines.length > 0 ? <div className="item-list">{lines.map((line, index) => (
+          <div className="order-item" key={line.item.id}>
+            <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>
+            <input className="request-qty" inputMode="numeric" value={line.quantity} onChange={(event) => setLines(lines.map((item, i) => i === index ? { ...item, quantity: event.target.value.replace(/\D/g, "") } : item))} aria-label={`Cantitate ${line.item.name}`} />
+            <button type="button" className="remove-button" title="Scoate" aria-label="Scoate produsul" onClick={() => setLines(lines.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
+          </div>
+        ))}</div> : <p className="muted small request-empty">Niciun produs în cerere. Adaugă din tabelul cu stocul inițial sau caută mai jos.</p>}
+        <ProductPicker catalog={catalog} exclude={new Set(lines.map((line) => line.item.id))} onPick={(item) => setLines([...lines, { item, quantity: "1" }])} placeholder="Alt produs (nume sau SKU)" />
+        <div className="request-send">
+          <button type="button" className="button button-primary" disabled={pending || !valid} onClick={send}>Trimite cererea la depozit</button>
         </div>
-      ))}</div>}
-      {suggestions.length > 0 && <div className="request-suggestions"><small>Din stocul inițial</small>
-        <div>{suggestions.map((item) => <button key={item.id} type="button" className="request-chip" onClick={() => setLines([...lines, { item, quantity: "1" }])}>+ {item.name}</button>)}</div></div>}
-      <ProductPicker catalog={catalog} exclude={new Set(lines.map((line) => line.item.id))} onPick={(item) => setLines([...lines, { item, quantity: "1" }])} placeholder="Alt produs (nume sau SKU)" />
-      <div className="partner-billing-actions">
-        <div className="request-sources" role="group" aria-label="Sursa cererii">
-          {(["telefon", "whatsapp"] as const).map((value) => <button key={value} type="button" className={`partner-filter ${source === value ? "active reseller" : ""}`} aria-pressed={source === value} onClick={() => setSource(value)}>{value === "whatsapp" ? "WhatsApp" : "Telefon"}</button>)}
-        </div>
-        <button type="button" className="button button-primary" disabled={pending || !valid} onClick={send}>Trimite cererea la depozit</button>
-      </div>
-    </section>
+        <p className="muted small">Pentru când clientul îți cere produse direct (la telefon, pe mesaj, în vizită): cererea ajunge la depozit ca o comandă B2B a clientului, ca și cum ar fi plasat-o el din contul lui.</p>
+      </section>
+
+      <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3><span>{channelLabel(channel).toLowerCase()} · {pars.length} produse</span></div>
+        {pars.length === 0 ? <p className="muted small">Clientul nu are stoc inițial pe {channelLabel(channel).toLowerCase()}. Îl setezi în tab-ul Stoc inițial.</p> : <>
+          <p className="muted small">Scrie câte bucăți mai are clientul; necesarul se calculează până la stocul inițial, fără ce e deja comandat.</p>
+          <div className="handed-table-wrap"><table className="handed-table request-stock-table">
+            <thead><tr><th>Produs</th><th>Stoc inițial</th><th>Rămase</th><th>Comandat</th><th>Necesar</th><th /></tr></thead>
+            <tbody>{pars.map((par) => {
+              const need = needed(par.product_id, par.par_level_quantity);
+              const inRequest = lines.find((line) => line.item.id === par.product_id);
+              return <tr key={par.product_id}>
+                <td><strong>{par.products?.name ?? "Produs"}</strong><small>SKU {par.products?.sku ?? "—"}</small></td>
+                <td className="num">{par.par_level_quantity}</td>
+                <td><input className="request-qty" inputMode="numeric" value={remaining[par.product_id] ?? ""} placeholder="—"
+                  onChange={(event) => setRemaining({ ...remaining, [par.product_id]: event.target.value.replace(/\D/g, "") })} aria-label={`Rămase ${par.products?.name ?? ""}`} /></td>
+                <td className="num">{ordered.get(par.product_id) ?? 0}</td>
+                <td className={`num ${need ? "need" : ""}`}>{need ?? "—"}</td>
+                <td className="num">{inRequest ? <span className="in-request" title="E deja în cerere">✓</span>
+                  : <button type="button" className="text-button" disabled={!need} onClick={() => need && put(par.product_id, need)}>Adaugă</button>}</td>
+              </tr>;
+            })}</tbody>
+          </table></div>
+          <div className="request-send"><button type="button" className="button button-outline" disabled={withNeed.length === 0} onClick={putAll}>Adaugă tot necesarul ({withNeed.length})</button></div>
+        </>}
+      </section>
+    </div>
   );
 }
 
-function LoginEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+function LoginEditor({ client, loginBlocked, onDone }: { client: AgentClient; loginBlocked: boolean; onDone: (result: { ok: boolean; message: string }) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [pending, start] = useTransition();
   return (
     <section className="detail-section"><h3>{client.stock_mode === "per_location" ? "Cont manager" : "Cont în aplicație"}</h3>
       {client.stock_mode === "per_location" && <p className="muted small">Vede toate punctele de lucru și facturile. Conturile pe punct se fac la Puncte de lucru.</p>}
-      {client.auth_user_id ? <p>Clientul are cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>. Parola se schimbă din Administrare.</p>
+      {client.auth_user_id ? <div className="login-state">
+          <p>Cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>
+            <span className={`payment-chip ${loginBlocked ? "overdue" : "paid"}`}>{loginBlocked ? "Dezactivat" : "Activ"}</span></p>
+          <p className="muted small">{loginBlocked ? "Clientul nu se poate conecta. Datele și comenzile lui rămân." : "Parola se schimbă din Administrare."}</p>
+          <button type="button" className={`button ${loginBlocked ? "button-primary" : "button-outline danger-outline"}`} disabled={pending}
+            onClick={() => { if (loginBlocked || window.confirm("Dezactivezi contul clientului? Nu se va mai putea conecta până îl reactivezi.")) start(async () => onDone(await setClientLoginActive(client.id, loginBlocked))); }}>
+            {loginBlocked ? "Reactivează contul" : "Dezactivează contul"}</button>
+        </div>
         : <div className="admin-inline admin-mini-form">
           <input value={username} maxLength={32} autoCapitalize="none" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="Username" aria-label="Username" />
           <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Parolă (min. 6)" aria-label="Parolă" autoComplete="new-password" />
@@ -607,10 +810,10 @@ function LoginEditor({ client, onDone }: { client: AgentClient; onDone: (result:
 }
 
 // The client's invoiced B2B orders, with the invoice PDF from BOCP.
-function ClientInvoices({ client }: { client: AgentClient }) {
+function ClientInvoices({ client, empty }: { client: AgentClient; empty?: boolean }) {
   const invoiced = client.partner_carts.filter((cart) => cart.invoiced_at && cart.bocp_invoice_id)
     .sort((a, b) => (b.invoiced_at ?? "").localeCompare(a.invoiced_at ?? "")).slice(0, 10);
-  if (!invoiced.length) return null;
+  if (!invoiced.length) return empty ? <section className="detail-section"><h3>Facturi</h3><p className="muted small">Nicio factură încă. Apar aici după prima comandă facturată.</p></section> : null;
   return (
     <section className="detail-section"><div className="section-line"><h3>Facturi</h3><span>{invoiced.length}</span></div>
       <div className="item-list">{invoiced.map((cart) => (
@@ -753,7 +956,7 @@ function ContractsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         </div>
       ))}</div>}
       <div className="contract-upload">
-        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="Nume, ex. Contract de consignație nr. 2 / 19.10.2026" aria-label="Numele contractului" />
+        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="ex. Contract nr. 2 / 19.10.2026" aria-label="Numele contractului" />
         <label className="button button-outline file-button">{file ? file.name : "Alege PDF-ul"}<input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
         <button type="button" className="button button-primary" disabled={pending || !file || !title.trim()} onClick={upload}>{pending ? "Se încarcă…" : "Încarcă contractul"}</button>
       </div>
@@ -769,8 +972,9 @@ function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (res
   const [pending, start] = useTransition();
   const changed = mode !== client.sales_mode || (mode === "consignment" && commission !== String(client.consignment_commission ?? ""));
   return (
-    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3><span>{client.sales_mode === "consignment" ? `consignație · comision ${client.consignment_commission ?? 0}%` : "cumpărare"}</span></div>
-      <div className="stock-mode" role="group" aria-label="Regim comercial">
+    <div className="regime-box">
+      <div className="stock-mode" role="group" aria-label="Regim pentru revânzare">
+        <span>Regim:</span>
         <button type="button" className={mode === "purchase" ? "active" : ""} onClick={() => setMode("purchase")}>Cumpărare</button>
         <button type="button" className={mode === "consignment" ? "active" : ""} onClick={() => setMode("consignment")}>Consignație</button>
       </div>
@@ -779,8 +983,8 @@ function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (res
         {changed && <button type="button" className="button button-primary" disabled={pending} onClick={() => start(async () => onDone(await setSalesMode(client.id, mode, commission)))}>Salvează regimul</button>}
       </div>
       <p className="muted small">{mode === "consignment"
-        ? "Marfa pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămâne a noastră până o vinde clientul; se facturează periodic ce a vândut, iar comisionul se calculează separat."
-        : "Clientul cumpără marfa: fiecare livrare se facturează."}</p>
-    </section>
+        ? "Produsele de revânzare pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămân ale noastre până le vinde clientul; se facturează periodic ce a vândut, cu comisionul lui."
+        : "Clientul cumpără produsele de revânzare: fiecare livrare se facturează."}</p>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { b2bSkuFilter } from "@/lib/b2b-products";
 import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { CatalogTable, type CatalogClient, type CatalogProduct, type Collection } from "./catalog-table";
 import { CollectionsBoard } from "./collections-board";
 import { LinkPending } from "@/components/link-pending";
@@ -16,13 +17,18 @@ const tabs = [
 export default async function AgentCatalogPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { supabase, profile } = await requireRole(["admin", "account"]);
   const view = (await searchParams).tab === "collections" ? "collections" : "products";
-  const [productsResult, clientsResult, collectionsResult] = await Promise.all([
+  const [productsResult, clientsResult, collectionsResult, stockResult] = await Promise.all([
     supabase.from("products").select("id,name,sku,category,image_url,delisted,list_price,list_price_with_vat,vat_percent,warehouse_stock(quantity_bocp_global)")
       .eq("active", true).or(b2bSkuFilter).not("list_price", "is", null).gt("list_price", 0).order("name").limit(5000),
     supabase.from("partners").select("id,business_name,partner_discounts(category,percent)").eq("partner_discounts.channel", "resale").eq("account_id", profile.id).order("business_name").limit(500),
     // Each agent's own collections (row security returns only theirs).
     supabase.from("product_collections").select("id,name,updated_at,product_collection_items(product_id,position)").order("name").limit(500),
+    // The last BOCP stock sync (every 15 minutes).
+    createAdminClient()?.from("app_settings").select("catalog_synced_at").eq("id", 1).maybeSingle() ?? Promise.resolve({ data: null }),
   ]);
+  const stockAt = stockResult.data?.catalog_synced_at
+    ? new Intl.DateTimeFormat("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Bucharest" }).format(new Date(stockResult.data.catalog_synced_at))
+    : null;
   const products: CatalogProduct[] = productsResult.data ?? [];
   const clients: CatalogClient[] = clientsResult.data ?? [];
   const collections: Collection[] = (collectionsResult.data ?? []).map((collection) => ({
@@ -42,7 +48,7 @@ export default async function AgentCatalogPage({ searchParams }: { searchParams:
                 className={view === tab.view ? "active" : ""} aria-current={view === tab.view ? "page" : undefined}>
                 {tab.label}{tab.view === "collections" && collections.length > 0 && <span>{collections.length}</span>}<LinkPending /></Link>)}
             </nav>
-            <span aria-hidden="true" />
+            {stockAt ? <span className="catalog-stock-time" title="Stocul se actualizează din BOCP la fiecare 15 minute">Stoc BOCP · {stockAt}</span> : <span aria-hidden="true" />}
           </div>
           {view === "products"
             ? <CatalogTable products={products} clients={clients} collections={collections} />

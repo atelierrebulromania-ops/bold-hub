@@ -118,7 +118,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
   return (
     <main className="app-shell" data-rail={railOpen ? "open" : "closed"}>
       <aside className="app-sidebar" aria-label="Navigație principală">
-        <div className="brand brand-wordmark"><Image src="/logo-light.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /></div>
+        <div className="brand brand-wordmark"><Image src="/logo-light.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /><span className="beta-pill">Beta Version</span></div>
         <MobileMenuButton />
         <nav className="sidebar-nav">
           {visible.map((group, index) => <div className="sidebar-group" key={group.label}>

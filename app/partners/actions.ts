@@ -89,7 +89,7 @@ export async function deleteDeliveryGroup(groupId: string): Promise<{ ok: boolea
   return data === true ? { ok: true, message: "Grupul a fost șters." } : { ok: false, message: "Grupul nu mai există." };
 }
 
-// A request received by WhatsApp or phone: the products go into the partner's open cart
+// A request the client made outside the app (phone, message, visit): the products go into the partner's open cart
 // (the partner moves to "Necesită produse") and the stock is reserved.
 export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string, locationId: string | null = null, channel: Channel = "resale"): Promise<{ ok: boolean; message: string }> {
   if (!uuid.test(partnerId) || (locationId !== null && !uuid.test(locationId)) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100

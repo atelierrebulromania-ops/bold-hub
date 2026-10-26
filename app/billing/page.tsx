@@ -9,7 +9,7 @@ import { LinkPending } from "@/components/link-pending";
 
 export const dynamic = "force-dynamic";
 
-const fields = "id,partner_id,invoiced_with,partner_locations(name,city,address),prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,bocp_transfer_number,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,invoice_due_date,invoice_rest,partners(sales_mode,business_name,location_name,type,is_important_client,contact_phone,contact_email,own_consumption_discounts,partner_discounts(category,percent,channel)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,channel,products(name,sku,variant_label,category))" as const;
+const fields = "id,partner_id,invoiced_with,partner_locations(name,city,address),prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,bocp_transfer_number,regime,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,invoice_due_date,invoice_rest,partners(sales_mode,business_name,location_name,type,is_important_client,contact_phone,contact_email,own_consumption_discounts,partner_discounts(category,percent,channel)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,channel,products(name,sku,variant_label,category))" as const;
 
 const documentFields = "id,number,client_name,client_vat_id,discount_percent,account_id,bocp_order_id,bocp_proforma_total,invoice_requested_at,invoiced_at,invoiced_by,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,cancel_requested_at,cancel_reason,status,sales_document_items(sku,name,quantity,unit_price,vat_percent,discount_percent,position)" as const;
 
@@ -81,7 +81,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const docsToCancel: BillingDocument[] = docCancelResult.data ?? [];
   const docsHistory: BillingDocument[] = docHistoryResult?.data ?? [];
   // Consignment carts leave on a transfer voucher: nothing to reserve.
-  const toReserve: BillingCart[] = (reserveResult.data ?? []).filter((cart) => cart.partners?.sales_mode !== "consignment");
+  // Consignment clients reserve only their own-consumption lines (resale leaves on a transfer voucher).
+  const toReserve: BillingCart[] = (reserveResult.data ?? []).filter((cart) => cart.partners?.sales_mode !== "consignment"
+    || cart.partner_cart_items.some((item) => item.channel === "consumption"));
   const toInvoice: BillingCart[] = invoiceResult.data ?? [];
   const carts: BillingCart[] = view === "reserve" ? toReserve : view === "invoice" ? toInvoice
     : view === "products" ? productsResult?.data ?? [] : historyResult?.data ?? [];

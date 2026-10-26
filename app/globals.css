@@ -1408,3 +1408,98 @@ p.push-toggle { display: block; }
 .partner-header-actions .power-button { text-decoration: none; }
 .partner-header-actions .key-button:hover { border-color: #cbd9ec; background: #f5f9ff; color: var(--blue); }
 .settings-access-button { min-width: 128px; padding: .5rem .85rem; font-size: .78rem; }
+.catalog-stock-time { justify-self: end; margin-bottom: 13px; color: #8a8d91; font-size: .72rem; font-weight: 600; white-space: nowrap; }
+
+/* Windows: Arial Bold under ClearType looks far heavier than on macOS (where antialiased smoothing thins it).
+   Use the native Segoe UI there, with its Semibold for every bold weight. macOS and phones are unchanged. */
+@font-face { font-family: "BoldHub Windows"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 100 549; }
+@font-face { font-family: "BoldHub Windows"; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"); font-weight: 550 1000; }
+html.on-windows body, html.on-windows button, html.on-windows input, html.on-windows select, html.on-windows textarea { font-family: "BoldHub Windows", Arial, Helvetica, sans-serif; }
+
+/* BETA pill under the logo */
+.beta-pill { display: inline-block; margin: 8px 0 0 2px; padding: .16rem .5rem; border: 1px solid #3a4a6b; border-radius: 999px; color: #9fb7ff; background: #1c2742; font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.4; }
+@media (max-width: 600px) {
+  .panel-tabs-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 16px 15px 0; }
+  .panel-tabs-row > span[aria-hidden="true"] { display: none; }
+  .panel-tabs-row .panel-tabs-title { margin-bottom: 4px; }
+  .panel-tabs-row .panel-tabs { gap: 18px; overflow-x: auto; scrollbar-width: none; }
+  .catalog-stock-time { justify-self: start; margin: 0 0 8px; }
+}
+/* Client file: room between a list and the action under it */
+.detail-section .section-add { margin-top: 14px; }
+.detail-section .invoice-suggest { margin-top: 12px; }
+.detail-section .invoice-suggest + .muted, .detail-section .request-send + .muted { margin-top: 12px; }
+.request-send { display: flex; justify-content: flex-end; margin-top: 14px; }
+.detail-section .stock-mode + .sales-mode-row:empty + .muted { margin-top: 10px; }
+
+/* Client file page */
+.client-file { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.client-file-back { margin: 0; }
+.client-file-back .text-button { color: var(--blue); font-weight: 700; }
+.client-file-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title action" "facts facts"; gap: 18px 24px; padding: 22px; }
+.client-file-title { grid-area: title; min-width: 0; }
+.client-file-title .eyebrow { margin: 0 0 4px; }
+.client-file-title h1 { margin: 0 0 10px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.client-file-request { grid-area: action; align-self: start; white-space: nowrap; }
+.client-file-facts { grid-area: facts; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.client-file-facts dt { margin-bottom: 3px; color: #8a8d91; font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.client-file-facts dd { margin: 0; font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
+.client-file-facts dd.due { color: #a13032; }
+.client-file-body { overflow: visible; }
+.client-file-tabs { padding-top: 16px; overflow-x: auto; scrollbar-width: none; }
+.client-file-tabs button { cursor: pointer; font-size: .8rem; }
+.client-file-content { padding: 4px 22px 24px; }
+.client-file-content > .action-feedback { margin: 16px 0 0; }
+/* Sections sit on the page, not in a narrow panel: the first one needs no divider. */
+.client-file-content > .detail-section:first-child, .client-file-content > .action-feedback + .detail-section,
+.client-file-columns > * > .detail-section:first-child, .client-file-columns > .detail-section { margin-top: 0; padding-top: 20px; border-top: 0; }
+.client-file-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 0 36px; align-items: start; }
+.client-file-columns > :nth-child(2) { padding-left: 36px; border-left: 1px solid var(--line); margin-left: -1px; }
+.company-form .detail-section + .detail-section { margin-top: 1.5rem; padding-top: 1.35rem; border-top: 1px solid var(--line); }
+.new-client-hint { margin: 0 0 4px; }
+@media (max-width: 900px) {
+  .client-file-columns { grid-template-columns: minmax(0, 1fr); }
+  .client-file-columns > :nth-child(2) { padding-left: 0; border-left: 0; margin-left: 0; border-top: 1px solid var(--line); margin-top: 1.5rem; }
+}
+@media (max-width: 600px) {
+  .client-file-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "action" "facts"; padding: 16px 15px; }
+  .client-file-request { justify-self: start; }
+  .client-file-facts { grid-template-columns: 1fr 1fr; }
+  .client-file-tabs { padding-inline: 15px; gap: 18px; }
+  .client-file-content { padding: 4px 15px 20px; }
+}
+.client-file-columns.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.client-file .partner-billing-actions { flex-wrap: wrap; }
+.client-file .partner-billing-actions .button { white-space: nowrap; }
+@media (max-width: 900px) { .client-file-columns.even { grid-template-columns: minmax(0, 1fr); } }
+/* Client file: CUI row, initial stock adds, account state */
+.company-form .cui-lookup { margin-bottom: 14px; }
+.company-form .cui-lookup label { flex: 0 1 280px; }
+.par-add { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.par-add .product-picker { flex: 1 1 320px; margin-top: 0; }
+.par-add select { min-height: 40px; padding: .4rem 2rem .4rem .7rem; border: 1px solid #ccd0d5; border-radius: 9px; background-color: #fff; color: var(--blue); font: inherit; font-size: .8rem; font-weight: 700; }
+.par-save-all { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: #f5f9ff; }
+.par-save-all .muted { margin: 0; margin-right: auto; }
+.par-save-all .button { padding: .55rem .9rem; font-size: .8rem; white-space: nowrap; }
+.login-state p { margin: 0 0 8px; }
+.login-state .payment-chip { margin-left: 8px; }
+.login-state .button { margin-top: 6px; }
+.button.danger-outline { color: #a13032; border-color: #f1c9cb; background: #fff; }
+.button.danger-outline:hover { background: #fdf3f3; }
+.point-form .partner-billing-actions .point-delete { margin-right: auto; }
+/* Client file: request with the initial stock table, regime inside the initial stock */
+.request-columns { grid-template-columns: minmax(0, .85fr) minmax(0, 1.5fr); }
+.request-stock-table td:first-child { min-width: 190px; }
+.request-empty { margin: 0 0 4px; }
+.request-stock-table th, .request-stock-table td { padding: 9px 8px; vertical-align: middle; }
+.request-stock-table td small { display: block; }
+.request-stock-table .num { text-align: center; white-space: nowrap; }
+.request-stock-table td.need { color: var(--blue); font-weight: 800; }
+.request-stock-table .request-qty { width: 56px; margin: 0 auto; display: block; }
+.request-stock-table .text-button { color: var(--blue); font-weight: 700; }
+.request-stock-table .text-button:disabled { color: #b0b3b8; cursor: default; }
+.regime-box { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc; }
+.regime-box .stock-mode { margin-bottom: 4px; }
+.regime-box .muted { margin: 6px 0 0; }
+@media (max-width: 900px) { .request-columns { grid-template-columns: minmax(0, 1fr); } }
+.request-stock-table .in-request { color: #23784d; font-weight: 800; }
