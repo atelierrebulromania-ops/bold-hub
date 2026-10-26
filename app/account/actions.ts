@@ -554,5 +554,5 @@ export async function setSalesMode(clientId: string, mode: "purchase" | "consign
   if (error || !data) return { ok: false, message: "Nu am putut salva regimul." };
   revalidatePath("/account");
   revalidatePath("/admin/partners");
-  return { ok: true, message: mode === "consignment" ? `Clientul e în consignație, cu comision ${value}%.` : "Clientul cumpără: se facturează la livrare." };
+  return { ok: true, message: mode === "consignment" ? `Revânzarea e în consignație, cu comision ${value}%. Consumul se facturează în continuare la livrare.` : "Revânzarea se facturează la livrare (cumpărare)." };
 }

@@ -6,9 +6,9 @@ export const clientFileSelect = `id,business_name,location_name,type,contact_pho
   partner_par_levels(product_id,location_id,channel,par_level_quantity,products(name,sku)),
   partner_contracts(id,title,status,supplier_uploaded_at,signed_uploaded_at),
   partner_custody_items(id,location_id,kind,product_id,name,quantity,unit_value,handed_on,trial_ends_on,status,closed_on,note,document_number),
-  partner_carts(id,status,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,partner_cart_items(quantity_needed))`;
+  partner_carts(id,status,location_id,created_at,prepared_at,delivered_at,invoiced_at,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,partner_cart_items(quantity_needed,product_id,channel))`;
 
-const tabIds = ["date", "puncte", "regim", "stoc", "custodie", "cerere", "cont", "admin"] as const;
+const tabIds = ["date", "puncte", "discounturi", "stoc", "custodie", "cerere", "cont", "admin"] as const;
 export type ClientTabId = (typeof tabIds)[number];
 export function clientTab(value: string | undefined): ClientTabId {
   return tabIds.includes(value as ClientTabId) ? value as ClientTabId : "date";

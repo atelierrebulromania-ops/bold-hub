@@ -690,6 +690,7 @@ export type Database = {
       }
       partner_carts: {
         Row: {
+          regime: string
           location_id: string | null
           invoiced_with: string | null
           invoice_due_date: string | null
@@ -721,6 +722,7 @@ export type Database = {
           status: Database["public"]["Enums"]["cart_status"]
         }
         Insert: {
+          regime?: string
           invoice_due_date?: string | null
           invoice_last_payment_date?: string | null
           invoice_rest?: number | null
@@ -749,6 +751,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["cart_status"]
         }
         Update: {
+          regime?: string
           invoice_due_date?: string | null
           invoice_last_payment_date?: string | null
           invoice_rest?: number | null

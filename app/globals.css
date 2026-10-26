@@ -1487,3 +1487,19 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .button.danger-outline { color: #a13032; border-color: #f1c9cb; background: #fff; }
 .button.danger-outline:hover { background: #fdf3f3; }
 .point-form .partner-billing-actions .point-delete { margin-right: auto; }
+/* Client file: request with the initial stock table, regime inside the initial stock */
+.request-columns { grid-template-columns: minmax(0, .85fr) minmax(0, 1.5fr); }
+.request-stock-table td:first-child { min-width: 190px; }
+.request-empty { margin: 0 0 4px; }
+.request-stock-table th, .request-stock-table td { padding: 9px 8px; vertical-align: middle; }
+.request-stock-table td small { display: block; }
+.request-stock-table .num { text-align: center; white-space: nowrap; }
+.request-stock-table td.need { color: var(--blue); font-weight: 800; }
+.request-stock-table .request-qty { width: 56px; margin: 0 auto; display: block; }
+.request-stock-table .text-button { color: var(--blue); font-weight: 700; }
+.request-stock-table .text-button:disabled { color: #b0b3b8; cursor: default; }
+.regime-box { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc; }
+.regime-box .stock-mode { margin-bottom: 4px; }
+.regime-box .muted { margin: 6px 0 0; }
+@media (max-width: 900px) { .request-columns { grid-template-columns: minmax(0, 1fr); } }
+.request-stock-table .in-request { color: #23784d; font-weight: 800; }

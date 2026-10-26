@@ -51,7 +51,8 @@ export type AgentClient = {
   partner_par_levels: { product_id: string; location_id: string | null; channel: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
-    invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
+    invoice_due_date: string | null; invoice_rest: number | null; location_id?: string | null;
+    partner_cart_items: { quantity_needed: number; product_id?: string; channel?: string }[] }[];
 };
 
 export type ClientContract = { id: string; title: string; status: string; supplier_uploaded_at: string; signed_uploaded_at: string | null };
@@ -282,7 +283,7 @@ export function NewClientPanel({ basePath, onClose }: { basePath: string; onClos
 export const clientTabs = [
   { id: "date", label: "Date firmă" },
   { id: "puncte", label: "Puncte de lucru" },
-  { id: "regim", label: "Regim comercial" },
+  { id: "discounturi", label: "Discounturi" },
   { id: "stoc", label: "Stoc inițial" },
   { id: "custodie", label: "Custodie" },
   { id: "cerere", label: "Cerere nouă" },
@@ -333,7 +334,7 @@ export function ClientFile({ client, catalog, categories, collections, loginBloc
           </div>
         </div>
         <dl className="client-file-facts">
-          <div><dt>Regim</dt><dd>{client.sales_mode === "consignment" ? `Consignație · ${client.consignment_commission ?? 0}%` : "Cumpărare"}</dd></div>
+          <div><dt>Revânzare</dt><dd>{client.sales_mode === "consignment" ? `Consignație · ${client.consignment_commission ?? 0}%` : "Cumpărare"}</dd></div>
           <div><dt>Puncte de lucru</dt><dd>{activePoints} · {client.stock_mode === "per_location" ? "pe punct" : "centralizat"}</dd></div>
           <div><dt>Discount</dt><dd>{describeRules(channelRules(client.partner_discounts, "resale"))}</dd></div>
           <div><dt>De încasat</dt><dd className={unpaid.length ? "due" : ""}>{unpaid.length ? `${money.format(unpaidTotal)} lei · ${unpaid.length} ${unpaid.length === 1 ? "factură" : "facturi"}` : "—"}</dd></div>
@@ -356,10 +357,7 @@ export function ClientFile({ client, catalog, categories, collections, loginBloc
             <div><ClientInvoices client={client} empty /></div>
           </div>}
           {tab === "puncte" && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={done} />}
-          {tab === "regim" && <div className="client-file-columns even">
-            <SalesModeEditor key={`m-${client.id}-${client.sales_mode}`} client={client} onDone={done} />
-            <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={done} />
-          </div>}
+          {tab === "discounturi" && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={done} />}
           {tab === "stoc" && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} collections={collections} onDone={done} />}
           {tab === "custodie" && <div className="client-file-columns even">
             <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={done} />
@@ -575,7 +573,10 @@ function ParLevelEditor({ client, catalog, collections, onDone }: { client: Agen
     header={<>
       <div className="point-tabs channel-switch" role="tablist" aria-label="Tip stoc">{channels.map((item) =>
         <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>
-          {item.label} ({count(item.id)})</button>)}</div>
+          {item.label} · {item.id === "resale" && client.sales_mode === "consignment" ? "consignație" : "cumpărare"} ({count(item.id)})</button>)}</div>
+      {channel === "resale"
+        ? <SalesModeEditor key={`m-${client.id}-${client.sales_mode}-${client.consignment_commission ?? ""}`} client={client} onDone={onDone} />
+        : <p className="muted small regime-box">Consum: produsele pe care clientul le folosește el (ex. hotel, salon). Se cumpără mereu: fiecare livrare se facturează, și la clienții în consignație.</p>}
       {perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
         <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null}
     </>} />;
@@ -675,7 +676,7 @@ function ParLevelList({ client, catalog, collections, levels, pointId, channel, 
           <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
         </div>
       ))}</div>}
-      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Salvează pe rând sau toate odată cu „Salvează tot”.</p>
+      <p className="muted small">{channel === "consumption" ? "Dacă are stoc doar pe Revânzare, clientul nu vede tab-urile în aplicația lui. " : ""}0 scoate produsul din stocul inițial. Salvează pe rând sau toate odată cu „Salvează tot”.</p>
     </section>
   );
 }
@@ -687,40 +688,99 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   const clientChannels = usedChannels(client.partner_par_levels);
   const [channel, setChannel] = useState<Channel>(clientChannels[0] ?? "resale");
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
+  // What the client says is left on its shelf, per product (the right-hand table).
+  const [remaining, setRemaining] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
-  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null) && level.channel === channel).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
+  const location = client.stock_mode === "per_location" ? pointId ?? points[0]?.id ?? null : null;
+  const pars = client.partner_par_levels.filter((level) => level.location_id === location && level.channel === channel)
+    .sort((a, b) => (a.products?.name ?? "").localeCompare(b.products?.name ?? "", "ro"));
+  // Already on its way: open and prepared orders for this point and channel (not yet delivered).
+  const ordered = new Map<string, number>();
+  for (const cart of client.partner_carts) {
+    if (!["open", "prepared", "pending_delivery"].includes(cart.status) || (location && cart.location_id !== location)) continue;
+    for (const item of cart.partner_cart_items) {
+      if (!item.product_id || (item.channel ?? "resale") !== channel) continue;
+      ordered.set(item.product_id, (ordered.get(item.product_id) ?? 0) + item.quantity_needed);
+    }
+  }
+  const needed = (productId: string, par: number) => {
+    const left = remaining[productId];
+    if (left === undefined || left === "") return null;
+    return Math.max(0, par - Number(left) - (ordered.get(productId) ?? 0));
+  };
   const valid = lines.length > 0 && lines.every((line) => /^\d+$/.test(line.quantity) && Number(line.quantity) > 0);
+
+  function put(productId: string, quantity: number) {
+    const item = byId.get(productId);
+    if (!item || quantity <= 0) return;
+    setLines((current) => current.some((line) => line.item.id === productId)
+      ? current.map((line) => line.item.id === productId ? { ...line, quantity: String(quantity) } : line)
+      : [...current, { item, quantity: String(quantity) }]);
+  }
+
+  function putAll() {
+    for (const par of pars) {
+      const quantity = needed(par.product_id, par.par_level_quantity);
+      if (quantity) put(par.product_id, quantity);
+    }
+  }
 
   function send() {
     start(async () => {
       const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), choosePoint ? pointId : null, channel);
       onDone(result);
-      if (result.ok) setLines([]);
+      if (result.ok) { setLines([]); setRemaining({}); }
     });
   }
 
+  const withNeed = pars.filter((par) => (needed(par.product_id, par.par_level_quantity) ?? 0) > 0);
+
   return (
-    <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>comandă în numele clientului</span></div>
-      {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
-        {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
-      {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
-        <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => setChannel(id)}>{channelLabel(id)}</button>)}</div>}
-      {lines.length > 0 && <div className="item-list">{lines.map((line, index) => (
-        <div className="order-item" key={line.item.id}>
-          <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>
-          <input className="request-qty" inputMode="numeric" value={line.quantity} onChange={(event) => setLines(lines.map((item, i) => i === index ? { ...item, quantity: event.target.value.replace(/\D/g, "") } : item))} aria-label={`Cantitate ${line.item.name}`} />
-          <button type="button" className="remove-button" title="Scoate" aria-label="Scoate produsul" onClick={() => setLines(lines.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
+    <div className="client-file-columns request-columns">
+      <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>comandă în numele clientului</span></div>
+        {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => { setPointId(event.target.value); setRemaining({}); }}>
+          {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
+        {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
+          <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => { setChannel(id); setLines([]); setRemaining({}); }}>{channelLabel(id)}</button>)}</div>}
+        {lines.length > 0 ? <div className="item-list">{lines.map((line, index) => (
+          <div className="order-item" key={line.item.id}>
+            <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>
+            <input className="request-qty" inputMode="numeric" value={line.quantity} onChange={(event) => setLines(lines.map((item, i) => i === index ? { ...item, quantity: event.target.value.replace(/\D/g, "") } : item))} aria-label={`Cantitate ${line.item.name}`} />
+            <button type="button" className="remove-button" title="Scoate" aria-label="Scoate produsul" onClick={() => setLines(lines.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
+          </div>
+        ))}</div> : <p className="muted small request-empty">Niciun produs în cerere. Adaugă din tabelul cu stocul inițial sau caută mai jos.</p>}
+        <ProductPicker catalog={catalog} exclude={new Set(lines.map((line) => line.item.id))} onPick={(item) => setLines([...lines, { item, quantity: "1" }])} placeholder="Alt produs (nume sau SKU)" />
+        <div className="request-send">
+          <button type="button" className="button button-primary" disabled={pending || !valid} onClick={send}>Trimite cererea la depozit</button>
         </div>
-      ))}</div>}
-      {suggestions.length > 0 && <div className="request-suggestions"><small>Din stocul inițial</small>
-        <div>{suggestions.map((item) => <button key={item.id} type="button" className="request-chip" onClick={() => setLines([...lines, { item, quantity: "1" }])}>+ {item.name}</button>)}</div></div>}
-      <ProductPicker catalog={catalog} exclude={new Set(lines.map((line) => line.item.id))} onPick={(item) => setLines([...lines, { item, quantity: "1" }])} placeholder="Alt produs (nume sau SKU)" />
-      <div className="request-send">
-        <button type="button" className="button button-primary" disabled={pending || !valid} onClick={send}>Trimite cererea la depozit</button>
-      </div>
-      <p className="muted small">Pentru când clientul îți cere produse direct (la telefon, pe mesaj, în vizită): cererea ajunge la depozit ca o comandă B2B a clientului, ca și cum ar fi plasat-o el din contul lui.</p>
-    </section>
+        <p className="muted small">Pentru când clientul îți cere produse direct (la telefon, pe mesaj, în vizită): cererea ajunge la depozit ca o comandă B2B a clientului, ca și cum ar fi plasat-o el din contul lui.</p>
+      </section>
+
+      <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3><span>{channelLabel(channel).toLowerCase()} · {pars.length} produse</span></div>
+        {pars.length === 0 ? <p className="muted small">Clientul nu are stoc inițial pe {channelLabel(channel).toLowerCase()}. Îl setezi în tab-ul Stoc inițial.</p> : <>
+          <p className="muted small">Scrie câte bucăți mai are clientul; necesarul se calculează până la stocul inițial, fără ce e deja comandat.</p>
+          <div className="handed-table-wrap"><table className="handed-table request-stock-table">
+            <thead><tr><th>Produs</th><th>Stoc inițial</th><th>Rămase</th><th>Comandat</th><th>Necesar</th><th /></tr></thead>
+            <tbody>{pars.map((par) => {
+              const need = needed(par.product_id, par.par_level_quantity);
+              const inRequest = lines.find((line) => line.item.id === par.product_id);
+              return <tr key={par.product_id}>
+                <td><strong>{par.products?.name ?? "Produs"}</strong><small>SKU {par.products?.sku ?? "—"}</small></td>
+                <td className="num">{par.par_level_quantity}</td>
+                <td><input className="request-qty" inputMode="numeric" value={remaining[par.product_id] ?? ""} placeholder="—"
+                  onChange={(event) => setRemaining({ ...remaining, [par.product_id]: event.target.value.replace(/\D/g, "") })} aria-label={`Rămase ${par.products?.name ?? ""}`} /></td>
+                <td className="num">{ordered.get(par.product_id) ?? 0}</td>
+                <td className={`num ${need ? "need" : ""}`}>{need ?? "—"}</td>
+                <td className="num">{inRequest ? <span className="in-request" title="E deja în cerere">✓</span>
+                  : <button type="button" className="text-button" disabled={!need} onClick={() => need && put(par.product_id, need)}>Adaugă</button>}</td>
+              </tr>;
+            })}</tbody>
+          </table></div>
+          <div className="request-send"><button type="button" className="button button-outline" disabled={withNeed.length === 0} onClick={putAll}>Adaugă tot necesarul ({withNeed.length})</button></div>
+        </>}
+      </section>
+    </div>
   );
 }
 
@@ -912,8 +972,9 @@ function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (res
   const [pending, start] = useTransition();
   const changed = mode !== client.sales_mode || (mode === "consignment" && commission !== String(client.consignment_commission ?? ""));
   return (
-    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3></div>
-      <div className="stock-mode" role="group" aria-label="Regim comercial">
+    <div className="regime-box">
+      <div className="stock-mode" role="group" aria-label="Regim pentru revânzare">
+        <span>Regim:</span>
         <button type="button" className={mode === "purchase" ? "active" : ""} onClick={() => setMode("purchase")}>Cumpărare</button>
         <button type="button" className={mode === "consignment" ? "active" : ""} onClick={() => setMode("consignment")}>Consignație</button>
       </div>
@@ -922,8 +983,8 @@ function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (res
         {changed && <button type="button" className="button button-primary" disabled={pending} onClick={() => start(async () => onDone(await setSalesMode(client.id, mode, commission)))}>Salvează regimul</button>}
       </div>
       <p className="muted small">{mode === "consignment"
-        ? "Marfa pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămâne a noastră până o vinde clientul; se facturează periodic ce a vândut, iar comisionul se calculează separat."
-        : "Clientul cumpără marfa: fiecare livrare se facturează."}</p>
-    </section>
+        ? "Produsele de revânzare pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămân ale noastre până le vinde clientul; se facturează periodic ce a vândut, cu comisionul lui."
+        : "Clientul cumpără produsele de revânzare: fiecare livrare se facturează."}</p>
+    </div>
   );
 }
