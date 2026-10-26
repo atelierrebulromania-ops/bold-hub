@@ -31,15 +31,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {params.notice === "rotated" && <p className="preview-alert success admin-feedback" role="status">Cheia a fost schimbată. Actualizează linkurile în Make, Zapier și MailerLite.</p>}
 
       <section className="board-panel" aria-label="Acces Lead">
-        <div className="board-panel-heading"><div><h2>Acces la Lead</h2><p>Cei bifați văd toate lead-urile. Doar agenții (Account) le pot prelua; administratorul are acces mereu.</p></div></div>
+        <div className="board-panel-heading"><div><h2>Acces la Lead</h2><p>Administratorul și agenții (Account) au acces mereu și pot prelua lead-uri. Celorlalți le poți da acces ca să vadă lead-urile, fără să le preia.</p></div></div>
         <div className="handed-table-wrap"><table className="handed-table settings-users">
           <thead><tr><th>Utilizator</th><th>Rol</th><th>Acces Lead</th></tr></thead>
           <tbody>{(users ?? []).map((user) => <tr key={user.id}>
             <td className="strong">{user.full_name}</td>
-            <td className="nowrap">{roleLabels[user.role]}{user.role === "account" ? " · poate prelua" : ""}</td>
-            <td className="nowrap">{user.role === "admin" ? <span className="outcome-chip ok">Mereu</span>
+            <td className="nowrap">{roleLabels[user.role]}</td>
+            <td className="nowrap">{user.role === "admin" || user.role === "account"
+              ? <span className="outcome-chip ok">{user.role === "account" ? "Mereu · preia lead-uri" : "Mereu"}</span>
               : <form action={setCrmAccess}><input type="hidden" name="user_id" value={user.id} /><input type="hidden" name="on" value={user.crm_access ? "false" : "true"} />
-                <SubmitButton className={user.crm_access ? "button button-outline" : "button button-primary"}>{user.crm_access ? "Scoate accesul" : "Dă acces"}</SubmitButton></form>}</td>
+                <SubmitButton className={`button settings-access-button ${user.crm_access ? "button-outline" : "button-primary"}`}>{user.crm_access ? "Scoate accesul" : "Dă acces"}</SubmitButton></form>}</td>
           </tr>)}</tbody>
         </table></div>
       </section>
