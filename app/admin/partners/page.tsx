@@ -1,6 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import type { AgentClient, CatalogItem } from "@/app/account/clients-board";
-import { b2bSkuFilter } from "@/lib/b2b-products";
+import type { AgentClient } from "@/app/account/clients-board";
 import { requireRole } from "@/lib/auth";
 import { AdminClientsBoard, type Agent } from "./admin-clients";
 
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 // Admin → Clienți: every client, with the agents' client file and the admin-only settings.
 export default async function AdminClientsPage() {
   const { supabase, profile } = await requireRole(["admin"]);
-  const [clientsResult, agentsResult, catalogResult] = await Promise.all([
+  const [clientsResult, agentsResult] = await Promise.all([
     supabase.from("partners")
       .select(`id,business_name,location_name,type,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username,account_id,bocp_contact_id,
         billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip,
@@ -22,20 +21,18 @@ export default async function AdminClientsPage() {
       .order("business_name").limit(1000),
     // Every user: a client may belong to an agent or (in tests) to the admin; only active agents can be picked.
     supabase.from("app_users").select("id,full_name,role,active").order("full_name"),
-    supabase.from("products").select("id,name,sku,category,list_price").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
   ]);
   const clients = (clientsResult.data ?? []) as AgentClient[];
   const users = agentsResult.data ?? [];
   const agents: Agent[] = users.filter((user) => user.role === "account" && user.active);
   const owners = Object.fromEntries(users.map((user) => [user.id, user.full_name]));
-  const catalog: CatalogItem[] = catalogResult.data ?? [];
-  const error = clientsResult.error ?? agentsResult.error ?? catalogResult.error;
+  const error = clientsResult.error ?? agentsResult.error;
 
   return (
     <AppShell profile={profile} active="/admin/partners" section="Administrare" title="Clienți"
       note={{ title: "Clienți", text: "Toți clienții, cu fișa completă. Agentul, clientul din BOCP și contul se setează doar de aici." }}>
       {error ? <p className="notice error" role="alert">Clienții nu pot fi încărcați acum. Reîncarcă pagina.</p>
-        : <AdminClientsBoard clients={clients} agents={agents} owners={owners} catalog={catalog} />}
+        : <AdminClientsBoard clients={clients} agents={agents} owners={owners} />}
     </AppShell>
   );
 }

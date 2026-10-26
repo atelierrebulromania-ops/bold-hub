@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClientPanel, orderStatus, productCategories, typeLabel, type AgentClient, type CatalogItem } from "@/app/account/clients-board";
+import { NewClientPanel, orderStatus, typeLabel, type AgentClient } from "@/app/account/clients-board";
 import { channelRules, describeRules } from "@/lib/pricing";
 import {
   deleteClientLogin, savePartnerBilling, searchBocpContacts, setClientActive, setClientAgent, setClientPassword, type BocpContactMatch,
@@ -14,14 +15,13 @@ type Feedback = { ok: boolean; message: string } | null;
 
 // Admin → Clienți: every client of the company, with the same client file the agents use, plus the
 // admin-only settings (agent, BOCP client, login, active).
-export function AdminClientsBoard({ clients, agents, owners, catalog }: { clients: AgentClient[]; agents: Agent[]; owners: Record<string, string>; catalog: CatalogItem[] }) {
+export function AdminClientsBoard({ clients, agents, owners }: { clients: AgentClient[]; agents: Agent[]; owners: Record<string, string> }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
+  const [creating, setCreating] = useState(false);
+  const open = (id: string) => router.push(`/admin/partners/${id}`);
   const [search, setSearch] = useState("");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [showInactive, setShowInactive] = useState(false);
-  const categories = useMemo(() => productCategories(catalog), [catalog]);
-  const selected = selectedId && selectedId !== "new" ? clients.find((client) => client.id === selectedId) ?? null : null;
   const needle = search.trim().toLocaleLowerCase("ro");
   const shown = clients.filter((client) => (showInactive || client.active)
     && (agentFilter === "all" || (agentFilter === "none" ? !client.account_id : client.account_id === agentFilter))
@@ -29,17 +29,17 @@ export function AdminClientsBoard({ clients, agents, owners, catalog }: { client
   const inactive = clients.filter((client) => !client.active).length;
 
   useEffect(() => {
-    if (!selectedId) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setSelectedId(null); };
+    if (!creating) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setCreating(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId]);
+  }, [creating]);
 
   return (
     <>
       <section className="board-panel" aria-label="Clienți">
         <div className="board-panel-heading"><div><h2>Clienți</h2><p>{clients.filter((client) => client.active).length} clienți activi. Un click deschide fișa completă.</p></div>
-          <button type="button" className="button button-primary" onClick={() => setSelectedId("new")}>+ Client nou</button></div>
+          <button type="button" className="button button-primary" onClick={() => setCreating(true)}>+ Client nou</button></div>
         <div className="admin-clients-toolbar">
           <label className="partners-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg>
@@ -59,8 +59,8 @@ export function AdminClientsBoard({ clients, agents, owners, catalog }: { client
               const status = orderStatus(client);
               const points = client.partner_locations.filter((location) => location.active).length;
               return (
-                <tr key={client.id} className={`handed-row ${selectedId === client.id ? "selected" : ""} ${client.active ? "" : "inactive-row"}`} onClick={() => setSelectedId(client.id)}>
-                  <td><button type="button" className="row-button strong" onClick={(event) => { event.stopPropagation(); setSelectedId(client.id); }}>{client.business_name}</button>
+                <tr key={client.id} className={`handed-row ${client.active ? "" : "inactive-row"}`} onClick={() => open(client.id)}>
+                  <td><Link href={`/admin/partners/${client.id}`} className="row-button strong" onClick={(event) => event.stopPropagation()}>{client.business_name}</Link>
                     <small>{client.location_name}{client.stock_mode === "per_location" && points > 1 ? ` · ${points} puncte de lucru` : ""}</small></td>
                   <td>{client.account_id ? owners[client.account_id] ?? "Utilizator șters" : <span className="item-flag no-ean nowrap">Fără agent</span>}</td>
                   <td><span className="partner-tile-chip-group">
@@ -78,16 +78,16 @@ export function AdminClientsBoard({ clients, agents, owners, catalog }: { client
           </table></div>}
       </section>
 
-      {selectedId && <div className="detail-backdrop" onClick={() => setSelectedId(null)} aria-hidden="true" />}
-      {selectedId && <ClientPanel key={`${selectedId}-${selected?.bocp_contact_id ?? ""}`} client={selected} catalog={catalog} categories={categories}
-        onClose={() => setSelectedId(null)} onSaved={(id) => { router.refresh(); if (id) setSelectedId(id); }}
-        admin={selected ? <AdminSection client={selected} agents={agents} owners={owners} onSaved={() => router.refresh()} /> : null} />}
+      {creating && <div className="detail-backdrop" onClick={() => setCreating(false)} aria-hidden="true" />}
+      {creating && <NewClientPanel basePath="/admin/partners" onClose={() => setCreating(false)} />}
     </>
   );
 }
 
 // Admin-only part of the client file.
-function AdminSection({ client, agents, owners, onSaved }: { client: AgentClient; agents: Agent[]; owners: Record<string, string>; onSaved: () => void }) {
+export function AdminSection({ client, agents, owners }: { client: AgentClient; agents: Agent[]; owners: Record<string, string> }) {
+  const router = useRouter();
+  const onSaved = () => router.refresh();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [pending, start] = useTransition();
   const [query, setQuery] = useState("");

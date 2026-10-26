@@ -1431,3 +1431,44 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .detail-section .invoice-suggest + .muted, .detail-section .request-send + .muted { margin-top: 12px; }
 .request-send { display: flex; justify-content: flex-end; margin-top: 14px; }
 .detail-section .stock-mode + .sales-mode-row:empty + .muted { margin-top: 10px; }
+
+/* Client file page */
+.client-file { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.client-file-back { margin: 0; }
+.client-file-back .text-button { color: var(--blue); font-weight: 700; }
+.client-file-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title action" "facts facts"; gap: 18px 24px; padding: 22px; }
+.client-file-title { grid-area: title; min-width: 0; }
+.client-file-title .eyebrow { margin: 0 0 4px; }
+.client-file-title h1 { margin: 0 0 10px; font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.client-file-request { grid-area: action; align-self: start; white-space: nowrap; }
+.client-file-facts { grid-area: facts; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.client-file-facts dt { margin-bottom: 3px; color: #8a8d91; font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.client-file-facts dd { margin: 0; font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
+.client-file-facts dd.due { color: #a13032; }
+.client-file-body { overflow: visible; }
+.client-file-tabs { padding-top: 16px; overflow-x: auto; scrollbar-width: none; }
+.client-file-tabs button { cursor: pointer; font-size: .8rem; }
+.client-file-content { padding: 4px 22px 24px; }
+.client-file-content > .action-feedback { margin: 16px 0 0; }
+/* Sections sit on the page, not in a narrow panel: the first one needs no divider. */
+.client-file-content > .detail-section:first-child, .client-file-content > .action-feedback + .detail-section,
+.client-file-columns > * > .detail-section:first-child, .client-file-columns > .detail-section { margin-top: 0; padding-top: 20px; border-top: 0; }
+.client-file-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 0 36px; align-items: start; }
+.client-file-columns > :nth-child(2) { padding-left: 36px; border-left: 1px solid var(--line); margin-left: -1px; }
+.company-form .detail-section + .detail-section { margin-top: 1.5rem; padding-top: 1.35rem; border-top: 1px solid var(--line); }
+.new-client-hint { margin: 0 0 4px; }
+@media (max-width: 900px) {
+  .client-file-columns { grid-template-columns: minmax(0, 1fr); }
+  .client-file-columns > :nth-child(2) { padding-left: 0; border-left: 0; margin-left: 0; border-top: 1px solid var(--line); margin-top: 1.5rem; }
+}
+@media (max-width: 600px) {
+  .client-file-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "action" "facts"; padding: 16px 15px; }
+  .client-file-request { justify-self: start; }
+  .client-file-facts { grid-template-columns: 1fr 1fr; }
+  .client-file-tabs { padding-inline: 15px; gap: 18px; }
+  .client-file-content { padding: 4px 15px 20px; }
+}
+.client-file-columns.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.client-file .partner-billing-actions { flex-wrap: wrap; }
+.client-file .partner-billing-actions .button { white-space: nowrap; }
+@media (max-width: 900px) { .client-file-columns.even { grid-template-columns: minmax(0, 1fr); } }
