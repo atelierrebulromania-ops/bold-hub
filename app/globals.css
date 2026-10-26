@@ -1374,3 +1374,21 @@ p.push-toggle { display: block; }
 .doc-actions .text-button { padding-top: 0; }
 .connect-card .connect-row { padding-top: 10px; }
 .accounting-form-row .optional { color: #8a8d91; font-weight: 500; }
+
+/* Ajutor */
+.help-page { display: grid; gap: 16px; max-width: 860px; }
+.help-card { padding: 20px 22px; }
+.help-card h2 { margin: 0 0 10px; font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
+.help-card p { margin: 0 0 8px; color: #4b4f56; font-size: .82rem; line-height: 1.55; }
+.help-card p:last-child { margin-bottom: 0; }
+.help-card a { color: var(--blue); font-weight: 700; }
+.help-steps, .help-list { margin: 0; padding-left: 20px; color: #4b4f56; font-size: .82rem; line-height: 1.6; }
+.help-steps li + li, .help-list li + li { margin-top: 4px; }
+.help-terms { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; margin: 0 0 10px; font-size: .82rem; line-height: 1.5; }
+.help-terms dt { font-weight: 800; }
+.help-terms dd { margin: 0; color: #4b4f56; }
+@media (max-width: 600px) {
+  .help-card { padding: 16px 15px; }
+  .help-terms { grid-template-columns: 1fr; gap: 2px; }
+  .help-terms dd { margin-bottom: 8px; }
+}

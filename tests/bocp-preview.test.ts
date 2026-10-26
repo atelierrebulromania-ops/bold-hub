@@ -115,6 +115,6 @@ test("SKU import candidate keeps EAN optional and excludes service lines", () =>
   assert.equal(candidates[0].customerName, "Client test");
   assert.equal(candidates[0].items.length, 1);
   assert.deepEqual(candidates[0].items[0], {
-    bocpProductId: "33", sku: "AT-33", name: "Produs test", ean: null, quantity: 2,
+    bocpProductId: "33", sku: "AT-33", name: "Produs test", ean: null, quantity: 2, gift: false,
   });
 });
