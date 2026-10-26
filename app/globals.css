@@ -1425,3 +1425,9 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
   .panel-tabs-row .panel-tabs { gap: 18px; overflow-x: auto; scrollbar-width: none; }
   .catalog-stock-time { justify-self: start; margin: 0 0 8px; }
 }
+/* Client file: room between a list and the action under it */
+.detail-section .section-add { margin-top: 14px; }
+.detail-section .invoice-suggest { margin-top: 12px; }
+.detail-section .invoice-suggest + .muted, .detail-section .request-send + .muted { margin-top: 12px; }
+.request-send { display: flex; justify-content: flex-end; margin-top: 14px; }
+.detail-section .stock-mode + .sales-mode-row:empty + .muted { margin-top: 10px; }

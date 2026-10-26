@@ -106,7 +106,7 @@ export async function setClientParLevel(clientId: string, productId: string, qua
   return { ok: true, message: quantity === 0 ? "Produsul a fost scos din stocul inițial." : "Stocul inițial a fost salvat." };
 }
 
-export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], source: "whatsapp" | "telefon", locationId: string | null = null, channel: Channel = "resale"): Promise<Result> {
+export async function addClientRequest(clientId: string, lines: { productId: string; quantity: number }[], locationId: string | null = null, channel: Channel = "resale"): Promise<Result> {
   const { supabase } = await agent();
   if (!uuid.test(clientId) || (locationId !== null && !uuid.test(locationId)) || !lines.length || lines.length > 100
     || lines.some((line) => !uuid.test(line.productId) || !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 100000)) {
@@ -115,7 +115,7 @@ export async function addClientRequest(clientId: string, lines: { productId: str
   const { error } = await supabase.rpc("staff_add_refill", {
     p_partner_id: clientId,
     p_items: lines.map((line) => ({ product_id: line.productId, quantity: line.quantity, channel: parseChannel(channel) })) as Json,
-    p_source: source,
+    p_source: "telefon",
     p_location_id: locationId,
   });
   if (error) return { ok: false, message: "Nu am putut adăuga cererea." };

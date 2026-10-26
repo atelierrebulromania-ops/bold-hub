@@ -375,7 +375,7 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
           <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
           <button type="button" className="button button-primary" disabled={pending || !editing.name.trim()} onClick={save}>{editing.id ? "Salvează punctul" : "Adaugă punctul"}</button>
         </div>
-      </div> : <button type="button" className="button button-outline" onClick={() => setEditing({ id: null, ...emptyPoint })}>+ Punct de lucru</button>}
+      </div> : <button type="button" className="button button-outline section-add" onClick={() => setEditing({ id: null, ...emptyPoint })}>+ Punct de lucru</button>}
     </section>
   );
 }
@@ -548,7 +548,6 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   const clientChannels = usedChannels(client.partner_par_levels);
   const [channel, setChannel] = useState<Channel>(clientChannels[0] ?? "resale");
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
-  const [source, setSource] = useState<"whatsapp" | "telefon">("telefon");
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
   const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null) && level.channel === channel).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
@@ -556,14 +555,14 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
 
   function send() {
     start(async () => {
-      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null, channel);
+      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), choosePoint ? pointId : null, channel);
       onDone(result);
       if (result.ok) setLines([]);
     });
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>ajunge la depozit</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>comandă în numele clientului</span></div>
       {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
         {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
       {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
@@ -578,12 +577,10 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
       {suggestions.length > 0 && <div className="request-suggestions"><small>Din stocul inițial</small>
         <div>{suggestions.map((item) => <button key={item.id} type="button" className="request-chip" onClick={() => setLines([...lines, { item, quantity: "1" }])}>+ {item.name}</button>)}</div></div>}
       <ProductPicker catalog={catalog} exclude={new Set(lines.map((line) => line.item.id))} onPick={(item) => setLines([...lines, { item, quantity: "1" }])} placeholder="Alt produs (nume sau SKU)" />
-      <div className="partner-billing-actions">
-        <div className="request-sources" role="group" aria-label="Sursa cererii">
-          {(["telefon", "whatsapp"] as const).map((value) => <button key={value} type="button" className={`partner-filter ${source === value ? "active reseller" : ""}`} aria-pressed={source === value} onClick={() => setSource(value)}>{value === "whatsapp" ? "WhatsApp" : "Telefon"}</button>)}
-        </div>
+      <div className="request-send">
         <button type="button" className="button button-primary" disabled={pending || !valid} onClick={send}>Trimite cererea la depozit</button>
       </div>
+      <p className="muted small">Pentru când clientul îți cere produse direct (la telefon, pe mesaj, în vizită): cererea ajunge la depozit ca o comandă B2B a clientului, ca și cum ar fi plasat-o el din contul lui.</p>
     </section>
   );
 }
@@ -753,7 +750,7 @@ function ContractsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         </div>
       ))}</div>}
       <div className="contract-upload">
-        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="Nume, ex. Contract de consignație nr. 2 / 19.10.2026" aria-label="Numele contractului" />
+        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="ex. Contract nr. 2 / 19.10.2026" aria-label="Numele contractului" />
         <label className="button button-outline file-button">{file ? file.name : "Alege PDF-ul"}<input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
         <button type="button" className="button button-primary" disabled={pending || !file || !title.trim()} onClick={upload}>{pending ? "Se încarcă…" : "Încarcă contractul"}</button>
       </div>
@@ -769,7 +766,7 @@ function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (res
   const [pending, start] = useTransition();
   const changed = mode !== client.sales_mode || (mode === "consignment" && commission !== String(client.consignment_commission ?? ""));
   return (
-    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3><span>{client.sales_mode === "consignment" ? `consignație · comision ${client.consignment_commission ?? 0}%` : "cumpărare"}</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3></div>
       <div className="stock-mode" role="group" aria-label="Regim comercial">
         <button type="button" className={mode === "purchase" ? "active" : ""} onClick={() => setMode("purchase")}>Cumpărare</button>
         <button type="button" className={mode === "consignment" ? "active" : ""} onClick={() => setMode("consignment")}>Consignație</button>
