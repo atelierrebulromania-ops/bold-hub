@@ -28,6 +28,8 @@ export type Database = {
           app_url: string | null
           leads_webhook_key: string | null
           lead_offer_days: number
+          lead_unclaimed_hours: number
+          lead_uncontacted_hours: number
         }
         Insert: { id?: number }
         Update: { id?: number }
@@ -56,6 +58,7 @@ export type Database = {
       partner_backorders: {
         Row: {
           location_id: string | null
+          channel: string
           id: string; partner_id: string; product_id: string; quantity: number; status: string; source_cart_id: string | null
           delivered_cart_id: string | null; created_by: string | null; shelved_at: string | null; shelved_by: string | null
           cancelled_at: string | null; cancelled_by: string | null; cancel_reason: string | null; stock_notified_at: string | null; created_at: string
@@ -68,10 +71,109 @@ export type Database = {
           { foreignKeyName: "partner_backorders_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
         ]
       }
-      partner_locations: {
-        Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string }
+      accounting_companies: {
+        Row: { id: string; name: string; vat_id: string | null; active: boolean; created_at: string }
+        Insert: { id?: string; name: string; vat_id?: string | null; active?: boolean }
+        Update: { name?: string; vat_id?: string | null; active?: boolean }
+        Relationships: []
+      }
+      accounting_company_access: {
+        Row: { user_id: string; company_id: string; created_at: string }
+        Insert: { user_id: string; company_id: string }
+        Update: { user_id?: string; company_id?: string }
+        Relationships: [
+          { foreignKeyName: "accounting_company_access_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "accounting_companies"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_suppliers: {
+        Row: { id: string; slug: string; name: string; domains: string[]; default_doc_type: string; sort: number; active: boolean; created_at: string }
+        Insert: { id?: string; slug: string; name: string; domains?: string[]; default_doc_type?: string; sort?: number; active?: boolean }
+        Update: { slug?: string; name?: string; domains?: string[]; default_doc_type?: string; sort?: number; active?: boolean }
+        Relationships: []
+      }
+      accounting_integrations: {
+        Row: { id: string; supplier_id: string; method: string; status: string; supports_sync: boolean; last_sync_at: string | null; last_document_at: string | null
+          last_error: string | null; last_error_at: string | null; note: string | null; created_at: string }
+        Insert: { id?: string; supplier_id: string; method: string; status?: string; supports_sync?: boolean; note?: string | null }
+        Update: { method?: string; status?: string; supports_sync?: boolean; last_sync_at?: string | null; last_document_at?: string | null; last_error?: string | null; last_error_at?: string | null; note?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_integrations_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: true; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_documents: {
+        Row: { id: string; company_id: string; supplier_id: string; doc_type: string; invoice_number: string | null; issued_on: string | null; period: string
+          original_name: string; mime_type: string; size_bytes: number; sha256: string; storage_path: string | null; collection_method: string
+          collected_at: string; collected_by: string | null; expires_at: string; last_downloaded_at: string | null; download_count: number
+          external_id: string | null; file_deleted_at: string | null; notes: string | null }
+        Insert: { id?: string; company_id: string; supplier_id: string; doc_type: string; invoice_number?: string | null; issued_on?: string | null; period: string
+          original_name: string; mime_type: string; size_bytes: number; sha256: string; storage_path?: string | null; collection_method: string
+          collected_at?: string; collected_by?: string | null; expires_at: string; external_id?: string | null; notes?: string | null }
+        Update: { storage_path?: string | null; file_deleted_at?: string | null; last_downloaded_at?: string | null; download_count?: number; notes?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_documents_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "accounting_companies"; referencedColumns: ["id"] },
+          { foreignKeyName: "accounting_documents_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: false; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_document_events: {
+        Row: { id: string; document_id: string | null; supplier_id: string | null; action: string; method: string | null; user_id: string | null; detail: string | null; created_at: string }
+        Insert: { id?: string; document_id?: string | null; supplier_id?: string | null; action: string; method?: string | null; user_id?: string | null; detail?: string | null }
+        Update: { detail?: string | null }
+        Relationships: [
+          { foreignKeyName: "accounting_document_events_supplier_id_fkey"; columns: ["supplier_id"]; isOneToOne: false; referencedRelation: "accounting_suppliers"; referencedColumns: ["id"] },
+        ]
+      }
+      accounting_sync_runs: {
+        Row: { id: string; integration_id: string; started_at: string; finished_at: string | null; status: string; collected: number; duplicates: number; error: string | null; triggered_by: string | null }
+        Insert: { id?: string; integration_id: string; status?: string; triggered_by?: string | null }
+        Update: { finished_at?: string | null; status?: string; collected?: number; duplicates?: number; error?: string | null }
+        Relationships: []
+      }
+      accounting_capture_tokens: {
+        Row: { id: string; user_id: string; label: string; token_hash: string; created_at: string; last_used_at: string | null; expires_at: string; revoked_at: string | null }
+        Insert: { id?: string; user_id: string; label?: string; token_hash: string; expires_at: string }
+        Update: { label?: string; last_used_at?: string | null; revoked_at?: string | null }
+        Relationships: []
+      }
+      consignment_settlements: {
+        Row: { id: string; partner_id: string; period_from: string | null; period_to: string; lines: Json; invoice_number: string; bocp_invoice_id: string; invoice_date: string | null
+          invoice_pdf_url: string | null; invoice_total: number | null; invoice_net: number | null; commission_percent: number; commission_amount: number | null; created_by: string | null; created_at: string }
         Insert: { id?: string }
         Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "consignment_settlements_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_stock_counts: {
+        Row: { id: string; partner_id: string; location_id: string | null; channel: string; product_id: string; remaining: number; counted_at: string; counted_by: string | null }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: []
+      }
+      partner_contracts: {
+        Row: { id: string; partner_id: string; title: string; status: string; supplier_file: string; supplier_uploaded_at: string; supplier_uploaded_by: string | null
+          signed_file: string | null; signed_uploaded_at: string | null; signed_uploaded_by: string | null; created_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_contracts_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_custody_items: {
+        Row: { id: string; partner_id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null
+          handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; document_number: string | null; trial_notified_at: string | null
+          created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string }
+        Update: { id?: string }
+        Relationships: [
+          { foreignKeyName: "partner_custody_items_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_custody_items_location_id_fkey"; columns: ["location_id"]; isOneToOne: false; referencedRelation: "partner_locations"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_custody_items_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+        ]
+      }
+      partner_locations: {
+        Row: { id: string; partner_id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; created_at: string; auth_user_id: string | null; account_username: string | null }
+        Insert: { id?: string }
+        Update: { id?: string; auth_user_id?: string | null; account_username?: string | null }
         Relationships: [
           { foreignKeyName: "partner_locations_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
         ]
@@ -541,6 +643,7 @@ export type Database = {
           product_id: string
           quantity_needed: number
           refill_request_id: string | null
+          channel: string
         }
         Insert: {
           cart_id: string
@@ -594,6 +697,7 @@ export type Database = {
           source_document_id: string | null
           bocp_order_id: string | null
           bocp_order_error: string | null
+          bocp_transfer_number: string | null
           bocp_order_attempted_at: string | null
           countdown_started_at: string | null
           created_at: string
@@ -738,6 +842,7 @@ export type Database = {
       partner_par_levels: {
         Row: {
           location_id: string | null
+          channel: string
           created_at: string
           id: string
           par_level_quantity: number
@@ -792,6 +897,9 @@ export type Database = {
       partners: {
         Row: {
           stock_mode: string
+          own_consumption_discounts: boolean
+          sales_mode: string
+          consignment_commission: number | null
           account_id: string | null
           bocp_contact_id: string | null
           billing_name: string | null
@@ -881,7 +989,7 @@ export type Database = {
         ]
       }
       partner_discounts: {
-        Row: { category: string | null; created_at: string; id: string; partner_id: string; percent: number }
+        Row: { category: string | null; channel: string; created_at: string; id: string; partner_id: string; percent: number }
         Insert: { category?: string | null; created_at?: string; id?: string; partner_id: string; percent: number }
         Update: { category?: string | null; created_at?: string; id?: string; partner_id?: string; percent?: number }
         Relationships: [
@@ -1021,11 +1129,11 @@ export type Database = {
         Returns: { account_id: string | null; account_name: string | null; active: boolean; business_name: string; id: string; location_name: string
           delivery_groups: string[]; type: string }[]
       }
-      save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json }; Returns: boolean }
+      save_partner_discounts: { Args: { p_partner_id: string; p_rules: Json; p_channel?: string; p_own?: boolean }; Returns: boolean }
       save_partner_profile: { Args: { p_data: Json; p_partner_id: string | null }; Returns: string | null }
       save_sales_document: { Args: { p_doc: Json; p_id: string | null; p_items: Json }; Returns: string | null }
       send_sales_document: { Args: { p_id: string }; Returns: string | null }
-      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number; p_location_id?: string | null }; Returns: boolean }
+      set_partner_par_level: { Args: { p_partner_id: string; p_product_id: string; p_quantity: number; p_location_id?: string | null; p_channel?: string }; Returns: boolean }
       save_partner_location: { Args: { p_partner_id: string; p_location_id: string | null; p_data: Json }; Returns: string | null }
       set_partner_stock_mode: { Args: { p_partner_id: string; p_mode: string }; Returns: boolean }
       link_partner_account: {
@@ -1117,6 +1225,19 @@ export type Database = {
       set_lead_status: { Args: { p_id: string; p_status: string; p_reason: string }; Returns: boolean }
       postpone_lead_follow_up: { Args: { p_id: string; p_days: number }; Returns: boolean }
       set_lead_offer_days: { Args: { p_days: number }; Returns: boolean }
+      set_lead_alert_hours: { Args: { p_unclaimed: number; p_uncontacted: number }; Returns: boolean }
+      point_login_paused: { Args: Record<PropertyKey, never>; Returns: boolean }
+      record_partner_contract: { Args: { p_id: string; p_partner_id: string; p_title: string; p_file: string }; Returns: boolean }
+      record_signed_contract: { Args: { p_id: string; p_file: string }; Returns: boolean }
+      delete_partner_contract: { Args: { p_id: string }; Returns: string[] | null }
+      save_custody_item: { Args: { p_id: string | null; p_partner_id: string; p_data: Json }; Returns: string | null }
+      set_custody_status: { Args: { p_id: string; p_status: string }; Returns: boolean }
+      delete_custody_item: { Args: { p_id: string }; Returns: boolean }
+      set_partner_sales_mode: { Args: { p_partner_id: string; p_mode: string; p_commission: number | null }; Returns: boolean }
+      record_accounting_downloads: { Args: { p_ids: string[]; p_zip: boolean }; Returns: number }
+      mark_partner_carts_transferred: { Args: { p_cart_ids: string[]; p_transfer_number: string }; Returns: boolean }
+      consignment_sales: { Args: { p_partner_id: string; p_to?: string }; Returns: { product_id: string; sold: number; delivered: number; on_shelf: number; last_count_at: string | null }[] }
+      record_consignment_settlement: { Args: { p_partner_id: string; p_period_to: string; p_invoice_number: string; p_bocp_invoice_id: string; p_invoice_date: string | null; p_invoice_pdf_url: string | null; p_invoice_total: number | null; p_invoice_net: number | null }; Returns: string | null }
       add_lead_note: { Args: { p_id: string; p_body: string }; Returns: boolean }
       link_lead_client: { Args: { p_id: string; p_partner_id: string }; Returns: boolean }
       set_crm_access: { Args: { p_user_id: string; p_on: boolean }; Returns: boolean }
@@ -1172,7 +1293,7 @@ export type Database = {
         | "produs_deteriorat"
         | "altul"
       return_status: "pending_restock" | "restocked"
-      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account"
+      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1324,7 +1445,7 @@ export const Constants = {
         "altul",
       ],
       return_status: ["pending_restock", "restocked"],
-      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account"],
+      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate"],
     },
   },
 } as const

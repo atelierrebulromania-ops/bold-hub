@@ -22,6 +22,17 @@ export async function rotateLeadsKey() {
   redirect("/admin/settings?notice=rotated");
 }
 
+// Hours before a waiting lead raises an alert; 0 turns that alert off.
+export async function setLeadAlertHours(form: FormData) {
+  const { supabase } = await requireRole(["admin"]);
+  const unclaimed = Number(form.get("unclaimed"));
+  const uncontacted = Number(form.get("uncontacted"));
+  const valid = (hours: number) => Number.isInteger(hours) && hours >= 0 && hours <= 168;
+  if (valid(unclaimed) && valid(uncontacted)) await supabase.rpc("set_lead_alert_hours", { p_unclaimed: unclaimed, p_uncontacted: uncontacted });
+  revalidatePath("/admin/settings");
+  redirect("/admin/settings?notice=alerts");
+}
+
 export async function setLeadOfferDays(form: FormData) {
   const { supabase } = await requireRole(["admin"]);
   const days = Number(form.get("days"));

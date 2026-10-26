@@ -11,7 +11,8 @@ const B2B_OVERDUE_HOURS = 48;
 const number = new Intl.NumberFormat("ro-RO");
 
 type Handed = { completed_at: string | null; claimed_at: string | null; claimed_by: string | null };
-type Cart = { id: string; created_at: string; partners: { business_name: string; location_name: string } | null; partner_cart_items: { quantity_needed: number }[] };
+// The point of work the cart goes to (multi-location clients), else the client's location.
+type Cart = { id: string; created_at: string; partners: { business_name: string; location_name: string } | null; partner_locations: { name: string } | null; partner_cart_items: { quantity_needed: number }[] };
 
 export default async function WarehouseDashboard() {
   const { supabase, profile } = await requireRole(["operator_depozit"]);
@@ -26,7 +27,7 @@ export default async function WarehouseDashboard() {
     supabase.from("online_orders").select("created_at").eq("status", "pending").order("created_at").limit(1).maybeSingle(),
     supabase.from("online_orders").select("id,invoice_number,customer_name,status,claimed_at")
       .eq("claimed_by", profile.id).in("status", ["claimed", "preparing", "ready"]).order("claimed_at").limit(50),
-    supabase.from("partner_carts").select("id,created_at,partners(business_name,location_name),partner_cart_items(quantity_needed)")
+    supabase.from("partner_carts").select("id,created_at,partners(business_name,location_name),partner_locations(name),partner_cart_items(quantity_needed)")
       .eq("status", "open").order("created_at").limit(100),
     supabase.from("order_returns").select("id", count).eq("status", "pending_restock"),
     supabase.from("order_returns").select("registered_at").eq("status", "pending_restock").order("registered_at").limit(1).maybeSingle(),
@@ -108,7 +109,7 @@ export default async function WarehouseDashboard() {
               const late = now - new Date(cart.created_at).getTime() > B2B_OVERDUE_HOURS * 3600000;
               const units = cart.partner_cart_items.reduce((sum, line) => sum + line.quantity_needed, 0);
               return <li key={cart.id}>
-                <span>{cart.partners?.business_name ?? "Client"}<small>{cart.partners?.location_name} · cerută {formatDateTime(cart.created_at)}</small></span>
+                <span>{cart.partners?.business_name ?? "Client"}<small>{cart.partner_locations?.name ?? cart.partners?.location_name} · cerută {formatDateTime(cart.created_at)}</small></span>
                 <span className="line-end">{late && <span className="payment-chip overdue">{waitingFor(cart.created_at, now)}</span>}<strong>{number.format(units)} buc.</strong></span>
               </li>;
             })}</ul>}

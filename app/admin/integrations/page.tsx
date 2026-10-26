@@ -22,7 +22,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   return (
     <AppShell profile={profile} active="/admin/integrations" section="Administrare" title="Integrări"
       note={{ title: "Import BOCP", text: "Primul import se face manual; apoi îl poți lăsa automat." }}>
-      <div className="page-heading"><div><p className="eyebrow">ADMINISTRARE</p><h1>Integrări</h1><p className="muted">Comenzile online vin din facturile BOCP.</p></div></div>
       <PreviewPanel importEnabled={today >= BOCP_LAUNCH_DATE} today={today} minDate={BOCP_LAUNCH_DATE} launchedOn={launchedOn} />
 
       <section className="admin-card auto-import-card" aria-label="Import automat">

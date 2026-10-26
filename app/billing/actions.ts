@@ -134,3 +134,40 @@ export async function confirmProformaCancelled(documentId: string): Promise<{ ok
   revalidatePath("/billing");
   return { ok: true, message: "Anularea a fost confirmată. Agentul a fost anunțat." };
 }
+
+// Consignment: the handed carts leave on a BOCP transfer voucher instead of an invoice.
+export async function markCartsTransferred(cartIds: string[], transferNumber: string): Promise<{ ok: boolean; message: string }> {
+  if (cartIds.length === 0 || cartIds.length > 20 || !cartIds.every((id) => uuid.test(id))) return { ok: false, message: "Comenzile nu sunt valide." };
+  const number = transferNumber.trim();
+  if (!number || number.length > 60) return { ok: false, message: "Introdu numărul bonului de transfer din BOCP." };
+  const { supabase } = await requireRole(["admin", "operator_facturare"]);
+  const { data, error } = await supabase.rpc("mark_partner_carts_transferred", { p_cart_ids: cartIds, p_transfer_number: number });
+  if (error) return { ok: false, message: "Nu am putut salva. Încearcă din nou." };
+  if (!data) return { ok: false, message: "Comenzile s-au schimbat între timp. Reîncarcă pagina." };
+  revalidatePath("/billing");
+  return { ok: true, message: `Marfa a fost trecută în consignație cu bonul de transfer ${number}.` };
+}
+
+// Consignment settlement: the BOCP invoice issued for what the client sold closes the period.
+export async function settleConsignment(partnerId: string, periodTo: string, invoiceNumber: string): Promise<{ ok: boolean; message: string }> {
+  if (!uuid.test(partnerId) || Number.isNaN(Date.parse(periodTo))) return { ok: false, message: "Decontul nu este valid." };
+  const number = invoiceNumber.trim();
+  if (!number || number.length > 60) return { ok: false, message: "Introdu numărul facturii din BOCP." };
+  const { supabase } = await requireRole(["admin", "operator_facturare"]);
+  let invoice: BocpInvoiceMatch | null;
+  try {
+    invoice = await findBocpInvoice(number, searchFrom(new Date(Date.now() - 60 * 86400000).toISOString()));
+  } catch {
+    return { ok: false, message: "BOCP nu a răspuns. Căutarea funcționează doar de pe rețeaua permisă în BOCP; încearcă din nou." };
+  }
+  if (!invoice) return { ok: false, message: `Nu am găsit factura „${number}” în BOCP (ultimele 60 de zile).` };
+  if (invoice.cancelled) return { ok: false, message: `Factura ${invoice.number} este anulată în BOCP.` };
+  const { data, error } = await supabase.rpc("record_consignment_settlement", {
+    p_partner_id: partnerId, p_period_to: periodTo, p_invoice_number: invoice.number, p_bocp_invoice_id: invoice.bocpInvoiceId,
+    p_invoice_date: invoice.date || null, p_invoice_pdf_url: invoice.pdfUrl, p_invoice_total: invoice.totalAmount, p_invoice_net: invoice.netAmount,
+  });
+  if (error) return { ok: false, message: error.code === "23505" ? `Factura ${invoice.number} e deja folosită la un decont.` : "Nu am putut salva decontul." };
+  if (!data) return { ok: false, message: "Decontul s-a schimbat între timp. Reîncarcă pagina." };
+  revalidatePath("/billing");
+  return { ok: true, message: `Decontul a fost închis cu factura ${invoice.number}.` };
+}

@@ -3,12 +3,13 @@ import { AppShell } from "@/components/app-shell";
 import { requireRole } from "@/lib/auth";
 import { bocpProductStock } from "@/lib/b2b-bocp";
 import { BillingBoard, type BillingCart, type BillingView, type BocpReserved } from "./billing-board";
+import { ConsignmentBoard, type ConsignmentClient, type Settlement } from "./consignment-board";
 import { DocumentRequests, type BillingDocument } from "./document-requests";
 import { LinkPending } from "@/components/link-pending";
 
 export const dynamic = "force-dynamic";
 
-const fields = "id,partner_id,invoiced_with,partner_locations(name,city,address),prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,invoice_due_date,invoice_rest,partners(business_name,location_name,type,is_important_client,contact_phone,contact_email,partner_discounts(category,percent)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,products(name,sku,variant_label,category))" as const;
+const fields = "id,partner_id,invoiced_with,partner_locations(name,city,address),prepared_at,delivered_at,delivered_by,reserved_in_bocp_at,reserved_in_bocp_by,bocp_order_id,bocp_order_error,bocp_order_attempted_at,bocp_transfer_number,invoiced_at,invoiced_by,invoice_number,invoice_date,bocp_invoice_id,invoice_due_date,invoice_rest,partners(sales_mode,business_name,location_name,type,is_important_client,contact_phone,contact_email,own_consumption_discounts,partner_discounts(category,percent,channel)),sales_documents!partner_carts_source_document_id_fkey(kind,number,discount_percent,sales_document_items(sku,discount_percent)),partner_cart_items(id,quantity_needed,channel,products(name,sku,variant_label,category))" as const;
 
 const documentFields = "id,number,client_name,client_vat_id,discount_percent,account_id,bocp_order_id,bocp_proforma_total,invoice_requested_at,invoiced_at,invoiced_by,invoice_number,bocp_invoice_id,invoice_due_date,invoice_rest,cancel_requested_at,cancel_reason,status,sales_document_items(sku,name,quantity,unit_price,vat_percent,discount_percent,position)" as const;
 
@@ -17,7 +18,35 @@ const tabs: { view: BillingView; label: string; title: string }[] = [
   { view: "invoice", label: "Facturare", title: "Facturare" },
   { view: "products", label: "Status", title: "Status rezervări BOCP" },
   { view: "history", label: "Istoric", title: "Istoric" },
+  { view: "consignment", label: "Consignație", title: "Consignație" },
 ];
+
+// Consignment: each client's sales since its last settlement, and the closed settlements.
+async function loadConsignment(supabase: Awaited<ReturnType<typeof requireRole>>["supabase"]) {
+  const [{ data: partners }, { data: rows }] = await Promise.all([
+    supabase.from("partners").select("id,business_name,consignment_commission").eq("sales_mode", "consignment").eq("active", true).order("business_name"),
+    supabase.from("consignment_settlements").select("id,partner_id,period_from,period_to,invoice_number,invoice_total,invoice_net,commission_percent,commission_amount,invoice_pdf_url,lines,partners(business_name)")
+      .order("period_to", { ascending: false }).limit(100),
+  ]);
+  const sales = await Promise.all((partners ?? []).map((partner) => supabase.rpc("consignment_sales", { p_partner_id: partner.id })));
+  const productIds = [...new Set(sales.flatMap((result) => (result.data ?? []).map((line) => line.product_id)))];
+  const { data: products } = productIds.length ? await supabase.from("products").select("id,name,sku").in("id", productIds) : { data: [] };
+  const product = new Map((products ?? []).map((row) => [row.id, row]));
+  const settlements = rows ?? [];
+  const clients: ConsignmentClient[] = (partners ?? []).map((partner, index) => ({
+    id: partner.id, name: partner.business_name, commission: partner.consignment_commission ?? 0,
+    since: settlements.find((row) => row.partner_id === partner.id)?.period_to ?? null,
+    lines: (sales[index].data ?? []).map((line) => ({ productId: line.product_id, name: product.get(line.product_id)?.name ?? "Produs", sku: product.get(line.product_id)?.sku ?? "—",
+      sold: line.sold, delivered: line.delivered, onShelf: line.on_shelf, lastCountAt: line.last_count_at }))
+      .sort((a, b) => b.sold - a.sold || a.name.localeCompare(b.name, "ro")),
+  }));
+  const closed: Settlement[] = settlements.map((row) => ({
+    id: row.id, partnerName: row.partners?.business_name ?? "Client", periodFrom: row.period_from, periodTo: row.period_to, invoiceNumber: row.invoice_number,
+    invoiceTotal: row.invoice_total, invoiceNet: row.invoice_net, commissionPercent: row.commission_percent, commissionAmount: row.commission_amount, pdfUrl: row.invoice_pdf_url,
+    units: (Array.isArray(row.lines) ? row.lines as { sold?: number }[] : []).reduce((sum, line) => sum + (line.sold ?? 0), 0),
+  }));
+  return { clients, closed };
+}
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { supabase, profile } = await requireRole(["admin", "operator_facturare"]);
@@ -51,13 +80,18 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const docsToInvoice: BillingDocument[] = docInvoiceResult.data ?? [];
   const docsToCancel: BillingDocument[] = docCancelResult.data ?? [];
   const docsHistory: BillingDocument[] = docHistoryResult?.data ?? [];
-  const toReserve: BillingCart[] = reserveResult.data ?? [];
+  // Consignment carts leave on a transfer voucher: nothing to reserve.
+  const toReserve: BillingCart[] = (reserveResult.data ?? []).filter((cart) => cart.partners?.sales_mode !== "consignment");
   const toInvoice: BillingCart[] = invoiceResult.data ?? [];
   const carts: BillingCart[] = view === "reserve" ? toReserve : view === "invoice" ? toInvoice
     : view === "products" ? productsResult?.data ?? [] : historyResult?.data ?? [];
   const names = Object.fromEntries((staffResult.data ?? []).map((user) => [user.id, user.full_name]));
   const error = reserveResult.error ?? invoiceResult.error ?? productsResult?.error ?? historyResult?.error;
   const counts: Partial<Record<BillingView, number>> = { reserve: toReserve.length, invoice: toInvoice.length + docsToInvoice.length + docsToCancel.length };
+
+  const consignment = view === "consignment" ? await loadConsignment(supabase) : null;
+  // The settlement closes the period at the moment the page was read, so sales counted later go to the next one.
+  const periodTo = new Date().toISOString();
 
   // "Status" shows BOCP's own reserved stock next to what the B2B carts hold.
   let bocpReserved: BocpReserved | null = null;
@@ -86,10 +120,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           </nav>
           <span aria-hidden="true" />
         </div>
+        {view === "consignment" && consignment && <ConsignmentBoard clients={consignment.clients} settlements={consignment.closed} periodTo={periodTo}
+          canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} />}
         {(view === "invoice" || view === "history") && <DocumentRequests toInvoice={docsToInvoice} toCancel={docsToCancel} history={docsHistory} view={view}
           canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} names={names} />}
         {view === "invoice" && docsToInvoice.length + docsToCancel.length > 0 && toInvoice.length > 0 && <h3 className="board-subtitle panel-subtitle">Comenzi B2B predate de depozit</h3>}
-        <BillingBoard hideEmpty={(view === "invoice" && docsToInvoice.length + docsToCancel.length > 0) || (view === "history" && docsHistory.length > 0)} carts={carts} view={view} canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} operatorNames={names} bocpReserved={bocpReserved} bocpError={bocpError} />
+        {view !== "consignment" && <BillingBoard hideEmpty={(view === "invoice" && docsToInvoice.length + docsToCancel.length > 0) || (view === "history" && docsHistory.length > 0)} carts={carts} view={view} canInvoice={profile.role === "admin" || profile.role === "operator_facturare"} operatorNames={names} bocpReserved={bocpReserved} bocpError={bocpError} />}
       </section>
     </AppShell>
   );

@@ -15,7 +15,7 @@ export default async function Home() {
     const view = await viewAs(profile.role);
     redirect(view && "partnerId" in view ? "/partner" : homeFor(view?.role ?? profile.role));
   }
-  const { data: partner } = await supabase.from("partners")
-    .select("id").eq("auth_user_id", userId).eq("active", true).maybeSingle();
+  // A partner: the client's manager login or a point login (row security shows it its client).
+  const { data: partner } = await supabase.from("partners").select("id").eq("active", true).limit(1).maybeSingle();
   redirect(partner ? "/partner" : "/access");
 }

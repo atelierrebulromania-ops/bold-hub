@@ -1,5 +1,12 @@
 // Client discount rules: a rule for a product category wins over the rule for the whole range.
-export type DiscountRule = { category: string | null; percent: number };
+// Rules belong to an order channel (resale when missing).
+export type DiscountRule = { category: string | null; percent: number; channel?: string };
+
+// The rules that apply on a channel: consumption uses the resale rules unless the client has its own.
+export function channelRules(rules: DiscountRule[], channel: string = "resale", ownConsumption = false): DiscountRule[] {
+  const on = channel === "consumption" && ownConsumption ? "consumption" : "resale";
+  return rules.filter((rule) => (rule.channel ?? "resale") === on);
+}
 
 export function discountFor(rules: DiscountRule[], category: string | null): number {
   const byCategory = category ? rules.find((rule) => rule.category?.toLocaleLowerCase("ro") === category.toLocaleLowerCase("ro")) : undefined;

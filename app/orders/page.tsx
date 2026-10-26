@@ -27,7 +27,7 @@ export default async function OrdersPage() {
     })),
   }));
   return (
-    <AppShell profile={profile} active="/orders" section="Depozit" title="Comenzi online"
+    <AppShell profile={profile} active="/orders" section="Operațiuni" title="Comenzi online"
       note={{ title: "Flux operațional", text: "Comenzile sunt actualizate automat." }}
       topbarExtra={<><div className="live-indicator"><span className="live-dot" /> Actualizare automată</div><span className="topbar-divider" /></>}>
       {error ? <div className="notice error" role="alert">Comenzile nu pot fi încărcate acum. Reîncarcă pagina.</div> : <OrderBoard orders={orders} userId={userId} operatorNames={operatorNames} />}

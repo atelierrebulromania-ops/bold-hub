@@ -5,11 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PaymentChip } from "@/components/payment-chip";
 import { formatDateTime } from "@/lib/orders";
-import { describeRules, type DiscountRule } from "@/lib/pricing";
+import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
+import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
-  type ClientInput, type InvoiceSuggestion,
+  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
+  saveCustodyItem, setCustodyStatus, setSalesMode, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
+  type ClientInput, type CustodyInput, type InvoiceSuggestion,
 } from "./actions";
+import { uploadContractFile } from "@/components/contract-file";
+import { custodyKindLabel, custodyStatusLabel, formatDay } from "@/lib/custody";
 import { LinkPending } from "@/components/link-pending";
 
 export type AgentClient = {
@@ -30,17 +34,31 @@ export type AgentClient = {
   billing_city: string | null;
   billing_county: string | null;
   billing_zip: string | null;
-  partner_discounts: { category: string | null; percent: number }[];
+  partner_discounts: { category: string | null; percent: number; channel: string }[];
+  // Loaded for the admin's client list only.
+  account_id?: string | null;
+  bocp_contact_id?: string | null;
+  partner_contracts: ClientContract[];
+  // purchase: invoiced at delivery; consignment: invoiced on what was sold, with the client's commission.
+  sales_mode: "purchase" | "consignment";
+  consignment_commission: number | null;
+  partner_custody_items: CustodyItem[];
+  // Consumption orders use the resale discounts unless the client has its own consumption rules.
+  own_consumption_discounts: boolean;
   // central: one stock and one order for the firm (to the main point); per_location: each point its own.
   stock_mode: "central" | "per_location";
   partner_locations: ClientLocation[];
-  partner_par_levels: { product_id: string; location_id: string | null; par_level_quantity: number; products: { name: string; sku: string } | null }[];
+  partner_par_levels: { product_id: string; location_id: string | null; channel: string; par_level_quantity: number; products: { name: string; sku: string } | null }[];
   partner_carts: { id: string; status: string; created_at: string; prepared_at: string | null; delivered_at: string | null;
     invoiced_at: string | null; invoice_number: string | null; bocp_invoice_id: string | null;
     invoice_due_date: string | null; invoice_rest: number | null; partner_cart_items: { quantity_needed: number }[] }[];
 };
 
-export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean };
+export type ClientContract = { id: string; title: string; status: string; supplier_uploaded_at: string; signed_uploaded_at: string | null };
+export type CustodyItem = { id: string; location_id: string | null; kind: string; product_id: string | null; name: string; quantity: number; unit_value: number | null;
+  handed_on: string; trial_ends_on: string | null; status: string; closed_on: string | null; note: string | null; document_number: string | null };
+
+export type ClientLocation = { id: string; name: string; city: string | null; address: string | null; contact_name: string | null; contact_phone: string | null; is_main: boolean; active: boolean; account_username?: string | null };
 
 const sortLocations = (locations: ClientLocation[]) => [...locations].sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.name.localeCompare(b.name, "ro"));
 
@@ -86,6 +104,12 @@ function orderStatus(client: AgentClient) {
 
 export type ClientsView = "mine" | "all";
 
+export function productCategories(catalog: CatalogItem[]) {
+  return [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro"));
+}
+
+export { orderStatus, typeLabel };
+
 export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   view: ClientsView; clients: AgentClient[]; directory: OtherClient[]; catalog: CatalogItem[]; userId: string;
 }) {
@@ -98,7 +122,7 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   const mine = clients.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.vat_id ?? ""}`));
   const everyone = directory.filter((client) => matches(`${client.business_name} ${client.location_name} ${client.account_name ?? ""}`));
   const own = new Set(clients.map((client) => client.id));
-  const categories = useMemo(() => [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro")), [catalog]);
+  const categories = useMemo(() => productCategories(catalog), [catalog]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -140,7 +164,7 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
                     {client.is_important_client && <span className="priority-chip">⚡ Prioritar</span>}
                     {!client.vat_id && <span className="item-flag no-ean">Fără date de facturare</span>}
                   </span></td>
-                  <td>{describeRules(client.partner_discounts as DiscountRule[])}</td>
+                  <td>{describeRules(channelRules(client.partner_discounts, "resale"))}</td>
                   <td><span className={`agent-status ${status.tone}`}>{status.label}</span></td>
                 </tr>
               );
@@ -170,8 +194,9 @@ export function ClientsBoard({ view, clients, directory, catalog, userId }: {
   );
 }
 
-function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
-  client: AgentClient | null; catalog: CatalogItem[]; categories: string[]; onClose: () => void; onSaved: (id?: string) => void;
+// The client file, shared by the agent's and the admin's client lists; `admin` adds the admin-only section.
+export function ClientPanel({ client, catalog, categories, onClose, onSaved, admin }: {
+  client: AgentClient | null; catalog: CatalogItem[]; categories: string[]; onClose: () => void; onSaved: (id?: string) => void; admin?: ReactNode;
 }) {
   const [input, setInput] = useState<ClientInput>(client ? toInput(client) : emptyClient);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -211,6 +236,7 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
         <button className="close-button" aria-label="Închide" onClick={onClose}>×</button></div>
       <div className="detail-scroll">
         {client && <p className={`agent-status ${orderStatus(client).tone} block`}>{orderStatus(client).label}</p>}
+        {client && admin}
         {client && <ClientInvoices client={client} />}
 
         <section className="detail-section"><h3>Date firmă și facturare</h3>
@@ -245,8 +271,11 @@ function ClientPanel({ client, catalog, categories, onClose, onSaved }: {
         </section>
 
         {client && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <SalesModeEditor key={`m-${client.id}-${client.sales_mode}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
+        {client && <ContractsEditor key={`k-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {client && <LoginEditor key={`l-${client.id}`} client={client} onDone={(result) => { setFeedback(result); if (result.ok) onSaved(); }} />}
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
@@ -261,8 +290,25 @@ const emptyPoint = { name: "", city: "", address: "", contactName: "", contactPh
 function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
   const [editing, setEditing] = useState<{ id: string | null } & typeof emptyPoint | null>(null);
   const [pending, start] = useTransition();
+  // Point logins (per-point mode): each point can have its own account that sees only that point.
+  const [login, setLogin] = useState<{ pointId: string; username: string; password: string } | null>(null);
   const points = sortLocations(client.partner_locations);
   const set = (key: keyof typeof emptyPoint, value: string | boolean) => editing && setEditing({ ...editing, [key]: value });
+  const perPoint = client.stock_mode === "per_location";
+
+  function createLogin() {
+    if (!login) return;
+    start(async () => {
+      const result = await createPointLogin(client.id, login.pointId, login.username, login.password);
+      onDone(result);
+      if (result.ok) setLogin(null);
+    });
+  }
+
+  function removeLogin(point: ClientLocation) {
+    if (!window.confirm(`Ștergi contul „${point.account_username}” al punctului ${point.name}? Nu se mai poate conecta; îi poți face altul.`)) return;
+    start(async () => onDone(await deletePointLogin(client.id, point.id)));
+  }
 
   function save() {
     if (!editing) return;
@@ -296,10 +342,25 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         <div className={`order-item ${point.active ? "" : "inactive-point"}`} key={point.id}>
           <div><strong>{point.name}{point.is_main && <span className="point-main">principal</span>}{!point.active && <span className="point-main off">inactiv</span>}</strong>
             <small>{[point.address, point.city].filter(Boolean).join(", ") || "Fără adresă"}{point.contact_name || point.contact_phone ? ` · ${[point.contact_name, point.contact_phone].filter(Boolean).join(", ")}` : ""}</small></div>
-          <button type="button" className="text-button" onClick={() => setEditing({ id: point.id, name: point.name, city: point.city ?? "", address: point.address ?? "",
-            contactName: point.contact_name ?? "", contactPhone: point.contact_phone ?? "", active: point.active })}>Editează</button>
+          <span className="point-actions">
+            {perPoint && point.active && (point.account_username
+              ? <><span className="point-login">Cont: <strong>{point.account_username}</strong></span>
+                <button type="button" className="text-button" disabled={pending} onClick={() => removeLogin(point)}>Șterge contul</button></>
+              : <button type="button" className="text-button" onClick={() => setLogin({ pointId: point.id, username: "", password: "" })}>Creează cont</button>)}
+            <button type="button" className="text-button" onClick={() => setEditing({ id: point.id, name: point.name, city: point.city ?? "", address: point.address ?? "",
+              contactName: point.contact_name ?? "", contactPhone: point.contact_phone ?? "", active: point.active })}>Editează</button>
+          </span>
         </div>
       ))}</div>
+      {login && <div className="point-form">
+        <p className="muted small">Cont pentru <strong>{points.find((point) => point.id === login.pointId)?.name}</strong>: vede doar punctul lui (stoc, cereri, comenzi, restanțe), fără facturi.</p>
+        <div className="admin-inline admin-mini-form">
+          <input value={login.username} maxLength={32} autoCapitalize="none" spellCheck={false} autoFocus onChange={(event) => setLogin({ ...login, username: event.target.value })} placeholder="Username" aria-label="Username" />
+          <input value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} placeholder="Parolă (min. 6)" aria-label="Parolă" autoComplete="new-password" />
+          <button type="button" className="button button-outline" disabled={pending} onClick={() => setLogin(null)}>Renunță</button>
+          <button type="button" className="button button-primary" disabled={pending || login.username.trim().length < 3 || login.password.length < 6} onClick={createLogin}>Creează cont</button>
+        </div>
+      </div>}
       {editing ? <div className="point-form">
         <div className="partner-billing-grid">
           <label>Nume punct<input value={editing.name} maxLength={120} autoFocus onChange={(event) => set("name", event.target.value)} placeholder="ex. Iulius Mall" /></label>
@@ -320,7 +381,32 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
 }
 
 function DiscountEditor({ client, categories, onDone }: { client: AgentClient; categories: string[]; onDone: (result: { ok: boolean; message: string }) => void }) {
-  const initial = client.partner_discounts as DiscountRule[];
+  // The Consum tab shows for clients that order for their own consumption (or already have consumption rules).
+  const consumption = client.own_consumption_discounts || client.partner_par_levels.some((level) => level.channel === "consumption");
+  const [channel, setChannel] = useState<Channel>("resale");
+  const [own, setOwn] = useState(client.own_consumption_discounts);
+  const switcher = consumption ? <div className="point-tabs channel-switch" role="tablist" aria-label="Discount pentru">{channels.map((item) =>
+    <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>{item.label}</button>)}</div> : null;
+  if (channel === "consumption" && !own) {
+    return (
+      <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>consum</span></div>
+        {switcher}
+        <label className="check-line"><input type="checkbox" checked onChange={() => setOwn(true)} /> Aceleași discounturi ca la revânzare</label>
+        <p className="muted small">Acum: {describeRules(channelRules(client.partner_discounts, "resale"))}. Debifează ca să setezi alte discounturi pentru consum.</p>
+        {client.own_consumption_discounts && <div className="partner-billing-actions">
+          <button type="button" className="button button-outline" onClick={() => saveSame()}>Salvează</button></div>}
+      </section>
+    );
+  }
+  function saveSame() {
+    void saveDiscounts(client.id, [], "consumption", false).then(onDone);
+  }
+  return <DiscountRules key={channel} client={client} categories={categories} channel={channel} header={<>{switcher}
+    {channel === "consumption" && <label className="check-line"><input type="checkbox" checked={false} onChange={() => setOwn(false)} /> Aceleași discounturi ca la revânzare</label>}</>} onDone={onDone} />;
+}
+
+function DiscountRules({ client, categories, channel, header, onDone }: { client: AgentClient; categories: string[]; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const initial = channel === "consumption" && !client.own_consumption_discounts ? channelRules(client.partner_discounts, "resale") : channelRules(client.partner_discounts, channel, true);
   const [general, setGeneral] = useState(String(initial.find((rule) => rule.category === null)?.percent ?? ""));
   const [rows, setRows] = useState(initial.filter((rule) => rule.category !== null).map((rule) => ({ category: rule.category!, percent: String(rule.percent) })));
   const [pending, start] = useTransition();
@@ -330,11 +416,12 @@ function DiscountEditor({ client, categories, onDone }: { client: AgentClient; c
     const rules: DiscountRule[] = [];
     if (general.trim()) rules.push({ category: null, percent: Number(general.replace(",", ".")) });
     for (const row of rows) if (row.percent.trim()) rules.push({ category: row.category, percent: Number(row.percent.replace(",", ".")) });
-    start(async () => onDone(await saveDiscounts(client.id, rules)));
+    start(async () => onDone(await saveDiscounts(client.id, rules, channel, true)));
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>fără perioadă de valabilitate</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Discounturi</h3><span>{channel === "consumption" ? "consum · " : ""}fără perioadă de valabilitate</span></div>
+      {header}
       <div className="discount-rows">
         <label className="discount-row"><span>Toate produsele</span><span className="percent-input"><input inputMode="decimal" value={general} onChange={(event) => setGeneral(event.target.value)} placeholder="0" />%</span></label>
         {rows.map((row, index) => (
@@ -374,15 +461,25 @@ function ProductPicker({ catalog, exclude, onPick, placeholder }: { catalog: Cat
 function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const perPoint = client.stock_mode === "per_location";
-  const [pointId, setPointId] = useState<string | null>(perPoint ? points[0]?.id ?? null : null);
-  const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null));
-  return <ParLevelList key={pointId ?? "central"} client={client} catalog={catalog} levels={levels} pointId={pointId} onDone={onDone}
-    header={perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
-      <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null} />;
+  // The picked point; after a switch to per-point stock it falls back to the main point.
+  const [picked, setPointId] = useState<string | null>(null);
+  const pointId = perPoint ? points.find((point) => point.id === picked)?.id ?? points[0]?.id ?? null : null;
+  // Resale (shelf for its customers) or own consumption (e.g. a hotel): each has its own initial stock.
+  const [channel, setChannel] = useState<Channel>("resale");
+  const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === channel);
+  const count = (id: Channel) => client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === id).length;
+  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
+    header={<>
+      <div className="point-tabs channel-switch" role="tablist" aria-label="Tip stoc">{channels.map((item) =>
+        <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>
+          {item.label} ({count(item.id)})</button>)}</div>
+      {perPoint && points.length > 0 ? <div className="point-tabs" role="tablist" aria-label="Punct de lucru">{points.map((point) =>
+        <button key={point.id} type="button" role="tab" aria-selected={point.id === pointId} className={point.id === pointId ? "active" : ""} onClick={() => setPointId(point.id)}>{point.name}</button>)}</div> : null}
+    </>} />;
 }
 
-function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
-  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
+function ParLevelList({ client, catalog, levels, pointId, channel, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
@@ -408,17 +505,18 @@ function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
   }
   const rows = [
     ...levels.map((level) => ({ id: level.product_id, name: level.products?.name ?? "Produs", sku: level.products?.sku ?? "—" })),
-    ...added.map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
+    // A product added here and then saved comes back as a level: show it once.
+    ...added.filter((item) => !levels.some((level) => level.product_id === item.id)).map((item) => ({ id: item.id, name: item.name, sku: item.sku })),
   ];
 
   function save(productId: string) {
     const quantity = Number(values[productId] ?? "0");
-    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId)));
+    start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId, channel)));
   }
 
   return (
-    <section className="detail-section"><div className="section-line"><h3>Stoc inițial pe raftul clientului</h3>
-      <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{levels.length} produse</span></div>
+    <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3>
+      <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{channelLabel(channel).toLowerCase()} · {levels.length} produse</span></div>
       {header}
       <div className="item-list">{rows.map((row) => (
         <div className="order-item" key={row.id}>
@@ -438,7 +536,7 @@ function ParLevelList({ client, catalog, levels, pointId, header, onDone }: {
           <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
         </div>
       ))}</div>}
-      <p className="muted small">0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
+      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
     </section>
   );
 }
@@ -447,16 +545,18 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const choosePoint = client.stock_mode === "per_location" && points.length > 1;
   const [pointId, setPointId] = useState<string | null>(points[0]?.id ?? null);
+  const clientChannels = usedChannels(client.partner_par_levels);
+  const [channel, setChannel] = useState<Channel>(clientChannels[0] ?? "resale");
   const [lines, setLines] = useState<{ item: CatalogItem; quantity: string }[]>([]);
   const [source, setSource] = useState<"whatsapp" | "telefon">("telefon");
   const [pending, start] = useTransition();
   const byId = new Map(catalog.map((item) => [item.id, item]));
-  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null)).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
+  const suggestions = client.partner_par_levels.filter((level) => level.location_id === (client.stock_mode === "per_location" ? pointId : null) && level.channel === channel).filter((level) => !lines.some((line) => line.item.id === level.product_id)).map((level) => byId.get(level.product_id)).filter((item): item is CatalogItem => !!item);
   const valid = lines.length > 0 && lines.every((line) => /^\d+$/.test(line.quantity) && Number(line.quantity) > 0);
 
   function send() {
     start(async () => {
-      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null);
+      const result = await addClientRequest(client.id, lines.map((line) => ({ productId: line.item.id, quantity: Number(line.quantity) })), source, choosePoint ? pointId : null, channel);
       onDone(result);
       if (result.ok) setLines([]);
     });
@@ -466,6 +566,8 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
     <section className="detail-section"><div className="section-line"><h3>Cerere nouă</h3><span>ajunge la depozit</span></div>
       {choosePoint && <label className="point-select">Pentru punctul de lucru<select value={pointId ?? ""} onChange={(event) => setPointId(event.target.value)}>
         {points.map((point) => <option key={point.id} value={point.id}>{point.name}{point.city ? ` · ${point.city}` : ""}</option>)}</select></label>}
+      {clientChannels.length > 1 && <div className="point-tabs channel-switch" role="tablist" aria-label="Tip comandă">{clientChannels.map((id) =>
+        <button key={id} type="button" role="tab" aria-selected={id === channel} className={id === channel ? "active" : ""} onClick={() => setChannel(id)}>{channelLabel(id)}</button>)}</div>}
       {lines.length > 0 && <div className="item-list">{lines.map((line, index) => (
         <div className="order-item" key={line.item.id}>
           <div><strong>{line.item.name}</strong><small>SKU {line.item.sku}</small></div>
@@ -491,7 +593,8 @@ function LoginEditor({ client, onDone }: { client: AgentClient; onDone: (result:
   const [password, setPassword] = useState("");
   const [pending, start] = useTransition();
   return (
-    <section className="detail-section"><h3>Cont în aplicație</h3>
+    <section className="detail-section"><h3>{client.stock_mode === "per_location" ? "Cont manager" : "Cont în aplicație"}</h3>
+      {client.stock_mode === "per_location" && <p className="muted small">Vede toate punctele de lucru și facturile. Conturile pe punct se fac la Puncte de lucru.</p>}
       {client.auth_user_id ? <p>Clientul are cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>. Parola se schimbă din Administrare.</p>
         : <div className="admin-inline admin-mini-form">
           <input value={username} maxLength={32} autoCapitalize="none" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="Username" aria-label="Username" />
@@ -515,6 +618,169 @@ function ClientInvoices({ client }: { client: AgentClient }) {
           <PaymentChip dueDate={cart.invoice_due_date} rest={cart.invoice_rest} />
           <a className="text-button" href={`/billing/invoice/${cart.id}`} target="_blank" rel="noopener noreferrer">Descarcă</a></div>
       ))}</div>
+    </section>
+  );
+}
+
+const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Bucharest" }).format(new Date());
+const emptyCustody = (): CustodyInput => ({ kind: "pos", productId: null, name: "", quantity: 1, unitValue: "", handedOn: today(), trialDays: 30, locationId: null, note: "", documentNumber: "" });
+
+// Custody: testers, POS materials (shelf, glass, bells) and products on trial that stay ours at the client.
+function CustodyEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+  // The item being added (id null) or edited.
+  const [editing, setEditing] = useState<{ id: string | null; input: CustodyInput } | null>(null);
+  const draft = editing?.input ?? null;
+  const setDraft = (input: CustodyInput) => setEditing((current) => current && { ...current, input });
+  const [pending, start] = useTransition();
+  const points = sortLocations(client.partner_locations.filter((location) => location.active));
+  const pointName = new Map(client.partner_locations.map((location) => [location.id, location.name]));
+  const open = client.partner_custody_items.filter((item) => item.status === "at_client")
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, "ro"));
+  const closed = client.partner_custody_items.filter((item) => item.status !== "at_client");
+  const total = open.reduce((sum, item) => sum + (item.unit_value ?? 0) * item.quantity, 0);
+  const set = <K extends keyof CustodyInput>(key: K, value: CustodyInput[K]) => { if (draft) setDraft({ ...draft, [key]: value }); };
+  const run = (action: () => Promise<{ ok: boolean; message: string }>, after?: () => void) => start(async () => { const result = await action(); onDone(result); if (result.ok) after?.(); });
+
+  function status(item: CustodyItem, next: "returned" | "missing" | "converted" | "at_client") {
+    const ask = { returned: `Marchezi ${item.name} ca returnat?`, missing: `Marchezi ${item.name} ca lipsă? Se poate factura la valoarea de inventar.`,
+      converted: `Proba ${item.name} s-a convertit în vânzare?`, at_client: `Readuci ${item.name} la client?` }[next];
+    if (window.confirm(ask)) run(() => setCustodyStatus(item.id, next));
+  }
+
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Custodie</h3>
+      <span>{open.length} la client{total > 0 ? ` · valoare ${total.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} lei` : ""}</span></div>
+      <p className="muted small">Testere, materiale POS (raft, geamuri, clopote) și produse date în probă. Rămân ale noastre și nu se facturează.</p>
+      {open.length > 0 && <div className="item-list">{open.map((item) => {
+        const ends = item.kind === "trial" && item.trial_ends_on ? item.trial_ends_on : null;
+        const late = !!ends && ends < today();
+        return <div className="order-item custody-row" key={item.id}>
+          <div><strong>{item.name}</strong>
+            <small>{[custodyKindLabel(item.kind, ends), points.length > 1 && item.location_id ? pointName.get(item.location_id) : null,
+              `din ${formatDay(item.handed_on)}`, item.document_number ? `bon custodie ${item.document_number}` : null, item.unit_value !== null ? `${item.unit_value.toLocaleString("ro-RO")} lei/buc.` : null, item.note].filter(Boolean).join(" · ")}</small>
+            {late && <span className="item-flag no-ean">Proba a expirat</span>}</div>
+          <b>×{item.quantity}</b>
+          <span className="custody-actions">
+            {item.kind === "trial" && <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "converted")}>Convertit</button>}
+            <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "returned")}>Returnat</button>
+            {item.kind !== "trial" && <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "missing")}>Lipsă</button>}
+            <button type="button" className="text-button" disabled={pending} onClick={() => setEditing({ id: item.id, input: { kind: item.kind as CustodyInput["kind"], productId: item.product_id,
+              name: item.name, quantity: item.quantity, unitValue: item.unit_value !== null ? String(item.unit_value) : "", handedOn: item.handed_on,
+              trialDays: ends ? Math.max(1, Math.round((Date.parse(ends) - Date.parse(item.handed_on)) / 86400000)) : 30, locationId: item.location_id, note: item.note ?? "",
+              documentNumber: item.document_number ?? "" } })}>Editează</button>
+          </span>
+        </div>;
+      })}</div>}
+      {closed.length > 0 && <details className="custody-history"><summary>Istoric ({closed.length})</summary>
+        <div className="item-list">{closed.map((item) => <div className="order-item custody-row" key={item.id}>
+          <div><strong>{item.name}</strong><small>{custodyKindLabel(item.kind, null)} · {custodyStatusLabel(item.status)}{item.closed_on ? ` pe ${formatDay(item.closed_on)}` : ""}</small></div>
+          <b>×{item.quantity}</b>
+          <span className="custody-actions">
+            <button type="button" className="text-button" disabled={pending} onClick={() => status(item, "at_client")}>Readu la client</button>
+            <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { if (window.confirm(`Ștergi definitiv ${item.name} din evidență?`)) run(() => deleteCustodyItem(item.id)); }}>Șterge</button>
+          </span>
+        </div>)}</div></details>}
+
+      {editing && draft ? <div className="point-form">
+        <div className="point-tabs" role="group" aria-label="Tip">{(["pos", "tester", "trial"] as const).map((kind) =>
+          <button key={kind} type="button" className={draft.kind === kind ? "active" : ""} onClick={() => set("kind", kind)}>{custodyKindLabel(kind, null)}</button>)}</div>
+        {!draft.productId && <ProductPicker catalog={catalog} exclude={new Set()} onPick={(item) => setDraft({ ...draft, productId: item.id, name: item.name })} placeholder="Produs din catalog (difuzor, tester…) sau scrie mai jos" />}
+        <div className="partner-billing-grid">
+          <label>Denumire<input value={draft.name} maxLength={200} onChange={(event) => setDraft({ ...draft, name: event.target.value, productId: null })} placeholder="ex. Raft 120 cm" /></label>
+          <label>Cantitate<input inputMode="numeric" value={String(draft.quantity)} onChange={(event) => set("quantity", Number(event.target.value.replace(/\D/g, "")) || 0)} /></label>
+          <label>Valoare de inventar / buc. (lei)<input inputMode="decimal" value={draft.unitValue} onChange={(event) => set("unitValue", event.target.value)} placeholder="opțional" /></label>
+          <label>Data predării<input type="date" value={draft.handedOn} onChange={(event) => set("handedOn", event.target.value)} /></label>
+          {draft.kind === "trial" && <label>Zile de probă<input inputMode="numeric" value={String(draft.trialDays)} onChange={(event) => set("trialDays", Number(event.target.value.replace(/\D/g, "")) || 0)} /></label>}
+          {points.length > 1 && <label>Punct de lucru<select value={draft.locationId ?? ""} onChange={(event) => set("locationId", event.target.value || null)}>
+            <option value="">Toată firma</option>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>}
+          <label>Nr. bon de custodie (BOCP)<input value={draft.documentNumber} maxLength={60} onChange={(event) => set("documentNumber", event.target.value)} placeholder="opțional, ex. 101" /></label>
+          <label>Notă<input value={draft.note} maxLength={500} onChange={(event) => set("note", event.target.value)} placeholder="opțional, ex. gratuit cât comandă rezerva lunar" /></label>
+        </div>
+        <div className="partner-billing-actions">
+          {editing.id && <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { const id = editing.id!; if (window.confirm("Ștergi definitiv din evidență?")) run(() => deleteCustodyItem(id), () => setEditing(null)); }}>Șterge</button>}
+          <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
+          <button type="button" className="button button-primary" disabled={pending || !draft.name.trim() || draft.quantity < 1}
+            onClick={() => run(() => saveCustodyItem(client.id, editing.id, draft), () => setEditing(null))}>{editing.id ? "Salvează" : "Trece în custodie"}</button>
+        </div>
+      </div> : <button type="button" className="button button-outline" onClick={() => setEditing({ id: null, input: emptyCustody() })}>+ Produs în custodie</button>}
+    </section>
+  );
+}
+
+// Contracts: the PDF signed by us, then the copy signed by both parties (uploaded by the client or the agent).
+function ContractsEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const [title, setTitle] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [pending, start] = useTransition();
+  const contracts = [...client.partner_contracts].sort((a, b) => b.supplier_uploaded_at.localeCompare(a.supplier_uploaded_at));
+
+  function upload() {
+    if (!file) return;
+    start(async () => {
+      const ready = await startContractUpload(client.id, null);
+      if (!ready.ok || !ready.contractId) { onDone({ ok: false, message: ready.ok ? "Nu am putut pregăti încărcarea." : ready.message }); return; }
+      const failed = await uploadContractFile(file, ready.path, ready.token);
+      if (failed) { onDone({ ok: false, message: failed }); return; }
+      const result = await finishContractUpload(client.id, ready.contractId, title, ready.path);
+      onDone(result);
+      if (result.ok) { setTitle(""); setFile(null); }
+    });
+  }
+
+  function uploadSigned(contract: ClientContract, signed: File) {
+    start(async () => {
+      const ready = await startContractUpload(client.id, contract.id);
+      if (!ready.ok) { onDone({ ok: false, message: ready.message }); return; }
+      const failed = await uploadContractFile(signed, ready.path, ready.token);
+      onDone(failed ? { ok: false, message: failed } : await finishSignedByAgent(contract.id, ready.path));
+    });
+  }
+
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Contracte</h3><span>{contracts.length}</span></div>
+      {contracts.length > 0 && <div className="item-list">{contracts.map((contract) => (
+        <div className="order-item contract-row" key={contract.id}>
+          <div><strong>{contract.title}</strong>
+            <small>Încărcat {formatDateTime(contract.supplier_uploaded_at)}{contract.signed_uploaded_at ? ` · semnat de client ${formatDateTime(contract.signed_uploaded_at)}` : ""}</small></div>
+          <span className={`contract-status ${contract.status === "both_signed" ? "done" : "waiting"}`}>{contract.status === "both_signed" ? "Semnat de ambele părți" : "Semnat de furnizor"}</span>
+          <span className="custody-actions">
+            <a className="text-button" href={`/contracts/${contract.id}/furnizor`} target="_blank" rel="noopener noreferrer">Descarcă</a>
+            {contract.status === "both_signed"
+              ? <a className="text-button" href={`/contracts/${contract.id}/semnat`} target="_blank" rel="noopener noreferrer">Descarcă semnat</a>
+              : <label className="text-button file-button">Încarcă semnat<input type="file" accept="application/pdf" disabled={pending} onChange={(event) => { const picked = event.target.files?.[0]; event.target.value = ""; if (picked) uploadSigned(contract, picked); }} /></label>}
+            <button type="button" className="text-button danger-text" disabled={pending} onClick={() => { if (window.confirm(`Ștergi contractul „${contract.title}”?`)) start(async () => onDone(await deleteContract(contract.id))); }}>Șterge</button>
+          </span>
+        </div>
+      ))}</div>}
+      <div className="contract-upload">
+        <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="Nume, ex. Contract de consignație nr. 2 / 19.10.2026" aria-label="Numele contractului" />
+        <label className="button button-outline file-button">{file ? file.name : "Alege PDF-ul"}<input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        <button type="button" className="button button-primary" disabled={pending || !file || !title.trim()} onClick={upload}>{pending ? "Se încarcă…" : "Încarcă contractul"}</button>
+      </div>
+      <p className="muted small">Încarcă PDF-ul semnat de noi. Clientul îl descarcă din aplicația lui, îl semnează și îl încarcă înapoi; poți încărca și tu varianta semnată.</p>
+    </section>
+  );
+}
+
+// Purchase or consignment: decides how the client's deliveries are invoiced.
+function SalesModeEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+  const [mode, setMode] = useState(client.sales_mode);
+  const [commission, setCommission] = useState(client.consignment_commission !== null ? String(client.consignment_commission) : "30");
+  const [pending, start] = useTransition();
+  const changed = mode !== client.sales_mode || (mode === "consignment" && commission !== String(client.consignment_commission ?? ""));
+  return (
+    <section className="detail-section"><div className="section-line"><h3>Regim comercial</h3><span>{client.sales_mode === "consignment" ? `consignație · comision ${client.consignment_commission ?? 0}%` : "cumpărare"}</span></div>
+      <div className="stock-mode" role="group" aria-label="Regim comercial">
+        <button type="button" className={mode === "purchase" ? "active" : ""} onClick={() => setMode("purchase")}>Cumpărare</button>
+        <button type="button" className={mode === "consignment" ? "active" : ""} onClick={() => setMode("consignment")}>Consignație</button>
+      </div>
+      <div className="sales-mode-row">
+        {mode === "consignment" && <label className="commission-input">Comision<span className="percent-input"><input inputMode="decimal" value={commission} onChange={(event) => setCommission(event.target.value)} aria-label="Comision" />%</span></label>}
+        {changed && <button type="button" className="button button-primary" disabled={pending} onClick={() => start(async () => onDone(await setSalesMode(client.id, mode, commission)))}>Salvează regimul</button>}
+      </div>
+      <p className="muted small">{mode === "consignment"
+        ? "Marfa pleacă prin bon de transfer în gestiunea CONSIGNAȚIE și rămâne a noastră până o vinde clientul; se facturează periodic ce a vândut, iar comisionul se calculează separat."
+        : "Clientul cumpără marfa: fiecare livrare se facturează."}</p>
     </section>
   );
 }

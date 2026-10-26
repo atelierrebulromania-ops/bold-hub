@@ -91,8 +91,8 @@ export function PreviewPanel({ importEnabled, today, minDate, launchedOn }: { im
   return (
     <section className="integration-panel" aria-labelledby="bocp-preview-title">
       <div className="integration-panel-heading">
-        <div><p className="eyebrow">BOCP · ORDERS + INVOICES</p><h2 id="bocp-preview-title">Audit import pe SKU</h2><p>Verifică eligibilitatea pentru confirmare temporară după SKU. Nicio comandă nu este creată în BoldHub.</p></div>
-        <span className="integration-status">Conectare read-only</span>
+        <div><p className="eyebrow">BOCP · COMENZI ȘI FACTURI</p><h2 id="bocp-preview-title">Audit import pe SKU</h2><p>Verifică eligibilitatea pentru confirmare temporară după SKU. Nicio comandă nu este creată în BoldHub.</p></div>
+        <span className="integration-status">Doar citire</span>
       </div>
       <form className="preview-form" onSubmit={loadPreview}>
         <label htmlFor="preview-from">Facturi începând cu</label>

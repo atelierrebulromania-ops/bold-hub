@@ -5,6 +5,7 @@ import { signOut } from "@/app/login/actions";
 import { NavCountsListener } from "@/components/nav-counts-listener";
 import { NotificationListener } from "@/components/notification-listener";
 import { NotificationRail } from "@/components/notification-rail";
+import { MobileMenuButton } from "@/components/mobile-menu";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { railCookie } from "@/lib/rail";
 import { cookies } from "next/headers";
@@ -47,12 +48,20 @@ const sections: { label: string; items: NavItem[] }[] = [
   { label: "ISTORIC", items: [
     { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "owner", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },
+  { label: "CONTABILITATE", items: [
+    { href: "/accounting/overview", label: "Prezentare generală", roles: ["admin", "contabilitate"], icon: <svg {...svg}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> },
+    { href: "/accounting", label: "Documente", roles: ["admin", "contabilitate"], icon: <svg {...svg}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg> },
+    { href: "/accounting/integrations", label: "Integrări", roles: ["admin"], icon: <svg {...svg}><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg> },
+  ] },
   { label: "ADMINISTRARE", items: [
     { href: "/admin/users", label: "Utilizatori", roles: ["admin"], icon: <svg {...svg}><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg> },
-    { href: "/admin/partners", label: "Revânzători", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },
+    { href: "/admin/partners", label: "Clienți", roles: ["admin"], icon: <svg {...svg}><path d="M4 20v-8l8-4 8 4v8M4 14h16M9 20v-4h6v4M12 8V4"/></svg> },
     { href: "/admin/catalog", label: "Catalog & EAN", roles: ["admin"], icon: <svg {...svg}><path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20 6v12"/></svg> },
     { href: "/admin/integrations", label: "Integrări", roles: ["admin"], icon: <svg {...svg}><path d="M4 7h8M4 17h8M16 4v6M16 14v6"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="12" r="2"/></svg> },
     { href: "/admin/settings", label: "Setări", roles: ["admin"], icon: <svg {...svg}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> },
+  ] },
+  { label: "SUPORT", items: [
+    { href: "/help", label: "Ajutor", roles: ["admin", "account"], icon: <svg {...svg}><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><path d="M12 17h.01"/></svg> },
   ] },
 ];
 
@@ -110,6 +119,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
     <main className="app-shell" data-rail={railOpen ? "open" : "closed"}>
       <aside className="app-sidebar" aria-label="Navigație principală">
         <div className="brand brand-wordmark"><Image src="/logo-light.png" alt="BoldHub" width={1446} height={440} priority className="brand-logo" /></div>
+        <MobileMenuButton />
         <nav className="sidebar-nav">
           {visible.map((group, index) => <div className="sidebar-group" key={group.label}>
             <p className={index === 0 ? "sidebar-label" : "sidebar-label admin-sidebar-label"}>{group.label}</p>

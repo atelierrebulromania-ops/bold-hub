@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
+import { parseChannel, type Channel } from "@/lib/channels";
 import { reserveCartInBocp } from "@/lib/b2b-bocp";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,7 +91,7 @@ export async function deleteDeliveryGroup(groupId: string): Promise<{ ok: boolea
 
 // A request received by WhatsApp or phone: the products go into the partner's open cart
 // (the partner moves to "Necesită produse") and the stock is reserved.
-export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string, locationId: string | null = null): Promise<{ ok: boolean; message: string }> {
+export async function addPartnerRequest(partnerId: string, items: { productId: string; quantity: number }[], source: string, locationId: string | null = null, channel: Channel = "resale"): Promise<{ ok: boolean; message: string }> {
   if (!uuid.test(partnerId) || (locationId !== null && !uuid.test(locationId)) || !["whatsapp", "telefon"].includes(source) || items.length === 0 || items.length > 100
     || !items.every((item) => uuid.test(item.productId) && Number.isSafeInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 100000)) {
     return { ok: false, message: "Alege partenerul, produsele și cantitățile." };
@@ -98,7 +99,7 @@ export async function addPartnerRequest(partnerId: string, items: { productId: s
   const { supabase } = await requireRole(["admin", "operator_depozit", "account"]);
   const { error } = await supabase.rpc("staff_add_refill", {
     p_partner_id: partnerId,
-    p_items: items.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
+    p_items: items.map((item) => ({ product_id: item.productId, quantity: item.quantity, channel: parseChannel(channel) })),
     p_source: source,
     p_location_id: locationId,
   });

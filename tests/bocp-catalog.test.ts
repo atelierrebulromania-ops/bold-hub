@@ -34,5 +34,7 @@ test("deleted, archived and SKU-less rows are skipped", () => {
     row("", "8691226602790"),
     row("A3", "", { stoc_global: "" }),
   ]);
-  assert.deepEqual(products, [{ sku: "A3", name: "Produs A3", ean: null, stock: null }]);
+  assert.deepEqual(products, [{
+    sku: "A3", name: "Produs A3", ean: null, stock: null, category: null, price: null, priceWithVat: null, vatPercent: null, imageUrl: null, delisted: false,
+  }]);
 });

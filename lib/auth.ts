@@ -42,6 +42,7 @@ export function homeFor(role: UserRole): string {
   if (role === "account") return "/sales";
   if (role === "operator_facturare") return "/invoicing";
   if (role === "operator_depozit") return "/warehouse";
+  if (role === "contabilitate") return "/accounting/overview";
   return "/orders";
 }
 
@@ -76,7 +77,15 @@ export async function requirePartner() {
   const { data: partner } = await supabase.from("partners")
     .select("id,business_name,location_name,is_important_client")
     .eq("auth_user_id", userId).eq("active", true).maybeSingle();
-  if (partner) return { supabase, userId, partner, preview: false };
+  if (partner) return { supabase, userId, partner, point: null, preview: false };
+
+  // A point login: it sees only its point of work (row security returns its point and its client).
+  const { data: point } = await supabase.from("partner_locations").select("id,name,partner_id").eq("auth_user_id", userId).eq("active", true).maybeSingle();
+  if (point) {
+    const { data: client } = await supabase.from("partners")
+      .select("id,business_name,location_name,is_important_client").eq("id", point.partner_id).eq("active", true).maybeSingle();
+    if (client) return { supabase, userId, partner: client, point: { id: point.id, name: point.name }, preview: false };
+  }
 
   // Dev mode: an admin previewing one partner location. Reads work (admin sees every row, and
   // the partner page filters by partner id); partner actions still run as the admin and fail.
@@ -86,5 +95,5 @@ export async function requirePartner() {
   const { data: previewed } = await supabase.from("partners")
     .select("id,business_name,location_name,is_important_client").eq("id", view.partnerId).maybeSingle();
   if (!previewed) redirect("/access");
-  return { supabase, userId, partner: previewed, preview: true };
+  return { supabase, userId, partner: previewed, point: null, preview: true };
 }

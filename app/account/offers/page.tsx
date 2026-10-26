@@ -41,7 +41,7 @@ export default async function AgentDocumentsPage({ searchParams }: { searchParam
   const counts = { offer: all.filter((document) => document.kind === "offer").length, proforma: all.filter((document) => document.kind === "proforma").length };
 
   return (
-    <AppShell profile={profile} active="/account/offers" section="Account" title="Oferte, proforme și facturi"
+    <AppShell profile={profile} active="/account/offers" section="Vânzări" title="Oferte, proforme și facturi"
       note={{ title: "Oferte și proforme", text: "Oferta rămâne în aplicație. Proforma se emite în BOCP; de pe ea rezervi comanda la depozit sau ceri factura, oricând." }}>
       <section className="board-panel" aria-label="Oferte și proforme">
         <div className="panel-tabs-row">
