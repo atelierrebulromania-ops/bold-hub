@@ -1503,3 +1503,20 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .regime-box .muted { margin: 6px 0 0; }
 @media (max-width: 900px) { .request-columns { grid-template-columns: minmax(0, 1fr); } }
 .request-stock-table .in-request { color: #23784d; font-weight: 800; }
+/* Ajutor: table of contents next to the guide */
+.help-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1100px; }
+.help-toc { position: sticky; top: 16px; padding: 16px 18px; }
+.help-toc-title { margin: 0 0 8px; color: #65676b; font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.help-toc ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: .8rem; }
+.help-toc a { color: var(--ink); font-weight: 600; }
+.help-toc a:hover { color: var(--blue); }
+.help-layout .help-page { max-width: none; }
+.help-card { scroll-margin-top: 90px; }
+.help-card h3 { margin: 18px 0 8px; color: #65676b; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.help-card .help-intro { margin: -4px 0 14px; color: #65676b; }
+.help-terms dd .help-list { margin: 6px 0; }
+@media (max-width: 900px) {
+  .help-layout { grid-template-columns: minmax(0, 1fr); }
+  .help-toc { position: static; }
+  .help-toc ol { grid-template-columns: 1fr 1fr; }
+}
