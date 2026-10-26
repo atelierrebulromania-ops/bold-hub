@@ -33,6 +33,10 @@ export default async function LoginPage({
               <span>Parolă</span>
               <input name="password" type="password" autoComplete="current-password" required placeholder="Parola contului" />
             </label>
+            <label className="auth-remember">
+              <input type="checkbox" name="remember" defaultChecked />
+              <span>Ține-mă minte<small>Debifează pe un calculator folosit și de alții: ieși din cont când închizi browserul.</small></span>
+            </label>
             {error && <p className="form-error" role="alert">{error === "missing" ? "Completează utilizatorul și parola." : "Datele de autentificare nu sunt corecte."}</p>}
             <SubmitButton className="auth-submit">Intră în aplicație</SubmitButton>
           </form>

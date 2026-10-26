@@ -134,7 +134,7 @@ export async function setClientPassword(partnerId: string, password: string): Pr
   const { data: partner } = await supabase.from("partners").select("auth_user_id").eq("id", partnerId).maybeSingle();
   if (!partner?.auth_user_id) return { ok: false, message: "Clientul nu are cont." };
   const error = await setLoginPassword(partner.auth_user_id, password);
-  return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată. Dă-i clientului parola nouă." };
+  return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată. Dă-i clientului parola nouă; la prima logare își alege una proprie." };
 }
 
 export async function deleteClientLogin(partnerId: string): Promise<Result> {

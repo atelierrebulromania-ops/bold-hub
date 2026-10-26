@@ -128,7 +128,7 @@ export async function AppShell({ profile, active, section, title, note, topbarEx
               : <Link className="sidebar-link" href={item.href} key={item.href} title={item.label}>{item.icon}{item.label}<LinkPending />{badge(item)}</Link>)}
           </div>)}
         </nav>
-        <div className="user-menu sidebar-user"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><form action={signOut}><SubmitButton className="logout-button" aria-label="Ieșire din cont" title="Ieșire din cont"><svg {...svg}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></SubmitButton></form></div>
+        <div className="user-menu sidebar-user"><span className="user-avatar" aria-hidden="true">{profile.full_name?.trim().charAt(0).toUpperCase() || "A"}</span><span className="user-name">{profile.full_name}</span><Link className="password-link" href="/password" aria-label="Schimbă parola" title="Schimbă parola"><svg {...svg}><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M17 6l2.5 2.5M14.5 8.5 16.5 10.5"/></svg></Link><form action={signOut}><SubmitButton className="logout-button" aria-label="Ieșire din cont" title="Ieșire din cont"><svg {...svg}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></SubmitButton></form></div>
         <div className="sidebar-bottom"><span className="sidebar-bottom-icon" aria-hidden="true">i</span><div><strong>{note.title}</strong><p>{note.text}</p></div></div>
       </aside>
       <div className="app-main">

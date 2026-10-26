@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Image from "next/image";
 import { signOut } from "@/app/login/actions";
 import { NavCountsListener } from "@/components/nav-counts-listener";
@@ -170,9 +171,14 @@ export default async function PartnerPage({ searchParams }: { searchParams: Prom
       <header className="partner-header">
         <div className="brand"><Image src="/icon.png" alt="" width={300} height={300} className="brand-icon-image" /><div><strong>{partner.business_name}</strong>{pointLogin && <small className="partner-point-name">{pointLogin.name}</small>}</div></div>
         {preview && <PreviewSwitcher partnerId={partner.id} />}
-        <form action={signOut}><SubmitButton className="power-button" aria-label="Ieșire din cont" title="Ieșire din cont">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>
-        </SubmitButton></form>
+        <div className="partner-header-actions">
+          {!preview && <Link className="power-button key-button" href="/password" aria-label="Schimbă parola" title="Schimbă parola">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M17 6l2.5 2.5M14.5 8.5 16.5 10.5"/></svg>
+          </Link>}
+          <form action={signOut}><SubmitButton className="power-button" aria-label="Ieșire din cont" title="Ieșire din cont">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>
+          </SubmitButton></form>
+        </div>
       </header>
       <div className="partner-content">
         {twoChannels && <nav className="channel-tabs" aria-label="Tip comandă">{orderChannels.map((id) =>
