@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { b2bSkuFilter } from "@/lib/b2b-products";
+import { isLoginBlocked } from "@/lib/account-admin";
 import { requireRole } from "@/lib/auth";
 import { ClientFile, type AgentClient, type CatalogItem } from "../../clients-board";
-import { clientFileSelect, clientTab, productCategories } from "../../client-select";
+import { clientFileSelect, clientTab, collectionSelect, productCategories, toCollections } from "../../client-select";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +18,21 @@ export default async function ClientFilePage({ params, searchParams }: { params:
   if (!uuid.test(id)) notFound();
   let query = supabase.from("partners").select(clientFileSelect).eq("id", id);
   if (profile.role === "account") query = query.eq("account_id", profile.id);
-  const [clientResult, catalogResult] = await Promise.all([
+  const [clientResult, catalogResult, collectionsResult] = await Promise.all([
     query.maybeSingle(),
     supabase.from("products").select("id,name,sku,category,list_price").eq("active", true).or(b2bSkuFilter).order("name").limit(5000),
+    supabase.from("product_collections").select(collectionSelect).order("name").limit(500),
   ]);
   const client = clientResult.data as AgentClient | null;
   if (!clientResult.error && !client) notFound();
   const catalog: CatalogItem[] = catalogResult.data ?? [];
+  const loginBlocked = await isLoginBlocked(client?.auth_user_id ?? null);
 
   return (
     <AppShell profile={profile} active="/account" section="Clienți" title={client?.business_name ?? "Client"}
       note={{ title: "Fișa clientului", text: "Toate datele clientului, pe tab-uri. Fiecare tab se salvează separat." }}>
       {clientResult.error || catalogResult.error || !client ? <p className="notice error" role="alert">Fișa clientului nu poate fi încărcată acum. Reîncarcă pagina.</p>
-        : <ClientFile key={client.id} client={client} catalog={catalog} categories={productCategories(catalog)} tab={clientTab(tab) === "admin" ? "date" : clientTab(tab)}
+        : <ClientFile key={client.id} client={client} catalog={catalog} categories={productCategories(catalog)} collections={toCollections(collectionsResult.data)} loginBlocked={loginBlocked} tab={clientTab(tab) === "admin" ? "date" : clientTab(tab)}
           backHref="/account" backLabel="Clienții mei" />}
     </AppShell>
   );

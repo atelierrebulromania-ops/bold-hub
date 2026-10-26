@@ -1472,3 +1472,18 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .client-file .partner-billing-actions { flex-wrap: wrap; }
 .client-file .partner-billing-actions .button { white-space: nowrap; }
 @media (max-width: 900px) { .client-file-columns.even { grid-template-columns: minmax(0, 1fr); } }
+/* Client file: CUI row, initial stock adds, account state */
+.company-form .cui-lookup { margin-bottom: 14px; }
+.company-form .cui-lookup label { flex: 0 1 280px; }
+.par-add { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.par-add .product-picker { flex: 1 1 320px; margin-top: 0; }
+.par-add select { min-height: 40px; padding: .4rem 2rem .4rem .7rem; border: 1px solid #ccd0d5; border-radius: 9px; background-color: #fff; color: var(--blue); font: inherit; font-size: .8rem; font-weight: 700; }
+.par-save-all { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: #f5f9ff; }
+.par-save-all .muted { margin: 0; margin-right: auto; }
+.par-save-all .button { padding: .55rem .9rem; font-size: .8rem; white-space: nowrap; }
+.login-state p { margin: 0 0 8px; }
+.login-state .payment-chip { margin-left: 8px; }
+.login-state .button { margin-top: 6px; }
+.button.danger-outline { color: #a13032; border-color: #f1c9cb; background: #fff; }
+.button.danger-outline:hover { background: #fdf3f3; }
+.point-form .partner-billing-actions .point-delete { margin-right: auto; }

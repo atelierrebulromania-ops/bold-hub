@@ -8,7 +8,7 @@ import { formatDateTime } from "@/lib/orders";
 import { channelLabel, channels, usedChannels, type Channel } from "@/lib/channels";
 import { channelRules, describeRules, type DiscountRule } from "@/lib/pricing";
 import {
-  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
+  addClientRequest, createClientLogin, createPointLogin, deleteContract, deleteLocation, setClientLoginActive, deleteCustodyItem, deletePointLogin, finishContractUpload, finishSignedByAgent,
   saveCustodyItem, setCustodyStatus, setSalesMode, startContractUpload, lookupCompany, saveClient, saveDiscounts, saveLocation, setClientParLevel, setStockMode, suggestFromInvoices,
   type ClientInput, type CustodyInput, type InvoiceSuggestion,
 } from "./actions";
@@ -63,6 +63,8 @@ export type ClientLocation = { id: string; name: string; city: string | null; ad
 const sortLocations = (locations: ClientLocation[]) => [...locations].sort((a, b) => Number(b.is_main) - Number(a.is_main) || a.name.localeCompare(b.name, "ro"));
 
 export type OtherClient = { id: string; business_name: string; location_name: string; type: string; account_id: string | null; account_name: string | null; delivery_groups: string[] };
+// The agent's own product collections (Catalog, Colecții), to fill an initial stock in one go.
+export type ProductCollection = { id: string; name: string; productIds: string[] };
 export type CatalogItem = { id: string; name: string; sku: string; category: string | null; list_price: number | null };
 
 type Feedback = { ok: boolean; message: string } | null;
@@ -229,7 +231,7 @@ function CompanyForm({ client, onSaved }: { client: AgentClient | null; onSaved:
     <div className="company-form">
       <section className="detail-section"><h3>Date firmă și facturare</h3>
         <div className="cui-lookup">
-          <label>CUI <span className="required">obligatoriu</span>
+          <label><span>CUI <span className="required">obligatoriu</span></span>
             <input value={input.vatId} maxLength={20} onChange={(event) => set("vatId", event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); fromAnaf(); } }} placeholder="ex. RO42910222" /></label>
           <button type="button" className="button button-outline" disabled={pending || input.vatId.trim().length < 2} onClick={fromAnaf}>Completează din ANAF</button>
@@ -292,8 +294,9 @@ const money = new Intl.NumberFormat("ro-RO", { minimumFractionDigits: 2, maximum
 
 // The client file on its own page: a summary on top and one tab per part. Shared by the agent's and the
 // admin's client lists; `admin` adds the admin-only tab.
-export function ClientFile({ client, catalog, categories, tab: initialTab, backHref, backLabel, admin }: {
-  client: AgentClient; catalog: CatalogItem[]; categories: string[]; tab: ClientTab; backHref: string; backLabel: string; admin?: ReactNode;
+export function ClientFile({ client, catalog, categories, collections, loginBlocked, tab: initialTab, backHref, backLabel, admin }: {
+  client: AgentClient; catalog: CatalogItem[]; categories: string[]; collections: ProductCollection[]; loginBlocked: boolean;
+  tab: ClientTab; backHref: string; backLabel: string; admin?: ReactNode;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<ClientTab>(initialTab === "admin" && !admin ? "date" : initialTab);
@@ -334,7 +337,7 @@ export function ClientFile({ client, catalog, categories, tab: initialTab, backH
           <div><dt>Puncte de lucru</dt><dd>{activePoints} · {client.stock_mode === "per_location" ? "pe punct" : "centralizat"}</dd></div>
           <div><dt>Discount</dt><dd>{describeRules(channelRules(client.partner_discounts, "resale"))}</dd></div>
           <div><dt>De încasat</dt><dd className={unpaid.length ? "due" : ""}>{unpaid.length ? `${money.format(unpaidTotal)} lei · ${unpaid.length} ${unpaid.length === 1 ? "factură" : "facturi"}` : "—"}</dd></div>
-          <div><dt>Cont</dt><dd>{client.account_username ?? "fără cont"}</dd></div>
+          <div><dt>Cont</dt><dd>{client.account_username ? `${client.account_username}${loginBlocked ? " · dezactivat" : ""}` : "fără cont"}</dd></div>
         </dl>
         <button type="button" className="button button-primary client-file-request" onClick={() => choose("cerere")}>Cerere nouă</button>
       </header>
@@ -357,13 +360,13 @@ export function ClientFile({ client, catalog, categories, tab: initialTab, backH
             <SalesModeEditor key={`m-${client.id}-${client.sales_mode}`} client={client} onDone={done} />
             <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={done} />
           </div>}
-          {tab === "stoc" && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} onDone={done} />}
+          {tab === "stoc" && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} collections={collections} onDone={done} />}
           {tab === "custodie" && <div className="client-file-columns even">
             <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={done} />
             <ContractsEditor key={`k-${client.id}`} client={client} onDone={done} />
           </div>}
           {tab === "cerere" && <RequestEditor key={`r-${client.id}`} client={client} catalog={catalog} onDone={done} />}
-          {tab === "cont" && <LoginEditor key={`l-${client.id}`} client={client} onDone={done} />}
+          {tab === "cont" && <LoginEditor key={`l-${client.id}`} client={client} loginBlocked={loginBlocked} onDone={done} />}
           {tab === "admin" && admin}
         </div>
       </section>
@@ -401,6 +404,18 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
     if (!editing) return;
     start(async () => {
       const result = await saveLocation(client.id, editing.id, editing);
+      onDone(result);
+      if (result.ok) setEditing(null);
+    });
+  }
+
+  function remove() {
+    if (!editing?.id) return;
+    const id = editing.id;
+    const point = points.find((item) => item.id === id);
+    if (!window.confirm(`Ștergi punctul de lucru ${point?.name ?? ""}? Se șterg și stocul lui inițial și contul lui. Un punct cu comenzi în istoric nu se poate șterge; îl poți doar dezactiva.`)) return;
+    start(async () => {
+      const result = await deleteLocation(client.id, id);
       onDone(result);
       if (result.ok) setEditing(null);
     });
@@ -459,6 +474,7 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
         {editing.id && !points.find((point) => point.id === editing.id)?.is_main && <label className="admin-checkbox">
           <input type="checkbox" checked={editing.active} onChange={(event) => set("active", event.target.checked)} /> Punct activ (primește comenzi)</label>}
         <div className="partner-billing-actions">
+          {editing.id && !points.find((point) => point.id === editing.id)?.is_main && <button type="button" className="text-button danger-text point-delete" disabled={pending} onClick={remove}>Șterge punctul</button>}
           <button type="button" className="button button-outline" disabled={pending} onClick={() => setEditing(null)}>Renunță</button>
           <button type="button" className="button button-primary" disabled={pending || !editing.name.trim()} onClick={save}>{editing.id ? "Salvează punctul" : "Adaugă punctul"}</button>
         </div>
@@ -545,7 +561,7 @@ function ProductPicker({ catalog, exclude, onPick, placeholder }: { catalog: Cat
   );
 }
 
-function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; catalog: CatalogItem[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+function ParLevelEditor({ client, catalog, collections, onDone }: { client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; onDone: (result: { ok: boolean; message: string }) => void }) {
   const points = sortLocations(client.partner_locations.filter((location) => location.active));
   const perPoint = client.stock_mode === "per_location";
   // The picked point; after a switch to per-point stock it falls back to the main point.
@@ -555,7 +571,7 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
   const [channel, setChannel] = useState<Channel>("resale");
   const levels = client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === channel);
   const count = (id: Channel) => client.partner_par_levels.filter((level) => level.location_id === (perPoint ? pointId : null) && level.channel === id).length;
-  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
+  return <ParLevelList key={`${pointId ?? "central"}-${channel}`} client={client} catalog={catalog} collections={collections} levels={levels} pointId={pointId} channel={channel} onDone={onDone}
     header={<>
       <div className="point-tabs channel-switch" role="tablist" aria-label="Tip stoc">{channels.map((item) =>
         <button key={item.id} type="button" role="tab" aria-selected={item.id === channel} className={item.id === channel ? "active" : ""} onClick={() => setChannel(item.id)}>
@@ -565,8 +581,9 @@ function ParLevelEditor({ client, catalog, onDone }: { client: AgentClient; cata
     </>} />;
 }
 
-function ParLevelList({ client, catalog, levels, pointId, channel, header, onDone }: {
-  client: AgentClient; catalog: CatalogItem[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void;
+function ParLevelList({ client, catalog, collections, levels, pointId, channel, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; levels: AgentClient["partner_par_levels"]; pointId: string | null; channel: Channel; header: ReactNode;
+  onDone: (result: { ok: boolean; message: string }) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(levels.map((level) => [level.product_id, String(level.par_level_quantity)])));
   const [added, setAdded] = useState<CatalogItem[]>([]);
@@ -601,6 +618,32 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
     start(async () => onDone(await setClientParLevel(client.id, productId, Number.isFinite(quantity) ? Math.max(0, Math.round(quantity)) : 0, pointId, channel)));
   }
 
+  // Rows whose quantity differs from what is saved (new products with a quantity, or changed ones).
+  const saved = new Map(levels.map((level) => [level.product_id, level.par_level_quantity]));
+  const changed = rows.filter((row) => (values[row.id] ?? "") !== "" && Number(values[row.id]) !== (saved.get(row.id) ?? -1));
+  const missing = rows.filter((row) => !saved.has(row.id) && !values[row.id]);
+
+  function saveAll() {
+    start(async () => {
+      let failed: { ok: boolean; message: string } | null = null;
+      for (const row of changed) {
+        const result = await setClientParLevel(client.id, row.id, Math.max(0, Math.round(Number(values[row.id]))), pointId, channel);
+        if (!result.ok) { failed = result; break; }
+      }
+      onDone(failed ?? { ok: true, message: `Stocul inițial a fost salvat (${changed.length} ${changed.length === 1 ? "produs" : "produse"}).` });
+    });
+  }
+
+  // Adds every product of one of the agent's collections that is not on the list yet.
+  function addCollection(id: string) {
+    const collection = collections.find((item) => item.id === id);
+    if (!collection) return;
+    const have = new Set(rows.map((row) => row.id));
+    const byId = new Map(catalog.map((item) => [item.id, item]));
+    const fresh = collection.productIds.map((productId) => byId.get(productId)).filter((item): item is CatalogItem => !!item && !have.has(item.id));
+    setAdded([...added, ...fresh]);
+  }
+
   return (
     <section className="detail-section"><div className="section-line"><h3>Stoc inițial</h3>
       <span>{client.stock_mode === "per_location" ? "pe punct de lucru · " : "centralizat · "}{channelLabel(channel).toLowerCase()} · {levels.length} produse</span></div>
@@ -612,7 +655,16 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
           <button type="button" className="text-button" disabled={pending} onClick={() => save(row.id)}>Salvează</button>
         </div>
       ))}</div>
-      <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.id))} onPick={(item) => setAdded([...added, item])} placeholder="Adaugă produs în stocul inițial (nume sau SKU)" />
+      {(changed.length > 0 || missing.length > 0) && <div className="par-save-all">
+        <span className="muted small">{missing.length > 0 ? `Completează cantitatea la ${missing.length} ${missing.length === 1 ? "produs adăugat" : "produse adăugate"}.` : `${changed.length} ${changed.length === 1 ? "modificare nesalvată" : "modificări nesalvate"}.`}</span>
+        <button type="button" className="button button-primary" disabled={pending || changed.length === 0} onClick={saveAll}>Salvează tot ({changed.length})</button>
+      </div>}
+      <div className="par-add">
+        <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.id))} onPick={(item) => setAdded([...added, item])} placeholder="Adaugă produs în stocul inițial (nume sau SKU)" />
+        {collections.length > 0 && <select value="" onChange={(event) => { if (event.target.value) addCollection(event.target.value); }} aria-label="Adaugă din colecție">
+          <option value="">+ Din colecție</option>
+          {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name} ({collection.productIds.length})</option>)}</select>}
+      </div>
       <div className="invoice-suggest">
         <button type="button" className="button button-outline" disabled={searching} onClick={suggest}>{searching ? "Caut în facturile BOCP (~30 sec.)…" : "Propune din facturi BOCP"}</button>
         {suggestMessage && <span className="muted small">{suggestMessage}</span>}
@@ -623,7 +675,7 @@ function ParLevelList({ client, catalog, levels, pointId, channel, header, onDon
           <button type="button" className="text-button" onClick={() => take(item)}>Adaugă</button>
         </div>
       ))}</div>}
-      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Produsele adăugate se salvează cu „Salvează” pe rândul lor.</p>
+      <p className="muted small">{channel === "consumption" ? "Consum: produsele pe care clientul le folosește el (ex. hotel). Dacă are stoc doar pe Revânzare, nu vede tab-urile. " : ""}0 scoate produsul din stocul inițial. Salvează pe rând sau toate odată cu „Salvează tot”.</p>
     </section>
   );
 }
@@ -672,14 +724,21 @@ function RequestEditor({ client, catalog, onDone }: { client: AgentClient; catal
   );
 }
 
-function LoginEditor({ client, onDone }: { client: AgentClient; onDone: (result: { ok: boolean; message: string }) => void }) {
+function LoginEditor({ client, loginBlocked, onDone }: { client: AgentClient; loginBlocked: boolean; onDone: (result: { ok: boolean; message: string }) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [pending, start] = useTransition();
   return (
     <section className="detail-section"><h3>{client.stock_mode === "per_location" ? "Cont manager" : "Cont în aplicație"}</h3>
       {client.stock_mode === "per_location" && <p className="muted small">Vede toate punctele de lucru și facturile. Conturile pe punct se fac la Puncte de lucru.</p>}
-      {client.auth_user_id ? <p>Clientul are cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>. Parola se schimbă din Administrare.</p>
+      {client.auth_user_id ? <div className="login-state">
+          <p>Cont: <strong>{client.account_username ?? "cont vechi (email)"}</strong>
+            <span className={`payment-chip ${loginBlocked ? "overdue" : "paid"}`}>{loginBlocked ? "Dezactivat" : "Activ"}</span></p>
+          <p className="muted small">{loginBlocked ? "Clientul nu se poate conecta. Datele și comenzile lui rămân." : "Parola se schimbă din Administrare."}</p>
+          <button type="button" className={`button ${loginBlocked ? "button-primary" : "button-outline danger-outline"}`} disabled={pending}
+            onClick={() => { if (loginBlocked || window.confirm("Dezactivezi contul clientului? Nu se va mai putea conecta până îl reactivezi.")) start(async () => onDone(await setClientLoginActive(client.id, loginBlocked))); }}>
+            {loginBlocked ? "Reactivează contul" : "Dezactivează contul"}</button>
+        </div>
         : <div className="admin-inline admin-mini-form">
           <input value={username} maxLength={32} autoCapitalize="none" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="Username" aria-label="Username" />
           <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Parolă (min. 6)" aria-label="Parolă" autoComplete="new-password" />

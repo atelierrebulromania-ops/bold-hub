@@ -62,3 +62,13 @@ export async function clearPasswordChange(id: string): Promise<AccountError | nu
   const { error } = await admin.auth.admin.updateUserById(id, { app_metadata: { [passwordChangeFlag]: false } });
   return error ? "failed" : null;
 }
+
+// Whether a login is paused (deactivated): it exists but cannot sign in.
+export async function isLoginBlocked(id: string | null): Promise<boolean> {
+  if (!id) return false;
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const { data } = await admin.auth.admin.getUserById(id);
+  const until = (data.user as { banned_until?: string | null } | null)?.banned_until;
+  return !!until && Date.parse(until) > Date.now();
+}

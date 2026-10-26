@@ -18,3 +18,12 @@ export function clientTab(value: string | undefined): ClientTabId {
 export function productCategories(catalog: { category: string | null }[]) {
   return [...new Set(catalog.map((item) => item.category).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "ro"));
 }
+
+// The signed-in user's product collections (row security returns only their own), as product id lists.
+export const collectionSelect = "id,name,product_collection_items(product_id,position)";
+export function toCollections(rows: { id: string; name: string; product_collection_items: { product_id: string; position: number }[] }[] | null) {
+  return (rows ?? []).map((row) => ({
+    id: row.id, name: row.name,
+    productIds: [...row.product_collection_items].sort((a, b) => a.position - b.position).map((item) => item.product_id),
+  }));
+}

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { b2bSkuFilter } from "@/lib/b2b-products";
-import { accountErrorMessages, createLogin, deleteLogin } from "@/lib/account-admin";
+import { accountErrorMessages, createLogin, deleteLogin, setLoginBlocked } from "@/lib/account-admin";
 import { lookupAnafCompany, normalizeCui } from "@/lib/anaf";
 import { listBocpInvoices } from "@/lib/bocp/invoices";
 import { requireRole } from "@/lib/auth";
@@ -173,6 +173,49 @@ export async function createClientLogin(clientId: string, username: string, pass
   }
   revalidatePath("/account");
   return { ok: true, message: `Contul „${login.username}” a fost creat. Dă-i clientului username-ul și parola; la prima logare își alege una proprie.` };
+}
+
+// Deletes a point of work that never had orders. Points with orders in the history stay (deactivate them instead),
+// so past deliveries keep their address. The main point cannot be deleted.
+export async function deleteLocation(clientId: string, locationId: string): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId) || !uuid.test(locationId)) return { ok: false, message: "Punctul de lucru nu este valid." };
+  const { data: point } = await supabase.from("partner_locations").select("id,name,is_main").eq("id", locationId).eq("partner_id", clientId).maybeSingle();
+  if (!point) return { ok: false, message: "Nu ai acces la acest punct." };
+  if (point.is_main) return { ok: false, message: "Punctul principal nu se poate șterge. Fă alt punct principal întâi." };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, message: accountErrorMessages.no_service_key };
+  const [carts, backorders, custody] = await Promise.all([
+    admin.from("partner_carts").select("id", { count: "exact", head: true }).eq("location_id", locationId),
+    admin.from("partner_backorders").select("id", { count: "exact", head: true }).eq("location_id", locationId),
+    admin.from("partner_custody_items").select("id", { count: "exact", head: true }).eq("location_id", locationId).eq("status", "at_client"),
+  ]);
+  if ((carts.count ?? 0) > 0 || (backorders.count ?? 0) > 0) {
+    return { ok: false, message: `${point.name} are comenzi în istoric, așa că nu se poate șterge. Dezactivează-l din „Editează”.` };
+  }
+  if ((custody.count ?? 0) > 0) return { ok: false, message: `${point.name} are produse în custodie. Închide-le sau mută-le întâi.` };
+  const { data: row } = await admin.from("partner_locations").select("auth_user_id").eq("id", locationId).maybeSingle();
+  const { error } = await admin.from("partner_locations").delete().eq("id", locationId).eq("partner_id", clientId);
+  if (error) return { ok: false, message: "Nu am putut șterge punctul de lucru." };
+  if (row?.auth_user_id) await deleteLogin(row.auth_user_id);
+  revalidatePath("/account");
+  return { ok: true, message: `Punctul de lucru ${point.name} a fost șters.` };
+}
+
+// Pauses or resumes the client's login: a paused account cannot sign in; nothing else changes.
+export async function setClientLoginActive(clientId: string, active: boolean): Promise<Result> {
+  const { supabase } = await agent();
+  if (!uuid.test(clientId)) return { ok: false, message: "Clientul nu este valid." };
+  const { data: client } = await supabase.from("partners").select("id").eq("id", clientId).maybeSingle();
+  if (!client) return { ok: false, message: "Nu ai acces la acest client." };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, message: accountErrorMessages.no_service_key };
+  const { data: row } = await admin.from("partners").select("auth_user_id").eq("id", clientId).maybeSingle();
+  if (!row?.auth_user_id) return { ok: false, message: "Clientul nu are cont." };
+  const failed = await setLoginBlocked(row.auth_user_id, !active);
+  if (failed) return { ok: false, message: accountErrorMessages[failed] };
+  revalidatePath("/account");
+  return { ok: true, message: active ? "Contul clientului a fost reactivat." : "Contul clientului a fost dezactivat. Nu se mai poate conecta până îl reactivezi." };
 }
 
 // A login for one point of work: it sees only that point (stock, requests, orders), no invoices.
