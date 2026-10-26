@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { homeFor, viewAs } from "@/lib/auth";
+import { homeFor, mustChangePassword, viewAs } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,7 @@ export default async function Home() {
   const { data: authData } = await supabase.auth.getClaims();
   const userId = authData?.claims?.sub;
   if (!userId) redirect("/login");
+  if (mustChangePassword(authData?.claims)) redirect("/password");
   const { data: profile } = await supabase.from("app_users")
     .select("role,active").eq("id", userId).maybeSingle();
   if (profile?.active) {

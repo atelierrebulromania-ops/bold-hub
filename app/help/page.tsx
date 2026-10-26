@@ -56,7 +56,7 @@ export default async function HelpPage() {
             <dt><span className="payment-chip paid">Câștigat</span></dt><dd>Completezi datele firmei (CUI-ul se caută la ANAF) și lead-ul devine <strong>clientul tău</strong>, în <Link href="/account">Clienți</Link>.</dd>
             <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Alegi motivul: preț, nu răspunde, nu e potrivit, a ales alt furnizor sau altul. Un lead pierdut se poate redeschide.</dd>
           </dl>
-          <p className="muted">Doar agentul care a preluat lead-ul îl poate muta între etape. Dacă nu-l mai poți lucra, apasă <strong>Eliberează lead-ul</strong>
+          <p className="muted">Doar agentul care a preluat lead-ul îl poate muta între etape. Dacă nu-l mai poți lucra, apasă <strong>Eliberează lead-ul</strong>{" "}
             și se întoarce în Noi, pentru alt coleg.</p>
         </section>
 

@@ -35,7 +35,7 @@ export async function createUser(input: { fullName: string; username: string; pa
     return { ok: false, message: error.code === "23505" ? accountErrorMessages.username_taken : accountErrorMessages.failed };
   }
   revalidatePath(page);
-  return { ok: true, message: `Contul „${login.username}” a fost creat.` };
+  return { ok: true, message: `Contul „${login.username}” a fost creat. La prima logare își alege propria parolă.` };
 }
 
 export async function updateUser(input: { id: string; fullName: string; email: string; role: string; active: boolean }): Promise<Result> {
@@ -64,7 +64,7 @@ export async function changePassword(id: string, password: string): Promise<Resu
   await requireRole(["admin"]);
   if (!uuid.test(id)) return { ok: false, message: "Utilizatorul nu este valid." };
   const error = await setLoginPassword(id, password);
-  return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată." };
+  return error ? { ok: false, message: accountErrorMessages[error] } : { ok: true, message: "Parola a fost schimbată. La următoarea logare utilizatorul își alege una proprie." };
 }
 
 const deleteMessages: Record<string, string> = {

@@ -46,11 +46,17 @@ export function homeFor(role: UserRole): string {
   return "/orders";
 }
 
+// A login whose password was set by someone else first goes to /password to choose its own.
+export function mustChangePassword(claims: { app_metadata?: Record<string, unknown> } | undefined) {
+  return claims?.app_metadata?.password_change_required === true;
+}
+
 export async function requireRole(roles: readonly UserRole[]) {
   const supabase = await createClient();
   const { data: authData } = await supabase.auth.getClaims();
   const userId = authData?.claims?.sub;
   if (!userId) redirect("/login");
+  if (mustChangePassword(authData?.claims)) redirect("/password");
   const { data: profile } = await supabase.from("app_users")
     .select("full_name,role,active,crm_access").eq("id", userId).maybeSingle();
   if (!profile?.active) redirect("/access");
@@ -74,6 +80,7 @@ export async function requirePartner() {
   const { data: authData } = await supabase.auth.getClaims();
   const userId = authData?.claims?.sub;
   if (!userId) redirect("/login");
+  if (mustChangePassword(authData?.claims)) redirect("/password");
   const { data: partner } = await supabase.from("partners")
     .select("id,business_name,location_name,is_important_client")
     .eq("auth_user_id", userId).eq("active", true).maybeSingle();

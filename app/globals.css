@@ -1382,7 +1382,7 @@ p.push-toggle { display: block; }
 .help-card p { margin: 0 0 8px; color: #4b4f56; font-size: .82rem; line-height: 1.55; }
 .help-card p:last-child { margin-bottom: 0; }
 .help-card a { color: var(--blue); font-weight: 700; }
-.help-steps, .help-list { margin: 0; padding-left: 20px; color: #4b4f56; font-size: .82rem; line-height: 1.6; }
+.help-steps, .help-list { margin: 0; padding-left: 22px; color: #4b4f56; font-size: .82rem; line-height: 1.6; }
 .help-steps li + li, .help-list li + li { margin-top: 4px; }
 .help-terms { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; margin: 0 0 10px; font-size: .82rem; line-height: 1.5; }
 .help-terms dt { font-weight: 800; }
@@ -1392,3 +1392,18 @@ p.push-toggle { display: block; }
   .help-terms { grid-template-columns: 1fr; gap: 2px; }
   .help-terms dd { margin-bottom: 8px; }
 }
+.help-steps { list-style: decimal; }
+.help-list { list-style: disc; }
+.help-steps li, .help-list li { display: list-item; }
+.auth-remember { display: flex; align-items: flex-start; gap: 10px; color: #1c1e21; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.auth-remember input { flex-shrink: 0; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--blue); cursor: pointer; }
+.auth-remember small { display: block; margin-top: 3px; color: #65676b; font-size: .74rem; font-weight: 500; line-height: 1.4; }
+.auth-form-wrap h1 + .auth-lead { margin-top: -18px; }
+.auth-help a { color: var(--blue); font-weight: 700; }
+.auth-submit:disabled { opacity: .6; cursor: default; transform: none; }
+.sidebar-user .password-link { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px; color: #b5b5b5; }
+.sidebar-user .password-link:hover { color: #fff; background: #2a2c30; }
+.sidebar-user .password-link svg { width: 17px; height: 17px; }
+.partner-header-actions { display: flex; align-items: center; gap: 8px; }
+.partner-header-actions .power-button { text-decoration: none; }
+.partner-header-actions .key-button:hover { border-color: #cbd9ec; background: #f5f9ff; color: var(--blue); }

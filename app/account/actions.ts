@@ -172,7 +172,7 @@ export async function createClientLogin(clientId: string, username: string, pass
     return { ok: false, message: error.code === "23505" ? accountErrorMessages.username_taken : accountErrorMessages.failed };
   }
   revalidatePath("/account");
-  return { ok: true, message: `Contul „${login.username}” a fost creat. Dă-i clientului username-ul și parola.` };
+  return { ok: true, message: `Contul „${login.username}” a fost creat. Dă-i clientului username-ul și parola; la prima logare își alege una proprie.` };
 }
 
 // A login for one point of work: it sees only that point (stock, requests, orders), no invoices.
@@ -197,7 +197,7 @@ export async function createPointLogin(clientId: string, locationId: string, use
     return { ok: false, message: accountErrorMessages.failed };
   }
   revalidatePath("/account");
-  return { ok: true, message: `Contul „${login.username}” pentru punct a fost creat. Dă-i username-ul și parola.` };
+  return { ok: true, message: `Contul „${login.username}” pentru punct a fost creat. Dă-i username-ul și parola; la prima logare își alege una proprie.` };
 }
 
 export async function deletePointLogin(clientId: string, locationId: string): Promise<Result> {
