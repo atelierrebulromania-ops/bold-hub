@@ -29,7 +29,6 @@ const stages: { value: string; label: string; tone: string }[] = [
 ];
 const stageOf = (value: string) => stages.find((stage) => stage.value === value) ?? stages[0];
 const sourceLabels: Record<string, string> = { meta: "Meta", website: "Site", google: "Google", tiktok: "TikTok", manual: "Manual", import: "Import" };
-const lostReasons = ["Preț", "Nu răspunde", "Nu e potrivit", "A ales alt furnizor", "Altul"];
 const tabs: { value: Tab; label: string }[] = [
   { value: "new", label: "Noi" }, { value: "working", label: "În lucru" }, { value: "won", label: "Câștigați" },
   { value: "lost", label: "Pierduți" }, { value: "all", label: "Toate" },
@@ -223,13 +222,13 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
         {canWork && holder && lead.status === "offer" && <section className="detail-section"><h3>Rezultat</h3>
           {!losing ? <div className="crm-result">
             <button type="button" className="button crm-won" disabled={pending} onClick={() => setConverting(true)}>✓ Câștigat<small>devine client nou</small></button>
-            <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => setLosing(true)}>✕ Pierdut<small>alege motivul</small></button>
+            <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => setLosing(true)}>✕ Pierdut<small>scrie motivul</small></button>
           </div> : <div className="crm-lost-box">
-            <p>De ce s-a pierdut?</p>
-            <div className="crm-reasons">{lostReasons.map((reason) => <button key={reason} type="button" className={lostReason === reason ? "selected" : ""}
-              onClick={() => setLostReason(reason)}>{reason}</button>)}</div>
+            <label htmlFor={`lost-${lead.id}`}>De ce s-a pierdut?</label>
+            <textarea id={`lost-${lead.id}`} className="crm-note" value={lostReason} maxLength={300} rows={3} autoFocus
+              onChange={(event) => setLostReason(event.target.value)} placeholder="Scrie pe scurt motivul, cu cuvintele tale…" />
             <div className="crm-lost-actions">
-              <button type="button" className="button button-danger" disabled={pending || !lostReason} onClick={() => run(() => setLeadStatus(lead.id, "lost", lostReason), () => setLosing(false))}>Marchează pierdut</button>
+              <button type="button" className="button button-danger" disabled={pending || !lostReason.trim()} onClick={() => run(() => setLeadStatus(lead.id, "lost", lostReason), () => setLosing(false))}>Marchează pierdut</button>
               <button type="button" className="button button-outline" disabled={pending} onClick={() => { setLosing(false); setLostReason(""); }}>Renunță</button>
             </div>
           </div>}

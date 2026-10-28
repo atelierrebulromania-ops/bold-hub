@@ -89,7 +89,7 @@ export default async function HelpPage() {
               <dt><span className="payment-chip open">Contactat</span></dt><dd>Ați vorbit; discuția continuă.</dd>
               <dt><span className="payment-chip offer">Ofertă trimisă</span></dt><dd>BoldHub îți amintește după {offerDays} zile dacă nu s-a închis; poți amâna cu +3, +7 sau +14 zile.</dd>
               <dt><span className="payment-chip paid">Câștigat</span></dt><dd>Completezi datele firmei (CUI-ul se caută la ANAF) și lead-ul devine clientul tău. Din lead ai apoi link direct la fișa clientului.</dd>
-              <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Alegi motivul (preț, nu răspunde, nu e potrivit, alt furnizor, altul). Se poate redeschide.</dd>
+              <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Scrii motivul cu cuvintele tale (până la 300 de caractere). Se poate redeschide.</dd>
             </dl>
             <h3>Butoane</h3>
             <dl className="help-terms">

@@ -1167,10 +1167,8 @@ p.push-toggle { display: block; }
 .crm-lost-button { color: #a13032; border-color: #f0c3c5; background: #fff; }
 .crm-lost-button:hover:not(:disabled) { background: #fff5f5; }
 .crm-lost-box { padding: 12px; border: 1px solid #f0c3c5; border-radius: 9px; background: #fffafa; }
-.crm-lost-box p { margin: 0 0 10px; font-size: .78rem; font-weight: 700; }
-.crm-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.crm-reasons button { padding: .4rem .7rem; border: 1px solid #e1e4e9; border-radius: 999px; background: #fff; color: #4b4f56; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
-.crm-reasons button.selected { border-color: #c62f33; background: #c62f33; color: #fff; }
+.crm-lost-box label { display: block; margin: 0 0 8px; font-size: .78rem; font-weight: 700; }
+.crm-lost-box .crm-note { background: #fff; }
 .crm-lost-actions { display: flex; gap: 8px; }
 .crm-panel-footer { display: flex; align-items: center; gap: 12px; }
 .crm-panel-footer small { color: #8a8d91; font-size: .7rem; }
