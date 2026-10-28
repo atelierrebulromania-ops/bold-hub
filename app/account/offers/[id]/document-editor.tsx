@@ -330,7 +330,8 @@ function DocumentActions({ document, related, pending, act }: {
     : document.partner_carts?.invoiced_at && document.partner_carts.bocp_invoice_id ? `/billing/invoice/${document.partner_carts.id}` : null;
   const open = document.status === "issued" && !document.cart_id && !document.invoice_requested_at;
 
-  if (cancelling) {
+  // The form closes once the proforma is no longer open (cancelled or sent on).
+  if (cancelling && open) {
     return <div className="proforma-cancel">
       <label>Motivul anulării (opțional)<input value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="ex. clientul a renunțat" autoFocus /></label>
       <button type="button" className="text-button" onClick={() => setCancelling(false)}>Renunță</button>
@@ -366,6 +367,7 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
   const cart = document.partner_carts;
   const source = related.find((item) => item.id === document.source_document_id);
   const steps: { label: string; detail: string; done: boolean }[] = [];
+  let warning: string | null = null;
 
   if (document.kind === "offer") {
     const proformas = related.filter((item) => item.kind === "proforma");
@@ -378,13 +380,12 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
     // BOCP prices the proforma itself: a different total means it did not take the document's discounts.
     const expected = documentTotals(document.sales_document_items, document.discount_percent).total;
     if (document.bocp_proforma_total !== null && Math.abs(document.bocp_proforma_total - expected) >= 0.1) {
-      steps.push({ label: "Atenție la total", done: false,
-        detail: `În BoldHub proforma are ${formatMoney(expected)} lei, în BOCP ${formatMoney(document.bocp_proforma_total)} lei. Verifică prețurile cu facturarea.` });
+      warning = `Atenție la total: în BoldHub proforma are ${formatMoney(expected)} lei, în BOCP ${formatMoney(document.bocp_proforma_total)} lei. Verifică prețurile cu facturarea.`;
     }
     if (document.status === "cancel_requested" || document.status === "cancelled") {
+      const reason = document.cancel_reason ? ` · Motiv: ${document.cancel_reason}` : "";
       steps.push({ label: "Anulare", done: document.status === "cancelled",
-        detail: document.status === "cancelled" ? `Anulată în BOCP${document.cancelled_at ? ` · ${formatDateTime(document.cancelled_at)}` : ""}` : "Stoc eliberat · facturarea anulează proforma în BOCP" });
-      if (document.cancel_reason) steps.push({ label: "Motiv", detail: document.cancel_reason, done: true });
+        detail: document.status === "cancelled" ? `Anulată în BOCP${document.cancelled_at ? ` · ${formatDateTime(document.cancelled_at)}` : ""}${reason}` : `Stoc eliberat · facturarea anulează proforma în BOCP${reason}` });
     } else if (cart) {
       const stage = cart.invoiced_at ? "Facturată" : cart.status === "delivered" ? "La facturare" : cart.prepared_at ? "Pe raft" : "În depozit (de pregătit)";
       steps.push({ label: "Comandă rezervată", detail: stage, done: cart.status === "delivered" });
@@ -400,6 +401,7 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
 
   return <section className="document-block document-progress"><h3>Parcurs</h3>
     <ol className="progress-steps">{steps.map((step) => <li key={step.label} className={step.done ? "done" : ""}><strong>{step.label}</strong><span>{step.detail}</span></li>)}</ol>
+    {warning && <p className="notice warning progress-warning" role="status">{warning}</p>}
   </section>;
 }
 
