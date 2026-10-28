@@ -11,7 +11,7 @@ export default async function AccountClientsPage({ searchParams }: { searchParam
     supabase.from("partners")
       .select(`id,business_name,location_name,type,contact_phone,contact_email,is_important_client,active,auth_user_id,account_username,
         billing_name,vat_id,registration_number,billing_street,billing_city,billing_county,billing_zip,
-        own_consumption_discounts,sales_mode,consignment_commission,partner_discounts(category,percent,channel),
+        own_consumption_discounts,sales_mode,consignment_commission,partner_discounts(product_id,percent,channel),
         stock_mode,partner_locations(id,name,city,address,contact_name,contact_phone,is_main,active,account_username),
         partner_par_levels(product_id,location_id,channel,par_level_quantity,products(name,sku)),
         partner_contracts(id,title,status,supplier_uploaded_at,signed_uploaded_at),

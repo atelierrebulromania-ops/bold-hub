@@ -91,6 +91,9 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
   const matches = needle.length < 2 ? [] : catalog.filter((item) => !lines.some((line) => line.productId === item.id)
     && `${item.name} ${item.sku}`.toLocaleLowerCase("ro").includes(needle)).slice(0, 8);
   const setField = (key: keyof typeof client, value: string) => setClient({ ...client, [key]: value });
+  // A product's own discount for the picked client ("" = the document's discount).
+  const ruleFor = (rules: DiscountRule[], productId: string) => { const rule = rules.find((item) => item.product_id === productId); return rule ? String(rule.percent) : ""; };
+  const clientRules = clients.find((item) => item.id === partnerId)?.partner_discounts ?? [];
 
   function pickClient(id: string) {
     const found = clients.find((item) => item.id === id);
@@ -102,8 +105,9 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
       contactName: "", contactEmail: found.contact_email ?? "", contactPhone: found.contact_phone,
     });
     setSaveAsPartner(false);
-    // The client's discount on the whole range is the starting point for the document.
+    // The client's discount on the whole range is the starting point for the document; products with their own discount get it on the line.
     setDiscount(String(discountFor(found.partner_discounts, null)));
+    setLines((current) => current.map((line) => ({ ...line, discount: ruleFor(found.partner_discounts, line.productId) })));
   }
 
   // Adds a collection's products (quantity 1) that are not on the document yet.
@@ -111,7 +115,7 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
     const collection = collections.find((item) => item.id === id);
     setCollectionId("");
     if (!collection) return;
-    const added = collectionLines(collection, catalog, lines);
+    const added = collectionLines(collection, catalog, lines).map((line) => ({ ...line, discount: ruleFor(clientRules, line.productId) }));
     setLines([...lines, ...added]);
     setFeedback({ ok: true, message: added.length
       ? `Am adăugat ${added.length} ${added.length === 1 ? "produs" : "produse"} din „${collection.name}”. Setează cantitățile sau scoate ce nu trebuie.`
@@ -265,7 +269,7 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
           {editable && <div className="product-picker">
             <input className="group-member-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Adaugă produs (nume sau SKU)" aria-label="Adaugă produs" />
             {matches.length > 0 && <div className="group-member-list request-options">{matches.map((item) => (
-              <button key={item.id} type="button" className="request-option" onClick={() => { setLines([...lines, { productId: item.id, name: item.name, sku: item.sku, quantity: "1", unitPrice: item.list_price ?? 0, vatPercent: item.vat_percent ?? 21, discount: "" }]); setQuery(""); }}>
+              <button key={item.id} type="button" className="request-option" onClick={() => { setLines([...lines, { productId: item.id, name: item.name, sku: item.sku, quantity: "1", unitPrice: item.list_price ?? 0, vatPercent: item.vat_percent ?? 21, discount: ruleFor(clientRules, item.id) }]); setQuery(""); }}>
                 <span>{item.name}</span><small>SKU {item.sku} · {formatMoney(item.list_price ?? 0)} lei</small>
               </button>
             ))}</div>}

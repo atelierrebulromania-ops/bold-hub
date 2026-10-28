@@ -385,6 +385,13 @@ a { color: inherit; text-decoration: none; }
 .partner-billing-grid select { min-height: 36px; padding: .4rem .6rem; border: 1px solid #ccd0d5; border-radius: 7px; background: #fff; font: inherit; font-size: .78rem; }
 .discount-rows { display: grid; gap: 6px; margin-bottom: 10px; }
 .discount-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: .78rem; font-weight: 600; }
+.discount-products-title { margin-top: 16px; }
+.discount-products-title h4 { margin: 0; font-size: .82rem; }
+.discount-product { display: grid; gap: 2px; min-width: 0; }
+.discount-product strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.discount-product small { color: #65676b; font-size: .7rem; font-weight: 500; }
+.discount-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; padding: .5rem .6rem; border: 1px dashed #ccd0d5; border-radius: 7px; background: #fafbfc; }
+.discount-bulk > .muted { flex: 1 1 200px; }
 .percent-input { display: inline-flex; align-items: center; gap: 4px; color: #65676b; }
 .percent-input input { width: 64px; min-height: 32px; padding: .3rem .45rem; border: 1px solid #ccd0d5; border-radius: 6px; text-align: right; font: inherit; }
 .partner-billing-actions select { min-height: 36px; padding: .3rem .5rem; border: 1px solid #ccd0d5; border-radius: 7px; background: #fff; font: inherit; font-size: .76rem; }

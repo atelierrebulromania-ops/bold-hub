@@ -74,16 +74,18 @@ export async function saveClient(clientId: string | null, input: ClientInput): P
   return { ok: true, message: clientId ? "Clientul a fost actualizat." : "Clientul a fost adăugat.", id: data };
 }
 
-// Rules for one order channel. For consumption, own = false means "same discounts as resale".
-export async function saveDiscounts(clientId: string, rules: { category: string | null; percent: number }[], channel: Channel = "resale", own = true): Promise<Result> {
+// Rules for one order channel: the one on the whole range (no product) and one per product. For consumption, own = false means
+// "same discounts as resale".
+export async function saveDiscounts(clientId: string, rules: { product_id?: string | null; percent: number }[], channel: Channel = "resale", own = true): Promise<Result> {
   const { supabase } = await agent();
   if (!uuid.test(clientId)) return { ok: false, message: "Clientul nu este valid." };
-  if (rules.length > 100 || rules.some((rule) => !(rule.percent > 0 && rule.percent < 100))) return { ok: false, message: "Discountul trebuie să fie între 0 și 100%." };
-  const categories = rules.map((rule) => rule.category ?? "");
-  if (new Set(categories).size !== categories.length) return { ok: false, message: "Fiecare categorie poate avea o singură regulă." };
+  if (rules.length > 1000 || rules.some((rule) => !(rule.percent > 0 && rule.percent < 100))) return { ok: false, message: "Discountul trebuie să fie între 0 și 100%." };
+  if (rules.some((rule) => rule.product_id && !uuid.test(rule.product_id))) return { ok: false, message: "Un produs nu este valid." };
+  const targets = rules.map((rule) => rule.product_id ?? "");
+  if (new Set(targets).size !== targets.length) return { ok: false, message: "Fiecare produs poate avea un singur discount." };
   const { data, error } = await supabase.rpc("save_partner_discounts", {
     p_partner_id: clientId,
-    p_rules: rules.map((rule) => ({ category: rule.category, percent: String(Math.round(rule.percent * 100) / 100) })) as Json,
+    p_rules: rules.map((rule) => ({ product_id: rule.product_id ?? null, percent: String(Math.round(rule.percent * 100) / 100) })) as Json,
     p_channel: parseChannel(channel),
     p_own: own,
   });
