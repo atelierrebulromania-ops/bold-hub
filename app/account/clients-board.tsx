@@ -572,7 +572,7 @@ function DiscountRules({ client, catalog, collections, channel, header, onDone }
           {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name} ({collection.productIds.length})</option>)}</select>}
       </div>
       {notice && <p className="muted small">{notice}</p>}
-      <div className="partner-billing-actions">
+      <div className="partner-billing-actions discount-actions">
         {missing > 0 && <span className="muted small">Completează procentul la {missing} {missing === 1 ? "produs" : "produse"} sau scoate-le.</span>}
         <button type="button" className="button button-primary" disabled={pending || missing > 0} onClick={save}>Salvează discounturile</button>
       </div>

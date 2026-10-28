@@ -24,7 +24,7 @@ export function describeRules(rules: DiscountRule[]) {
   if (!rules.length) return "Fără discount";
   const general = rules.find((rule) => !rule.product_id);
   const products = rules.filter((rule) => rule.product_id).length;
-  return [general ? `Toate produsele −${general.percent}%` : null, products ? `${products} ${products === 1 ? "produs" : "produse"} cu discount propriu` : null]
+  return [general ? `Toate −${general.percent}%` : null, products ? `${products} pe produs` : null]
     .filter(Boolean).join(" · ");
 }
 
