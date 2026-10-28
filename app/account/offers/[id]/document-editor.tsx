@@ -371,6 +371,12 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
     if (source) steps.push({ label: "Din oferta", detail: source.number ?? "—", done: true });
     steps.push({ label: "Proformă în BOCP", done: document.status !== "issuing",
       detail: document.status === "issuing" ? "Comanda a ajuns în BOCP, se așteaptă numărul proformei" : `${document.number}${document.bocp_proforma_total !== null ? ` · ${formatMoney(document.bocp_proforma_total)} lei` : ""} · stoc rezervat în BOCP` });
+    // BOCP prices the proforma itself: a different total means it did not take the document's discounts.
+    const expected = documentTotals(document.sales_document_items, document.discount_percent).total;
+    if (document.bocp_proforma_total !== null && Math.abs(document.bocp_proforma_total - expected) >= 0.1) {
+      steps.push({ label: "Atenție la total", done: false,
+        detail: `În BoldHub proforma are ${formatMoney(expected)} lei, în BOCP ${formatMoney(document.bocp_proforma_total)} lei. Verifică prețurile cu facturarea.` });
+    }
     if (document.status === "cancel_requested" || document.status === "cancelled") {
       steps.push({ label: "Anulare", done: document.status === "cancelled",
         detail: document.status === "cancelled" ? `Anulată în BOCP${document.cancelled_at ? ` · ${formatDateTime(document.cancelled_at)}` : ""}` : "Stoc eliberat · facturarea anulează proforma în BOCP" });

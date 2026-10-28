@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bocpGetList } from "@/lib/bocp/client";
+import { normalizeCui } from "@/lib/anaf";
 import { sendConnectorOrder } from "@/lib/bocp/connector";
 import type { Database } from "@/lib/database.types";
 
@@ -108,6 +109,7 @@ export async function reserveCartInBocp(supabase: Client, cartId: string): Promi
     client: {
       name: partner.billing_name?.trim() || partner.business_name, isCompany: vatId.length > 0, vatId,
       registrationNumber: partner.registration_number?.trim() ?? "", phone: partner.contact_phone, email: partner.contact_email ?? "", address,
+      uniqueId: normalizeCui(vatId) ?? undefined,
     },
     items: [...lines.entries()].map(([code, line]) => {
       const product = stock.get(code)!;
