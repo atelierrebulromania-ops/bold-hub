@@ -53,6 +53,7 @@ Ce lipsește depinde de acces extern: IP fix pentru BOCP, contul WhatsApp Busine
 | operator_facturare (`marketing@chicchic.ro`) | `/returns` | Retururi (înregistrare), Facturare refill, Căutare comenzi, Notificări |
 | owner (`admin@atelierrebul.ro`) | `/dashboard` | doar dashboard (cifre agregate, fără date de client) |
 | revânzător | `/partner` | cererea proprie de refill, coșul, livrările, istoricul |
+| catalog_editor („Editor cataloage”) | `/catalogs` | doar Cataloage HoReCa (vezi [mai jos](#cataloage-horeca-10-noiembrie-2026)) |
 
 Contul de admin este `atelierrebulromania@gmail.com`. Conturile de revânzător se creează în Supabase → Authentication → Users (Invite user), apoi se asociază locației din `/admin/partners`.
 
@@ -77,6 +78,9 @@ Toate sunt aplicate pe proiectul BoldHub, cu excepția celei marcate.
 | `20260924201726_return_restock_note` … `20260924202910_shopify_return_mark_admin_only` | retur procesat cu notă / „cu mențiuni” (notifică facturarea); marcarea în Shopify doar de admin |
 | `20260924205049_username_accounts` | `app_users.username`, `notification_email`; `partners.account_username` |
 | `20260924211227_online_import_fixes` | ora reală a facturii, produse „Cadou”, numele din catalog nu mai sunt suprascrise, bifă pentru produsele fără EAN |
+| [`20261110111412_catalog_editor_role`](supabase/migrations/20261110111412_catalog_editor_role.sql) | rolul `catalog_editor` |
+| [`20261110111500_horeca_catalogs`](supabase/migrations/20261110111500_horeca_catalogs.sql) | cataloage HoReCa: 3 tabele cu RLS (doar admin și catalog_editor), duplicare și reordonare, bucket privat `horeca-catalog-images` |
+| [`20261110111517_horeca_catalog_seed`](supabase/migrations/20261110111517_horeca_catalog_seed.sql) | catalogul „HoReCa Spania – Octombrie 2026”: 3 colecții, 15 produse din PDF-ul de referință |
 
 Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pentru citire, pe rol.
 
@@ -146,6 +150,19 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
 - **Conturi cu username și parolă:** ecran **Administrare → Utilizatori** (nume, username, parolă min. 6, email opțional pentru notificări, rol; editare, schimbare parolă, dezactivare). Conturile partenerilor se creează la fel din `/admin/partners`. Login: username; cine scrie un email (cu @) intră ca înainte. Necesită `SUPABASE_SERVICE_ROLE_KEY` pe server. **Conturile existente se mută pe username la predarea aplicației.**
 - **Primul import real BOCP** (11 comenzi, apoi șterse): ora reală a facturii, 24h peste tot; numele produselor curățate; produsele gratuite din ofertă (produs + „Discount …” egal) primesc eticheta „Cadou”; produsele fără EAN se bifează în loc să fie scanate.
 - **Adresa de livrare:** BOCP nu dă strada în câmpurile de adresă; adresa completă e în XML-ul e-Factura (adresa de facturare) sau în Shopify. De decis sursa pentru AWB Cargus (de verificat cum o ia eColet).
+
+## Cataloage HoReCa (10 noiembrie 2026)
+
+Modul pentru listele de prețuri HoReCa, exportate în PDF dintr-un singur template fix (după „ES – LISTA DE PRECIOS HORECA – Oct 2026.pdf”). Nu are legătură cu Shopify, BOCP sau catalogul de produse: fiecare catalog își ține propriile colecții și produse.
+
+- **Unde:** meniul „Cataloage HoReCa” (`/catalogs`), pentru admin și rolul nou „Editor cataloage” (se dă din Administrare → Utilizatori).
+- **Cataloage:** creare, editare, duplicare (copie independentă), previzualizare, export PDF, arhivare/restaurare.
+- **Colecții și produse:** adăugare, redenumire, ordonare (săgeți și drag & drop), ascundere din PDF, ștergere cu confirmare; fotografie încărcată din calculator (redimensionată în browser, încadrată fără deformare).
+- **Condiții comerciale:** TVA, monedă, plată, livrare, alte mențiuni, per catalog.
+- **PDF:** copertă, foto + condiții, pagină de titlu și pagini de produse per colecție (8 produse pe pagină, cardurile nu se rup), pagina finală cu link. Previzualizarea folosește exact fișierul exportat. Nume: `Atelier_Rebul_HoReCa_<LIMBA>_<data>.pdf`.
+- **Securitate:** rolul e verificat în pagini, în acțiuni și în rutele PDF/foto; în baza de date RLS pe tabele și pe bucket. Celelalte module trimit rolul nou la `/access`.
+- **Fonturi:** EB Garamond și Archivo (licență OFL) în locul fonturilor comerciale din PDF-ul original.
+- **Verificat:** `npm test` (31/31), typecheck, build; test în browser ca admin, ca Editor cataloage și ca Operator depozit (fără acces), plus verificare RLS în baza live cu un cont de depozit.
 
 ## Ce rămâne
 
