@@ -1541,6 +1541,10 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .hc-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .hc-row-actions .button, .hc-collection-actions .button, .hc-product-actions .button { padding: .48rem .7rem; font-size: .74rem; }
 .hc-row-actions form { display: contents; }
+.hc-row-actions form.hc-rename-catalog { display: flex; flex-basis: 100%; gap: 6px; }
+.hc-rename-catalog input { flex: 1; min-width: 160px; padding: .5rem .65rem; border: 1px solid #ccd0d5; border-radius: 7px; font: inherit; font-size: .8rem; }
+.hc-editor-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.hc-editor-title h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em; }
 .hc-editor-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px; margin-bottom: 18px; }
 .hc-editor-head > div:first-child { display: grid; gap: 8px; justify-items: start; }
 .hc-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
