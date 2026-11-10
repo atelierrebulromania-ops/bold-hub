@@ -1084,11 +1084,190 @@ export type Database = {
           },
         ]
       }
+      horeca_catalogs: {
+        Row: {
+          archived_at: string | null
+          cover_subtitle: string
+          cover_title: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          language: string
+          terms_currency: string | null
+          terms_delivery: string | null
+          terms_other: string | null
+          terms_payment: string | null
+          terms_vat: string | null
+          title: string
+          updated_at: string
+          updated_by: string | null
+          website: string
+        }
+        Insert: {
+          archived_at?: string | null
+          cover_subtitle?: string
+          cover_title?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          language?: string
+          terms_currency?: string | null
+          terms_delivery?: string | null
+          terms_other?: string | null
+          terms_payment?: string | null
+          terms_vat?: string | null
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          website?: string
+        }
+        Update: {
+          archived_at?: string | null
+          cover_subtitle?: string
+          cover_title?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          language?: string
+          terms_currency?: string | null
+          terms_delivery?: string | null
+          terms_other?: string | null
+          terms_payment?: string | null
+          terms_vat?: string | null
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          website?: string
+        }
+        Relationships: []
+      }
+      horeca_catalog_collections: {
+        Row: {
+          active: boolean
+          catalog_id: string
+          created_at: string
+          id: string
+          label: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          catalog_id: string
+          created_at?: string
+          id?: string
+          label?: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horeca_catalog_collections_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "horeca_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      horeca_catalog_products: {
+        Row: {
+          active: boolean
+          catalog_id: string
+          collection_id: string
+          created_at: string
+          currency: string | null
+          id: string
+          image_path: string | null
+          name: string
+          position: number
+          price: number
+          size_unit: string | null
+          size_value: number | null
+          sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          catalog_id: string
+          collection_id: string
+          created_at?: string
+          currency?: string | null
+          id?: string
+          image_path?: string | null
+          name: string
+          position?: number
+          price: number
+          size_unit?: string | null
+          size_value?: number | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          catalog_id?: string
+          collection_id?: string
+          created_at?: string
+          currency?: string | null
+          id?: string
+          image_path?: string | null
+          name?: string
+          position?: number
+          price?: number
+          size_unit?: string | null
+          size_value?: number | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horeca_catalog_products_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "horeca_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horeca_catalog_products_collection_id_catalog_id_fkey"
+            columns: ["collection_id", "catalog_id"]
+            isOneToOne: false
+            referencedRelation: "horeca_catalog_collections"
+            referencedColumns: ["id", "catalog_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      duplicate_horeca_catalog: {
+        Args: { p_catalog_id: string; p_title: string | null }
+        Returns: string
+      }
+      reorder_horeca_collections: {
+        Args: { p_catalog_id: string; p_collection_ids: string[] }
+        Returns: boolean
+      }
+      reorder_horeca_products: {
+        Args: { p_collection_id: string; p_product_ids: string[] }
+        Returns: boolean
+      }
       owner_clients: {
         Args: { p_from: string | null; p_to: string | null }
         Returns: { id: string; name: string; location: string; type: string; active: boolean; agent: string | null; delivery_groups: string[]; orders: number; units: number; invoiced_value: number; outstanding: number; last_order: string | null }[]
@@ -1299,7 +1478,7 @@ export type Database = {
         | "produs_deteriorat"
         | "altul"
       return_status: "pending_restock" | "restocked"
-      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate"
+      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate" | "catalog_editor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1451,7 +1630,7 @@ export const Constants = {
         "altul",
       ],
       return_status: ["pending_restock", "restocked"],
-      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate"],
+      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate", "catalog_editor"],
     },
   },
 } as const

@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { homeFor, staffRoles, viewAsCookie, viewAsPartnerValue, type UserRole } from "@/lib/auth";
+import { homeFor, previewRoles, viewAsCookie, viewAsPartnerValue, type UserRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,7 +25,7 @@ export async function switchView(target: string) {
     store.set(viewAsCookie, viewAsPartnerValue(partnerId), options);
     redirect("/partner");
   }
-  if (!staffRoles.includes(target as UserRole)) redirect("/access");
+  if (!previewRoles.includes(target as UserRole)) redirect("/access");
   if (target === "admin") store.delete(viewAsCookie);
   else store.set(viewAsCookie, target, options);
   redirect(homeFor(target as UserRole));
