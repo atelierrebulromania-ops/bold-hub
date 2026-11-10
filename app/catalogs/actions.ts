@@ -29,6 +29,20 @@ export async function createCatalog(form: FormData) {
   redirect(`/catalogs/${data.id}`);
 }
 
+// Renames a catalog from the list. Same limit as the title field in the editor (1–120 characters).
+export async function renameCatalog(form: FormData) {
+  const { supabase, userId } = await requireRole(catalogRoles);
+  const id = String(form.get("id") ?? "");
+  const title = clean(form.get("title"));
+  if (!uuid.test(id)) redirect("/catalogs?error=save");
+  if (!title || title.length > 120) redirect("/catalogs?error=title");
+  const { error } = await supabase.from("horeca_catalogs").update({ title, updated_at: new Date().toISOString(), updated_by: userId }).eq("id", id);
+  if (error) redirect("/catalogs?error=save");
+  revalidatePath("/catalogs");
+  revalidatePath(`/catalogs/${id}`);
+  redirect("/catalogs?notice=renamed");
+}
+
 // A full, independent copy: info, terms, collections and products (photos are shared until replaced).
 export async function duplicateCatalog(form: FormData) {
   const { supabase } = await requireRole(catalogRoles);

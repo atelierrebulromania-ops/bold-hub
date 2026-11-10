@@ -29,6 +29,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
   const [collections, setCollections] = useState<CatalogCollection[]>(initial.collections);
   const [products, setProducts] = useState<CatalogProduct[]>(initial.products);
   const [currency, setCurrency] = useState(initial.currency);
+  const [title, setTitle] = useState(initial.title);
   const [tab, setTab] = useState<Tab>("products");
   const [status, setStatus] = useState<Status>({ kind: "saved" });
   const [infoDirty, setInfoDirty] = useState(false);
@@ -139,6 +140,13 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
       <div className="hc-editor-head">
         <div>
           <Link href="/catalogs" className="hc-back">← Toate cataloagele</Link>
+          <div className="hc-editor-title">
+            <h1>{title}</h1>
+            <button type="button" className="button button-outline" onClick={() => {
+              setTab("info");
+              requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.hc-info input[name="title"]')?.select());
+            }}>Redenumește</button>
+          </div>
           <SaveBadge status={status} />
         </div>
         <div className="hc-editor-actions">
@@ -154,7 +162,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
 
       {/* The info form stays mounted so unsaved typing survives switching tabs. */}
       <div hidden={tab !== "info"}>
-        <InfoForm initial={initial} save={save} onDirty={setInfoDirty} onCurrency={setCurrency} />
+        <InfoForm initial={initial} save={save} onDirty={setInfoDirty} onSaved={values => { setCurrency(values.currency); setTitle(values.title.trim().replace(/\s+/g, " ")); }} />
       </div>
 
       <div hidden={tab !== "products"} className="hc-collections">
@@ -197,7 +205,7 @@ function FieldError({ errors, name }: { errors: FieldErrors; name: string }) {
 const infoFields = ["title", "language", "currency", "coverTitle", "coverSubtitle", "website", "termsVat", "termsCurrency", "termsPayment", "termsDelivery", "termsOther"] as const;
 type InfoValues = Record<(typeof infoFields)[number], string>;
 
-function InfoForm({ initial, save, onDirty, onCurrency }: { initial: CatalogData; save: Save; onDirty: (dirty: boolean) => void; onCurrency: (currency: string) => void }) {
+function InfoForm({ initial, save, onDirty, onSaved }: { initial: CatalogData; save: Save; onDirty: (dirty: boolean) => void; onSaved: (values: InfoValues) => void }) {
   const start: InfoValues = {
     title: initial.title, language: initial.language, currency: initial.currency, coverTitle: initial.cover_title, coverSubtitle: initial.cover_subtitle,
     website: initial.website, termsVat: initial.terms_vat ?? "", termsCurrency: initial.terms_currency ?? "", termsPayment: initial.terms_payment ?? "",
@@ -220,7 +228,7 @@ function InfoForm({ initial, save, onDirty, onCurrency }: { initial: CatalogData
     setBusy(true);
     const result = await save(() => saveCatalogInfo(initial.id, values));
     setBusy(false);
-    if (result.ok) { setSaved(values); setErrors({}); onCurrency(values.currency); }
+    if (result.ok) { setSaved(values); setErrors({}); onSaved(values); }
     else setErrors(result.errors ?? {});
   }
 

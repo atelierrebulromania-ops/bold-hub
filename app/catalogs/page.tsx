@@ -5,11 +5,13 @@ import { catalogRoles, requireRole } from "@/lib/auth";
 import { catalogCurrencies, catalogLanguages, type CatalogLanguage } from "@/lib/horeca/catalog";
 import { createCatalog, deleteCatalog, duplicateCatalog } from "./actions";
 import { ConfirmSubmit } from "./confirm-submit";
+import { RenameCatalog } from "./rename-catalog";
 
 export const dynamic = "force-dynamic";
 
 const notices: Record<string, string> = {
   deleted: "Catalogul a fost șters.",
+  renamed: "Catalogul a fost redenumit.",
 };
 const errors: Record<string, string> = {
   title: "Scrie titlul catalogului (cel mult 120 de caractere).",
@@ -61,6 +63,7 @@ export default async function CatalogsPage({ searchParams }: { searchParams: Pro
                 <td className="nowrap">{count}</td>
                 <td><div className="hc-row-actions">
                   <Link className="button button-primary" href={`/catalogs/${catalog.id}`}>Editare</Link>
+                  <RenameCatalog id={catalog.id} title={catalog.title} />
                   <form action={duplicateCatalog}><input type="hidden" name="id" value={catalog.id} />
                     <ConfirmSubmit className="button button-outline" message={`Faci o copie completă a catalogului „${catalog.title}”? Copia este independentă: modificările ei nu schimbă originalul.`}>Duplicare</ConfirmSubmit></form>
                   <Link className="button button-outline" href={`/catalogs/${catalog.id}/preview`}>Previzualizare</Link>
