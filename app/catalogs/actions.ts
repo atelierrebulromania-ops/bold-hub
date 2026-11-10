@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { catalogRoles, requireRole } from "@/lib/auth";
 import { catalogCurrencies, catalogLanguages, defaultCatalogTexts, type CatalogLanguage } from "@/lib/horeca/catalog";
+import { catalogImagesBucket, isImagePath } from "@/lib/horeca/server";
 
 // Catalog list actions. Every action checks the role again; the database's row security also refuses
 // anyone who is not an admin or a catalog editor.
@@ -42,15 +43,24 @@ export async function duplicateCatalog(form: FormData) {
   redirect(`/catalogs/${copy}?notice=duplicated`);
 }
 
-// Archiving hides a catalog from the list; nothing is deleted and it can be restored.
-export async function setCatalogArchived(form: FormData) {
-  const { supabase, userId } = await requireRole(catalogRoles);
+// Deletes a catalog for good: its collections and products go with it (the database cascades), then the
+// photos it uploaded, except those another catalog still uses (a duplicate shares its original's photos).
+export async function deleteCatalog(form: FormData) {
+  const { supabase } = await requireRole(catalogRoles);
   const id = String(form.get("id") ?? "");
-  const archive = form.get("archive") === "true";
-  if (!uuid.test(id)) redirect("/catalogs?error=save");
-  const now = new Date().toISOString();
-  const { error } = await supabase.from("horeca_catalogs").update({ archived_at: archive ? now : null, updated_at: now, updated_by: userId }).eq("id", id);
-  if (error) redirect("/catalogs?error=save");
+  if (!uuid.test(id)) redirect("/catalogs?error=delete");
+  const { data: products, error: readError } = await supabase.from("horeca_catalog_products").select("image_path").eq("catalog_id", id);
+  if (readError) redirect("/catalogs?error=delete");
+  const { error } = await supabase.from("horeca_catalogs").delete().eq("id", id);
+  if (error) redirect("/catalogs?error=delete");
+
+  const stored = [...new Set((products ?? []).map(product => product.image_path).filter((path): path is string => !!path && isImagePath(path) && !path.startsWith("seed/")))];
+  if (stored.length > 0) {
+    const { data: stillUsed } = await supabase.from("horeca_catalog_products").select("image_path").in("image_path", stored);
+    const keep = new Set((stillUsed ?? []).map(product => product.image_path));
+    const unused = stored.filter(path => !keep.has(path));
+    if (unused.length > 0) await supabase.storage.from(catalogImagesBucket).remove(unused);
+  }
   revalidatePath("/catalogs");
-  redirect(archive ? "/catalogs?notice=archived" : "/catalogs?archived=1&notice=restored");
+  redirect("/catalogs?notice=deleted");
 }

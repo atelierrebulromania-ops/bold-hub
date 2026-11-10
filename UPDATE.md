@@ -156,7 +156,7 @@ Toate scrierile trec prin RPC-uri cu verificare de rol. Tabelele au RLS doar pen
 Modul pentru listele de prețuri HoReCa, exportate în PDF dintr-un singur template fix (după „ES – LISTA DE PRECIOS HORECA – Oct 2026.pdf”). Nu are legătură cu Shopify, BOCP sau catalogul de produse: fiecare catalog își ține propriile colecții și produse.
 
 - **Unde:** meniul „Cataloage HoReCa” (`/catalogs`), pentru admin și rolul nou „Editor cataloage” (se dă din Administrare → Utilizatori).
-- **Cataloage:** creare, editare, duplicare (copie independentă), previzualizare, export PDF, arhivare/restaurare.
+- **Cataloage:** creare, editare, duplicare (copie independentă), previzualizare, export PDF, ștergere definitivă (cu confirmare; fotografiile se șterg doar dacă nu le mai folosește alt catalog).
 - **Colecții și produse:** adăugare, redenumire, ordonare (săgeți și drag & drop), ascundere din PDF, ștergere cu confirmare; fotografie încărcată din calculator (redimensionată în browser, încadrată fără deformare).
 - **Condiții comerciale:** TVA, monedă, plată, livrare, alte mențiuni, per catalog.
 - **PDF:** copertă, foto + condiții, pagină de titlu și pagini de produse per colecție (8 produse pe pagină, cardurile nu se rup), pagina finală cu link. Previzualizarea folosește exact fișierul exportat. Nume: `Atelier_Rebul_HoReCa_<LIMBA>_<data>.pdf`.
