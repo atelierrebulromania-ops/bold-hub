@@ -1554,7 +1554,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .hc-collection.is-hidden { background: #fafafa; }
 .hc-collection-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .hc-order { display: grid; gap: 2px; }
-.hc-collection-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; flex: 1; min-width: 0; }
+.hc-collection-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; flex: 1 1 240px; min-width: 0; }
 .hc-collection-title small { flex-basis: 100%; color: #8a8d91; font-size: .66rem; font-weight: 800; letter-spacing: .06em; }
 .hc-collection-title h2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.02em; }
 .hc-count { color: var(--muted); font-size: .74rem; }
@@ -1611,5 +1611,6 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
   .hc-product { grid-template-columns: auto 52px minmax(0, 1fr); }
   .hc-thumb { width: 52px; height: 52px; }
   .hc-product-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .hc-collection-actions { flex-basis: 100%; }
 }
 @media (max-width: 600px) { .hc-fields { grid-template-columns: minmax(0, 1fr); } .page-heading:has(.hc-tabs) { flex-wrap: wrap; } }
