@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
-  catalogCurrencies, catalogLanguages, defaultCatalogTexts, formatPrice, formatSize, sizeUnits,
+  catalogCurrencies, catalogLanguages, defaultCatalogTexts, discountedPrice, formatPercent, formatPrice, formatSize, sizeUnits,
   type CatalogCollection, type CatalogData, type CatalogProduct, type SizeUnit,
 } from "@/lib/horeca/catalog";
 import type { FieldErrors } from "@/lib/horeca/validate";
@@ -30,6 +30,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
   const [products, setProducts] = useState<CatalogProduct[]>(initial.products);
   const [currency, setCurrency] = useState(initial.currency);
   const [title, setTitle] = useState(initial.title);
+  const [discount, setDiscount] = useState(initial.discount_percent);
   const [tab, setTab] = useState<Tab>("products");
   const [status, setStatus] = useState<Status>({ kind: "saved" });
   const [infoDirty, setInfoDirty] = useState(false);
@@ -148,6 +149,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
             }}>Redenumește</button>
           </div>
           <SaveBadge status={status} />
+          {discount > 0 && <span className="outcome-chip remarks">Discount activ: {formatPercent(discount)} pe tot catalogul</span>}
         </div>
         <div className="hc-editor-actions">
           <Link className="button button-outline" href={`/catalogs/${catalogId}/preview`}>Previzualizare</Link>
@@ -162,13 +164,17 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
 
       {/* The info form stays mounted so unsaved typing survives switching tabs. */}
       <div hidden={tab !== "info"}>
-        <InfoForm initial={initial} save={save} onDirty={setInfoDirty} onSaved={values => { setCurrency(values.currency); setTitle(values.title.trim().replace(/\s+/g, " ")); }} />
+        <InfoForm initial={initial} save={save} onDirty={setInfoDirty} onSaved={values => {
+          setCurrency(values.currency);
+          setTitle(values.title.trim().replace(/\s+/g, " "));
+          setDiscount(Number(values.discountPercent.trim().replace(",", ".")) || 0);
+        }} />
       </div>
 
       <div hidden={tab !== "products"} className="hc-collections">
         {sortedCollections.length === 0 && <p className="hc-empty">Catalogul nu are încă nicio colecție. Adaugă prima colecție mai jos, apoi produsele ei.</p>}
         {sortedCollections.map((collection, index) => (
-          <CollectionCard key={collection.id} catalogId={catalogId} collection={collection} products={productsOf(collection.id)} currency={currency}
+          <CollectionCard key={collection.id} catalogId={catalogId} collection={collection} products={productsOf(collection.id)} currency={currency} discount={discount}
             first={index === 0} last={index === sortedCollections.length - 1} save={save}
             onRenamed={(name, label) => setCollections(current => current.map(item => item.id === collection.id ? { ...item, name, label } : item))}
             onMove={offset => moveCollection(index, offset)} onToggle={() => toggleCollection(collection)} onDelete={() => removeCollection(collection)}
@@ -202,12 +208,13 @@ function FieldError({ errors, name }: { errors: FieldErrors; name: string }) {
 
 // ---- Catalog info and commercial terms ----------------------------------------------------------------
 
-const infoFields = ["title", "language", "currency", "coverTitle", "coverSubtitle", "website", "termsVat", "termsCurrency", "termsPayment", "termsDelivery", "termsOther"] as const;
+const infoFields = ["title", "language", "currency", "discountPercent", "coverTitle", "coverSubtitle", "website", "termsVat", "termsCurrency", "termsPayment", "termsDelivery", "termsOther"] as const;
 type InfoValues = Record<(typeof infoFields)[number], string>;
 
 function InfoForm({ initial, save, onDirty, onSaved }: { initial: CatalogData; save: Save; onDirty: (dirty: boolean) => void; onSaved: (values: InfoValues) => void }) {
   const start: InfoValues = {
-    title: initial.title, language: initial.language, currency: initial.currency, coverTitle: initial.cover_title, coverSubtitle: initial.cover_subtitle,
+    title: initial.title, language: initial.language, currency: initial.currency, discountPercent: String(initial.discount_percent),
+    coverTitle: initial.cover_title, coverSubtitle: initial.cover_subtitle,
     website: initial.website, termsVat: initial.terms_vat ?? "", termsCurrency: initial.terms_currency ?? "", termsPayment: initial.terms_payment ?? "",
     termsDelivery: initial.terms_delivery ?? "", termsOther: initial.terms_other ?? "",
   };
@@ -241,6 +248,12 @@ function InfoForm({ initial, save, onDirty, onSaved }: { initial: CatalogData; s
           <small>Etichetele fixe din PDF (Preț, Volum, Cod) urmează limba aleasă.</small><FieldError errors={errors} name="language" /></label>
         <label>Moneda catalogului<select {...field("currency")}>{catalogCurrencies.map(code => <option key={code}>{code}</option>)}</select>
           <small>Produsele o preiau automat.</small><FieldError errors={errors} name="currency" /></label>
+      </fieldset>
+      <fieldset>
+        <legend>Discount</legend>
+        <label>Discount pe tot catalogul (%)<input {...field("discountPercent")} inputMode="decimal" placeholder="0" />
+          <small>0 = fără discount. În PDF, la fiecare produs, prețul de listă apare tăiat și lângă el prețul cu discount. Prețurile salvate ale produselor nu se schimbă.</small>
+          <FieldError errors={errors} name="discountPercent" /></label>
       </fieldset>
       <fieldset>
         <legend>Copertă și ultima pagină</legend>
@@ -291,7 +304,7 @@ function NewCollection({ catalogId, save, label, onAdded }: { catalogId: string;
 }
 
 function CollectionCard(props: {
-  catalogId: string; collection: CatalogCollection; products: CatalogProduct[]; currency: string; first: boolean; last: boolean; save: Save;
+  catalogId: string; collection: CatalogCollection; products: CatalogProduct[]; currency: string; discount: number; first: boolean; last: boolean; save: Save;
   onRenamed: (name: string, label: string) => void; onMove: (offset: number) => void; onToggle: () => void; onDelete: () => void;
   onAdd: () => void; onEdit: (product: CatalogProduct) => void; onCopy: (product: CatalogProduct) => void;
   onToggleProduct: (product: CatalogProduct) => void; onDeleteProduct: (product: CatalogProduct) => void; onMoveProduct: (from: number, to: number) => void;
@@ -360,7 +373,9 @@ function CollectionCard(props: {
                 <span className="hc-thumb">{product.image_path ? <img src={imageUrl(product.image_path)} alt="" loading="lazy" /> : <span>Fără foto</span>}</span>
                 <span className="hc-product-main">
                   <strong>{product.name}</strong>
-                  <span>{formatPrice(product.price, product.currency ?? props.currency)}{formatSize(product.size_value, product.size_unit) ? ` · ${formatSize(product.size_value, product.size_unit)}` : ""}{product.sku ? ` · ${product.sku}` : ""}</span>
+                  <span>{props.discount > 0
+                    ? <><s>{formatPrice(product.price, product.currency ?? props.currency)}</s> <b className="hc-discounted">{formatPrice(discountedPrice(product.price, props.discount), product.currency ?? props.currency)}</b></>
+                    : formatPrice(product.price, product.currency ?? props.currency)}{formatSize(product.size_value, product.size_unit) ? ` · ${formatSize(product.size_value, product.size_unit)}` : ""}{product.sku ? ` · ${product.sku}` : ""}</span>
                   {!product.active && <span className="outcome-chip inactive">Ascuns în PDF</span>}
                 </span>
                 <span className="hc-product-actions">

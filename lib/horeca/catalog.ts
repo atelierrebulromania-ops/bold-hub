@@ -51,6 +51,8 @@ export type CatalogData = {
   terms_payment: string | null;
   terms_delivery: string | null;
   terms_other: string | null;
+  // Percent off every product's price when the catalog is shown; 0 = no discount.
+  discount_percent: number;
   collections: CatalogCollection[];
   products: CatalogProduct[];
 };
@@ -90,6 +92,17 @@ export function formatPrice(price: number, currency: string) {
   const amount = price.toFixed(2);
   const sign = currencySymbols[currency] ?? { symbol: ` ${currency}`, before: false };
   return sign.before ? `${sign.symbol}${amount}` : `${amount}${sign.symbol}`;
+}
+
+// The price after the catalog's discount, rounded to cents (computed on cents to avoid float drift).
+export function discountedPrice(price: number, percent: number) {
+  if (!(percent > 0)) return price;
+  return Math.round(Math.round(price * 100) * (100 - percent) / 100) / 100;
+}
+
+// "10%", "12.5%"
+export function formatPercent(percent: number) {
+  return `${Number.isInteger(percent) ? percent : String(percent).replace(/0+$/, "")}%`;
 }
 
 export function formatSize(value: number | null, unit: SizeUnit | null) {

@@ -33,7 +33,7 @@ export async function catalogAccess(): Promise<{ supabase: Client; userId: strin
 
 export async function loadCatalog(supabase: Client, id: string): Promise<CatalogData | null> {
   const [catalog, collections, products] = await Promise.all([
-    supabase.from("horeca_catalogs").select("id,title,language,currency,cover_title,cover_subtitle,website,terms_vat,terms_currency,terms_payment,terms_delivery,terms_other")
+    supabase.from("horeca_catalogs").select("id,title,language,currency,cover_title,cover_subtitle,website,terms_vat,terms_currency,terms_payment,terms_delivery,terms_other,discount_percent")
       .eq("id", id).maybeSingle(),
     supabase.from("horeca_catalog_collections").select("id,label,name,position,active").eq("catalog_id", id).order("position"),
     supabase.from("horeca_catalog_products").select("id,collection_id,name,price,currency,size_value,size_unit,sku,image_path,position,active")
@@ -43,6 +43,7 @@ export async function loadCatalog(supabase: Client, id: string): Promise<Catalog
   return {
     ...catalog.data,
     language: catalog.data.language as CatalogLanguage,
+    discount_percent: Number(catalog.data.discount_percent),
     collections: collections.data ?? [],
     products: (products.data ?? []).map(product => ({
       ...product,

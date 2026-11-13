@@ -54,6 +54,7 @@ export function parseProduct(input: Record<string, unknown>): Parsed<ProductInpu
 export type CatalogInfoInput = {
   title: string; language: CatalogLanguage; currency: string; coverTitle: string; coverSubtitle: string; website: string;
   termsVat: string | null; termsCurrency: string | null; termsPayment: string | null; termsDelivery: string | null; termsOther: string | null;
+  discountPercent: number;
 };
 
 export function parseCatalogInfo(input: Record<string, unknown>): Parsed<CatalogInfoInput> {
@@ -71,6 +72,10 @@ export function parseCatalogInfo(input: Record<string, unknown>): Parsed<Catalog
   if (coverSubtitle.length > 60) errors.coverSubtitle = "Subtitlul poate avea cel mult 60 de caractere.";
   const website = text(input.website);
   if (website.length > 80) errors.website = "Adresa site-ului poate avea cel mult 80 de caractere.";
+  // Empty means no discount; otherwise a percent from 0 to 99.99 (e.g. 10 or 12,5).
+  const discountText = text(input.discountPercent);
+  const discountPercent = discountText ? parseAmount(discountText) : 0;
+  if (discountPercent === null || discountPercent >= 100) errors.discountPercent = "Scrie discountul ca procent între 0 și 99, de exemplu 10.";
   const terms = {} as Record<"termsVat" | "termsCurrency" | "termsPayment" | "termsDelivery" | "termsOther", string | null>;
   for (const key of ["termsVat", "termsCurrency", "termsPayment", "termsDelivery", "termsOther"] as const) {
     const value = multiline(input[key]);
@@ -79,7 +84,7 @@ export function parseCatalogInfo(input: Record<string, unknown>): Parsed<Catalog
   }
   return Object.keys(errors).length
     ? { ok: false, errors }
-    : { ok: true, value: { title, language: language as CatalogLanguage, currency, coverTitle, coverSubtitle, website, ...terms } };
+    : { ok: true, value: { title, language: language as CatalogLanguage, currency, coverTitle, coverSubtitle, website, ...terms, discountPercent: discountPercent as number } };
 }
 
 export function parseCollection(input: Record<string, unknown>): Parsed<{ name: string; label: string }> {
