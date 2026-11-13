@@ -1092,6 +1092,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          discount_percent: number
           id: string
           language: string
           terms_currency: string | null
@@ -1111,6 +1112,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          discount_percent?: number
           id?: string
           language?: string
           terms_currency?: string | null
@@ -1130,6 +1132,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          discount_percent?: number
           id?: string
           language?: string
           terms_currency?: string | null

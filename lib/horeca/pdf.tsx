@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ComponentProps } from "react";
 import { Document, Font, Image, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import {
-  formatPrice, formatSize, planCatalog, sizeLabel, templateWording,
+  discountedPrice, formatPrice, formatSize, planCatalog, sizeLabel, templateWording,
   type CatalogCollection, type CatalogData, type CatalogProduct, type PlannedPage,
 } from "./catalog";
 
@@ -73,6 +73,9 @@ const s = StyleSheet.create({
   detailLabel: { fontFamily: "Archivo", fontWeight: 700, fontSize: 9.5 },
   detailValue: { fontFamily: "Archivo", fontSize: 9.5, textAlign: "right" },
   detailPrice: { fontFamily: "Archivo", fontWeight: 700, fontSize: 9.5, textAlign: "right" },
+  // With a catalog discount: the list price struck through, then the discounted price.
+  priceValues: { flexDirection: "row", alignItems: "baseline" },
+  listPrice: { fontFamily: "Archivo", fontSize: 8.5, color: "#8A8A8A", textDecoration: "line-through", marginRight: 4 },
   cardRule: { position: "absolute", left: 0, right: 0, top: 119, height: 0.8, backgroundColor: "#333333" },
 });
 
@@ -133,6 +136,8 @@ function Card({ ctx, product, left, top }: { ctx: Ctx; product: CatalogProduct; 
   const wording = templateWording[ctx.catalog.language];
   const image = product.image_path ? ctx.images.get(product.image_path) : undefined;
   const size = formatSize(product.size_value, product.size_unit);
+  const currency = product.currency ?? ctx.catalog.currency;
+  const discount = ctx.catalog.discount_percent;
   return (
     <View style={{ ...s.card, left, top }} wrap={false}>
       <View style={s.cardImageBox}>
@@ -142,7 +147,11 @@ function Card({ ctx, product, left, top }: { ctx: Ctx; product: CatalogProduct; 
       <View style={s.cardText}>
         <Text style={s.cardName}>{product.name}</Text>
         <View style={s.cardDetails}>
-          <View style={s.detailRow}><Text style={s.detailLabel}>{wording.price}</Text><Text style={s.detailPrice}>{formatPrice(product.price, product.currency ?? ctx.catalog.currency)}</Text></View>
+          <View style={s.detailRow}><Text style={s.detailLabel}>{wording.price}</Text>
+            {discount > 0
+              ? <View style={s.priceValues}><Text style={s.listPrice}>{formatPrice(product.price, currency)}</Text><Text style={s.detailPrice}>{formatPrice(discountedPrice(product.price, discount), currency)}</Text></View>
+              : <Text style={s.detailPrice}>{formatPrice(product.price, currency)}</Text>}
+          </View>
           {size ? <View style={s.detailRow}><Text style={s.detailLabel}>{sizeLabel(product.size_unit, ctx.catalog.language)}</Text><Text style={s.detailValue}>{size}</Text></View> : null}
           {product.sku ? <View style={s.detailRow}><Text style={s.detailLabel}>{wording.code}</Text><Text style={s.detailValue}>{product.sku}</Text></View> : null}
         </View>

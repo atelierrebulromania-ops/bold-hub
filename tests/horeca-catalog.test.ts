@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cardsPerPage, formatPrice, formatSize, pdfFileName, planCatalog, termsOf, type CatalogData, type CatalogProduct } from "../lib/horeca/catalog.ts";
+import { cardsPerPage, discountedPrice, formatPercent, formatPrice, formatSize, pdfFileName, planCatalog, termsOf, type CatalogData, type CatalogProduct } from "../lib/horeca/catalog.ts";
 
 function catalog(counts: number[], overrides: Partial<CatalogData> = {}): CatalogData {
   const collections = counts.map((_, index) => ({ id: `c${index}`, label: "COLECCIÓN SIGNATURE", name: `C${index}`, position: index, active: true }));
@@ -10,7 +10,7 @@ function catalog(counts: number[], overrides: Partial<CatalogData> = {}): Catalo
   })));
   return {
     id: "x", title: "T", language: "es", currency: "EUR", cover_title: "HO RE CA", cover_subtitle: "LISTA DE PRECIOS",
-    website: "www.atelierrebul.ro", terms_vat: "IVA", terms_currency: null, terms_payment: " Pago ", terms_delivery: "", terms_other: null,
+    website: "www.atelierrebul.ro", terms_vat: "IVA", terms_currency: null, terms_payment: " Pago ", terms_delivery: "", terms_other: null, discount_percent: 0,
     collections, products, ...overrides,
   };
 }
@@ -72,6 +72,23 @@ test("formatting as in the reference catalog", () => {
   assert.equal(formatSize(null, null), null);
   assert.equal(pdfFileName("es", new Date("2026-11-10T10:00:00Z")), "Atelier_Rebul_HoReCa_ES_2026-11-10.pdf");
   assert.deepEqual(termsOf(catalog([1])), ["IVA", "Pago"]);
+});
+
+test("catalog discount: rounded to cents, 0 leaves the price as it is", async () => {
+  assert.equal(discountedPrice(6.59, 10), 5.93);
+  assert.equal(discountedPrice(62.7, 15), 53.3);
+  assert.equal(discountedPrice(111.92, 12.5), 97.93);
+  assert.equal(discountedPrice(1.07, 0), 1.07);
+  assert.equal(formatPrice(discountedPrice(6.59, 10), "EUR"), "5.93€");
+  assert.equal(formatPercent(10), "10%");
+  assert.equal(formatPercent(12.5), "12.5%");
+  const { parseCatalogInfo } = await import("../lib/horeca/validate.ts");
+  const base = { title: "T", language: "es", currency: "EUR" };
+  const ok = parseCatalogInfo({ ...base, discountPercent: "12,5" });
+  assert.ok(ok.ok && ok.value.discountPercent === 12.5);
+  const none = parseCatalogInfo({ ...base, discountPercent: "" });
+  assert.ok(none.ok && none.value.discountPercent === 0);
+  for (const bad of ["100", "-5", "zece"]) assert.ok(!parseCatalogInfo({ ...base, discountPercent: bad }).ok, bad);
 });
 
 test("product fields are validated with plain messages", async () => {

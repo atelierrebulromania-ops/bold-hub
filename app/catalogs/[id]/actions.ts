@@ -44,7 +44,8 @@ export async function saveCatalogInfo(catalogId: string, input: Record<string, u
   const { error } = await access.supabase.from("horeca_catalogs").update({
     title: value.title, language: value.language, currency: value.currency, cover_title: value.coverTitle, cover_subtitle: value.coverSubtitle,
     website: value.website, terms_vat: value.termsVat, terms_currency: value.termsCurrency, terms_payment: value.termsPayment,
-    terms_delivery: value.termsDelivery, terms_other: value.termsOther, updated_at: new Date().toISOString(), updated_by: access.userId,
+    terms_delivery: value.termsDelivery, terms_other: value.termsOther, discount_percent: value.discountPercent,
+    updated_at: new Date().toISOString(), updated_by: access.userId,
   }).eq("id", catalogId);
   if (error) return failed();
   touched(catalogId);
