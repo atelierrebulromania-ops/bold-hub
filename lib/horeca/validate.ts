@@ -40,6 +40,10 @@ export function parseProduct(input: Record<string, unknown>): Parsed<ProductInpu
   const unitRaw = text(input.sizeUnit);
   let sizeValue: number | null = null;
   let sizeUnit: SizeUnit | null = null;
+  // A unit was chosen but no amount typed: ask for it instead of silently saving the product without a size.
+  if (!sizeText && unitRaw && unitRaw !== noUnit) {
+    errors.sizeValue = "Scrie cantitatea (de exemplu 1) sau alege „-” la unitate dacă produsul nu are gramaj.";
+  }
   // Unit "-": the product has no size; whatever is in the size field is ignored.
   if (sizeText && unitRaw !== noUnit) {
     sizeValue = parseAmount(sizeText);
