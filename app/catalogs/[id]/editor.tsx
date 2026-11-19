@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
   catalogCurrencies, catalogLanguages, defaultCatalogTexts, discountedPrice, formatPercent, formatPrice, formatSize, sizeUnits,
-  type CatalogCollection, type CatalogData, type CatalogProduct, type SizeUnit,
+  type CatalogCollection, type CatalogData, type CatalogLanguage, type CatalogProduct, type SizeUnit,
 } from "@/lib/horeca/catalog";
-import type { FieldErrors } from "@/lib/horeca/validate";
+import { noUnit, type FieldErrors } from "@/lib/horeca/validate";
 import { createClient } from "@/lib/supabase/client";
 import {
   addCollection, deleteCollection, deleteProduct, discardUpload, duplicateProduct, reorderCollections, reorderProducts,
@@ -31,6 +31,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
   const [currency, setCurrency] = useState(initial.currency);
   const [title, setTitle] = useState(initial.title);
   const [discount, setDiscount] = useState(initial.discount_percent);
+  const [language, setLanguage] = useState<CatalogLanguage>(initial.language);
   const [tab, setTab] = useState<Tab>("products");
   const [status, setStatus] = useState<Status>({ kind: "saved" });
   const [infoDirty, setInfoDirty] = useState(false);
@@ -168,13 +169,14 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
           setCurrency(values.currency);
           setTitle(values.title.trim().replace(/\s+/g, " "));
           setDiscount(Number(values.discountPercent.trim().replace(",", ".")) || 0);
+          setLanguage(values.language as CatalogLanguage);
         }} />
       </div>
 
       <div hidden={tab !== "products"} className="hc-collections">
         {sortedCollections.length === 0 && <p className="hc-empty">Catalogul nu are încă nicio colecție. Adaugă prima colecție mai jos, apoi produsele ei.</p>}
         {sortedCollections.map((collection, index) => (
-          <CollectionCard key={collection.id} catalogId={catalogId} collection={collection} products={productsOf(collection.id)} currency={currency} discount={discount}
+          <CollectionCard key={collection.id} catalogId={catalogId} collection={collection} products={productsOf(collection.id)} currency={currency} discount={discount} language={language}
             first={index === 0} last={index === sortedCollections.length - 1} save={save}
             onRenamed={(name, label) => setCollections(current => current.map(item => item.id === collection.id ? { ...item, name, label } : item))}
             onMove={offset => moveCollection(index, offset)} onToggle={() => toggleCollection(collection)} onDelete={() => removeCollection(collection)}
@@ -304,7 +306,7 @@ function NewCollection({ catalogId, save, label, onAdded }: { catalogId: string;
 }
 
 function CollectionCard(props: {
-  catalogId: string; collection: CatalogCollection; products: CatalogProduct[]; currency: string; discount: number; first: boolean; last: boolean; save: Save;
+  catalogId: string; collection: CatalogCollection; products: CatalogProduct[]; currency: string; discount: number; language: CatalogLanguage; first: boolean; last: boolean; save: Save;
   onRenamed: (name: string, label: string) => void; onMove: (offset: number) => void; onToggle: () => void; onDelete: () => void;
   onAdd: () => void; onEdit: (product: CatalogProduct) => void; onCopy: (product: CatalogProduct) => void;
   onToggleProduct: (product: CatalogProduct) => void; onDeleteProduct: (product: CatalogProduct) => void; onMoveProduct: (from: number, to: number) => void;
@@ -375,7 +377,7 @@ function CollectionCard(props: {
                   <strong>{product.name}</strong>
                   <span>{props.discount > 0
                     ? <><s>{formatPrice(product.price, product.currency ?? props.currency)}</s> <b className="hc-discounted">{formatPrice(discountedPrice(product.price, props.discount), product.currency ?? props.currency)}</b></>
-                    : formatPrice(product.price, product.currency ?? props.currency)}{formatSize(product.size_value, product.size_unit) ? ` · ${formatSize(product.size_value, product.size_unit)}` : ""}{product.sku ? ` · ${product.sku}` : ""}</span>
+                    : formatPrice(product.price, product.currency ?? props.currency)}{formatSize(product.size_value, product.size_unit, props.language) ? ` · ${formatSize(product.size_value, product.size_unit, props.language)}` : ""}{product.sku ? ` · ${product.sku}` : ""}</span>
                   {!product.active && <span className="outcome-chip inactive">Ascuns în PDF</span>}
                 </span>
                 <span className="hc-product-actions">
@@ -421,7 +423,9 @@ function ProductDialog({ catalogId, product, collectionId, collections, currency
 }) {
   const start: ProductValues = {
     name: product?.name ?? "", collectionId, price: product ? product.price.toFixed(2) : "", currency: product?.currency ?? "",
-    sizeValue: product?.size_value === null || product?.size_value === undefined ? "" : String(product.size_value), sizeUnit: product?.size_unit ?? "ml",
+    sizeValue: product?.size_value === null || product?.size_value === undefined ? "" : String(product.size_value),
+    // A new product starts in ml; an existing one without a size shows "-".
+    sizeUnit: product ? (product.size_unit ?? noUnit) : "ml",
     sku: product?.sku ?? "", imagePath: product?.image_path ?? "", active: product?.active ?? true,
   };
   const [values, setValues] = useState(start);
@@ -503,8 +507,11 @@ function ProductDialog({ catalogId, product, collectionId, collections, currency
             <label>Colecția *<select {...text("collectionId")}>{collections.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select><FieldError errors={errors} name="collectionId" /></label>
             <label>Preț *<input {...text("price")} inputMode="decimal" placeholder="ex. 6.59" /><FieldError errors={errors} name="price" /></label>
             <label>Moneda<select {...text("currency")}><option value="">Moneda catalogului ({currency})</option>{catalogCurrencies.filter(code => code !== currency).map(code => <option key={code}>{code}</option>)}</select><FieldError errors={errors} name="currency" /></label>
-            <label>Volum / gramaj<input {...text("sizeValue")} inputMode="decimal" placeholder="ex. 550" /><FieldError errors={errors} name="sizeValue" /></label>
-            <label>Unitate<select {...text("sizeUnit")}>{(Object.keys(sizeUnits) as SizeUnit[]).map(unit => <option key={unit} value={unit}>{sizeUnits[unit]}</option>)}</select><FieldError errors={errors} name="sizeUnit" /></label>
+            <label>Volum / gramaj<input {...text("sizeValue")} inputMode="decimal" placeholder={values.sizeUnit === noUnit ? "fără" : "ex. 550"} disabled={values.sizeUnit === noUnit} /><FieldError errors={errors} name="sizeValue" /></label>
+            <label>Unitate<select {...text("sizeUnit")} onChange={event => { const unit = event.target.value; setValues(current => ({ ...current, sizeUnit: unit, sizeValue: unit === noUnit ? "" : current.sizeValue })); }}>
+                {(Object.keys(sizeUnits) as SizeUnit[]).map(unit => <option key={unit} value={unit}>{unit === "buc" ? "buc. (în spaniolă: ud.)" : sizeUnits[unit]}</option>)}
+                <option value={noUnit}>- (fără, nu apare în PDF)</option>
+              </select><FieldError errors={errors} name="sizeUnit" /></label>
             <label>Cod produs (SKU)<input {...text("sku")} maxLength={40} placeholder="ex. AT03126" /><FieldError errors={errors} name="sku" /></label>
             <label className="hc-check"><input type="checkbox" checked={values.active} onChange={event => set("active", event.target.checked)} />Apare în PDF</label>
           </div>

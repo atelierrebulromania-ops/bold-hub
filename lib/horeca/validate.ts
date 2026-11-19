@@ -3,6 +3,9 @@
 import { catalogLanguages, sizeUnits, type CatalogLanguage, type SizeUnit } from "./catalog.ts";
 
 export type FieldErrors = Record<string, string>;
+
+// The "-" choice in the unit list: no size and no unit on the product (nothing printed in the PDF).
+export const noUnit = "-";
 export type Parsed<T> = { ok: true; value: T } | { ok: false; errors: FieldErrors };
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "");
@@ -37,7 +40,8 @@ export function parseProduct(input: Record<string, unknown>): Parsed<ProductInpu
   const unitRaw = text(input.sizeUnit);
   let sizeValue: number | null = null;
   let sizeUnit: SizeUnit | null = null;
-  if (sizeText) {
+  // Unit "-": the product has no size; whatever is in the size field is ignored.
+  if (sizeText && unitRaw !== noUnit) {
     sizeValue = parseAmount(sizeText);
     if (sizeValue === null || sizeValue <= 0) errors.sizeValue = "Scrie gramajul sau volumul ca număr, de exemplu 550.";
     if (!(unitRaw in sizeUnits)) errors.sizeUnit = "Alege unitatea de măsură.";
