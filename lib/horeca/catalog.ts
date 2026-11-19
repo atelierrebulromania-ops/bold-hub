@@ -105,10 +105,21 @@ export function formatPercent(percent: number) {
   return `${Number.isInteger(percent) ? percent : String(percent).replace(/0+$/, "")}%`;
 }
 
-export function formatSize(value: number | null, unit: SizeUnit | null) {
+// "Pieces" in each catalog language: 1 UD. / 6 UDS. in Spanish, BUC. in Romanian, and so on.
+const piecesWord: Record<CatalogLanguage, (amount: number) => string> = {
+  ro: () => "BUC.",
+  es: amount => (amount === 1 ? "UD." : "UDS."),
+  en: () => "PCS",
+  fr: () => "PCS",
+  it: () => "PZ.",
+  de: () => "STK.",
+};
+
+// "550ML", "30G", "6 UDS." No unit ("-" in the editor) means no size at all: the PDF leaves the row out.
+export function formatSize(value: number | null, unit: SizeUnit | null, language: CatalogLanguage = "ro") {
   if (value === null || unit === null) return null;
   const amount = Number.isInteger(value) ? String(value) : String(value).replace(/\.?0+$/, "");
-  return `${amount}${unit === "buc" ? " BUC." : unit.toUpperCase()}`;
+  return `${amount}${unit === "buc" ? ` ${piecesWord[language](value)}` : unit.toUpperCase()}`;
 }
 
 export function sizeLabel(unit: SizeUnit | null, language: CatalogLanguage) {

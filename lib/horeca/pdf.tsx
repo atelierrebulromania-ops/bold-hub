@@ -135,7 +135,7 @@ function CollectionTitle({ ctx, collection }: { ctx: Ctx; collection: CatalogCol
 function Card({ ctx, product, left, top }: { ctx: Ctx; product: CatalogProduct; left: number; top: number }) {
   const wording = templateWording[ctx.catalog.language];
   const image = product.image_path ? ctx.images.get(product.image_path) : undefined;
-  const size = formatSize(product.size_value, product.size_unit);
+  const size = formatSize(product.size_value, product.size_unit, ctx.catalog.language);
   const currency = product.currency ?? ctx.catalog.currency;
   const discount = ctx.catalog.discount_percent;
   return (

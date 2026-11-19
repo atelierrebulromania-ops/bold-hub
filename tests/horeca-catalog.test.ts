@@ -69,6 +69,10 @@ test("formatting as in the reference catalog", () => {
   assert.equal(formatSize(550, "ml"), "550ML");
   assert.equal(formatSize(0.5, "kg"), "0.5KG");
   assert.equal(formatSize(6, "buc"), "6 BUC.");
+  assert.equal(formatSize(6, "buc", "ro"), "6 BUC.");
+  assert.equal(formatSize(1, "buc", "es"), "1 UD.");
+  assert.equal(formatSize(6, "buc", "es"), "6 UDS.");
+  assert.equal(formatSize(550, "ml", "es"), "550ML");
   assert.equal(formatSize(null, null), null);
   assert.equal(pdfFileName("es", new Date("2026-11-10T10:00:00Z")), "Atelier_Rebul_HoReCa_ES_2026-11-10.pdf");
   assert.deepEqual(termsOf(catalog([1])), ["IVA", "Pago"]);
@@ -100,6 +104,10 @@ test("product fields are validated with plain messages", async () => {
   const ok = parseProduct({ name: "  Champú   1895 ", collectionId: "0d0e9a9c-0000-4000-8000-000000000001", price: "6,59", sizeValue: "550", sizeUnit: "ml", sku: " AT03661 " });
   assert.ok(ok.ok);
   if (ok.ok) assert.deepEqual([ok.value.name, ok.value.price, ok.value.sizeValue, ok.value.sizeUnit, ok.value.sku, ok.value.currency], ["Champú 1895", 6.59, 550, "ml", "AT03661", null]);
+  // Unit "-": no size at all, even if a number was typed.
+  const noSize = parseProduct({ name: "Máquina", collectionId: "0d0e9a9c-0000-4000-8000-000000000001", price: "360.70", sizeValue: "1", sizeUnit: "-" });
+  assert.ok(noSize.ok);
+  if (noSize.ok) assert.deepEqual([noSize.value.sizeValue, noSize.value.sizeUnit], [null, null]);
   const bad = parseProduct({ name: "", collectionId: "x", price: "", sizeValue: "550", sizeUnit: "" });
   assert.ok(!bad.ok);
   if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["collectionId", "name", "price", "sizeUnit"]);
