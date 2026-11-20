@@ -1254,7 +1254,101 @@ export type Database = {
           },
         ]
       }
-    }
+      marketing_lanes: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          position: number
+          show_images: boolean
+          subtitle: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          position?: number
+          show_images?: boolean
+          subtitle?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          position?: number
+          show_images?: boolean
+          subtitle?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marketing_events: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          dates_tbc: boolean
+          end_date: string
+          id: string
+          image_path: string | null
+          lane_id: string
+          notes: string | null
+          show_dates: boolean
+          start_date: string
+          stock_in: string | null
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          dates_tbc?: boolean
+          end_date: string
+          id?: string
+          image_path?: string | null
+          lane_id: string
+          notes?: string | null
+          show_dates?: boolean
+          start_date: string
+          stock_in?: string | null
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          dates_tbc?: boolean
+          end_date?: string
+          id?: string
+          image_path?: string | null
+          lane_id?: string
+          notes?: string | null
+          show_dates?: boolean
+          start_date?: string
+          stock_in?: string | null
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_events_lane_id_fkey"
+            columns: ["lane_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_lanes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }    }
     Views: {
       [_ in never]: never
     }
@@ -1481,7 +1575,7 @@ export type Database = {
         | "produs_deteriorat"
         | "altul"
       return_status: "pending_restock" | "restocked"
-      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate" | "catalog_editor"
+      user_role: "admin" | "owner" | "operator_depozit" | "operator_facturare" | "account" | "contabilitate" | "catalog_editor" | "marketing"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1633,7 +1727,7 @@ export const Constants = {
         "altul",
       ],
       return_status: ["pending_restock", "restocked"],
-      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate", "catalog_editor"],
+      user_role: ["admin", "owner", "operator_depozit", "operator_facturare", "account", "contabilitate", "catalog_editor", "marketing"],
     },
   },
 } as const

@@ -25,4 +25,5 @@ export const roleLabels = {
   account: "Account",
   contabilitate: "Contabilitate",
   catalog_editor: "Editor cataloage",
+  marketing: "Marketing",
 } as const;
