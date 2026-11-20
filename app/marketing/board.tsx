@@ -67,7 +67,7 @@ export function CalendarBoard({ year, today, years, lanes, events }: {
           {lanes.length === 0 && <p className="mk-empty">Calendarul nu are încă nicio categorie. Apasă „Categorii” ca să adaugi primul rând (de exemplu „Main communication”).</p>}
           {lanes.map(lane => {
             const laneEvents = events.filter(event => event.lane_id === lane.id);
-            const { items, rows } = layoutLane(laneEvents, year, lane.kind === "band" ? 10 : lane.show_images ? 28 : 20);
+            const { items, rows } = layoutLane(laneEvents, year, lane.kind === "band" ? 10 : 30);
             const height = lane.kind === "band" ? rowHeight.band : lane.show_images ? rowHeight.images : rowHeight.events;
             return (
               <div key={lane.id} className={`mk-row mk-lane mk-lane-${lane.kind}`}>

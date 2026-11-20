@@ -92,20 +92,24 @@ export function layoutLane<T extends Pick<MarketingEvent, "start_date" | "end_da
     return { event, from: shownFrom, to: shownFrom + length - 1, clippedStart: start < 0, clippedEnd: end > total - 1 };
   }).sort((a, b) => a.from - b.from || b.to - a.to || a.event.title.localeCompare(b.event.title));
 
+  // Back-to-back events that share their boundary day (one ends on 10 May, the next starts on 10 May)
+  // stay on the same row, as on the original.
   const rowEnds: number[] = [];
   const items = spans.map(span => {
-    let row = rowEnds.findIndex(end => end < span.from);
+    let row = rowEnds.findIndex(end => end <= span.from);
     if (row === -1) { row = rowEnds.length; rowEnds.push(span.to); } else rowEnds[row] = span.to;
     return { event: span.event, row, left: span.from / total, width: (span.to - span.from + 1) / total, clippedStart: span.clippedStart, clippedEnd: span.clippedEnd };
   });
   return { items, rows: Math.max(rowEnds.length, 1) };
 }
 
-// "(15 IAN – 30 MAR)", "(21 MAR)", "(TBC)"
+// "(15 IAN – 30 MAR)", "(9–12 MAR)" within one month, "(21 MAR)", "(TBC)"
 export function formatRange(start: string, end: string, tbc: boolean) {
   if (tbc) return "(TBC)";
   const label = (iso: string) => { const [, month, day] = iso.split("-"); return `${Number(day)} ${monthNames[Number(month) - 1]}`; };
-  return start === end ? `(${label(start)})` : `(${label(start)} – ${label(end)})`;
+  if (start === end) return `(${label(start)})`;
+  if (start.slice(0, 7) === end.slice(0, 7)) return `(${Number(start.slice(8))}–${label(end)})`;
+  return `(${label(start)} – ${label(end)})`;
 }
 
 // Today's position on the board (0–1), or null when the board shows another year.

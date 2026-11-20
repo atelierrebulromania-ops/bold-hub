@@ -38,6 +38,14 @@ test("overlapping events go on separate sub-rows; back-to-back ones share a row"
   assert.equal(row("AOG MOTHERS' DAY"), 0);
 });
 
+test("back-to-back events sharing their boundary day stay on one row", () => {
+  const { rows } = layoutLane([
+    event("NEW FRENCH HERITAGE", "2027-04-01", "2027-05-10"),
+    event("BODY MIST EXTENSION", "2027-05-10", "2027-08-01"),
+  ], 2027, 1);
+  assert.equal(rows, 1);
+});
+
 test("a one-day event gets a readable minimum width and stays inside the year", () => {
   const { items } = layoutLane([event("UNBOXING DAY UK", "2027-12-26", "2027-12-26")], 2027, 20);
   assert.ok(Math.abs(items[0].width - 20 / 365) < 1e-9);
@@ -57,6 +65,7 @@ test("events crossing the new year are clipped to the year shown", () => {
 test("dates printed on the board", () => {
   assert.equal(formatRange("2027-01-15", "2027-03-30", false), "(15 IAN – 30 MAR)");
   assert.equal(formatRange("2027-03-21", "2027-03-21", false), "(21 MAR)");
+  assert.equal(formatRange("2027-03-09", "2027-03-12", false), "(9–12 MAR)");
   assert.equal(formatRange("2027-01-01", "2027-01-31", true), "(TBC)");
 });
 
