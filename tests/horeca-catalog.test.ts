@@ -108,6 +108,10 @@ test("product fields are validated with plain messages", async () => {
   const noSize = parseProduct({ name: "Máquina", collectionId: "0d0e9a9c-0000-4000-8000-000000000001", price: "360.70", sizeValue: "1", sizeUnit: "-" });
   assert.ok(noSize.ok);
   if (noSize.ok) assert.deepEqual([noSize.value.sizeValue, noSize.value.sizeUnit], [null, null]);
+  // A unit without an amount is refused (it used to save the product without a size, silently).
+  const noAmount = parseProduct({ name: "Soporte", collectionId: "0d0e9a9c-0000-4000-8000-000000000001", price: "5", sizeValue: "", sizeUnit: "buc" });
+  assert.ok(!noAmount.ok);
+  if (!noAmount.ok) assert.deepEqual(Object.keys(noAmount.errors), ["sizeValue"]);
   const bad = parseProduct({ name: "", collectionId: "x", price: "", sizeValue: "550", sizeUnit: "" });
   assert.ok(!bad.ok);
   if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["collectionId", "name", "price", "sizeUnit"]);
