@@ -24,4 +24,5 @@ export const roleLabels = {
   operator_facturare: "Operator facturare",
   account: "Account",
   contabilitate: "Contabilitate",
+  catalog_editor: "Editor cataloage",
 } as const;

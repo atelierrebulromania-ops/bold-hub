@@ -10,6 +10,10 @@ export type UserRole = Database["public"]["Enums"]["user_role"];
 export type Profile = { id: string; full_name: string; role: UserRole; realRole: UserRole; crm: boolean };
 
 export const staffRoles: readonly UserRole[] = ["admin", "owner", "operator_depozit", "operator_facturare", "account"];
+// Roles the admin can preview with the dev switcher: the staff roles plus the catalog editor.
+export const previewRoles: readonly UserRole[] = [...staffRoles, "catalog_editor"];
+// Who may use the HoReCa catalogs module (checked again by row security in the database).
+export const catalogRoles: readonly UserRole[] = ["admin", "catalog_editor"];
 export const viewAsCookie = "boldhub-view-as";
 
 const partnerPrefix = "partner:";
@@ -24,7 +28,7 @@ export async function viewAs(realRole: UserRole): Promise<{ role: UserRole } | {
   if (value.startsWith(partnerPrefix) && uuidPattern.test(value.slice(partnerPrefix.length))) {
     return { partnerId: value.slice(partnerPrefix.length) };
   }
-  return staffRoles.includes(value as UserRole) ? { role: value as UserRole } : null;
+  return previewRoles.includes(value as UserRole) ? { role: value as UserRole } : null;
 }
 
 export function viewAsPartnerValue(partnerId: string) {
@@ -43,6 +47,7 @@ export function homeFor(role: UserRole): string {
   if (role === "operator_facturare") return "/invoicing";
   if (role === "operator_depozit") return "/warehouse";
   if (role === "contabilitate") return "/accounting/overview";
+  if (role === "catalog_editor") return "/catalogs";
   return "/orders";
 }
 
