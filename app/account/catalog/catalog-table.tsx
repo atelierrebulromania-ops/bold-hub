@@ -105,7 +105,7 @@ export function CatalogTable({ products, clients, collections }: { products: Cat
           <th><span className="sr-only">Poză</span></th><th>Produs</th><th>SKU</th><th>Categorie</th><th>Preț listă (fără TVA)</th><th>Cu TVA</th>{client && <th>Discount</th>}{client && <th>Preț client (fără TVA)</th>}<th>Stoc BOCP</th>
         </tr></thead>
         <tbody>{rows.map((product) => {
-          const discount = client ? discountFor(client.partner_discounts, product.category) : 0;
+          const discount = client ? discountFor(client.partner_discounts, product.id) : 0;
           const price = product.list_price ?? 0;
           return (
             <tr key={product.id} className={selected.has(product.id) ? "selected" : ""} onClick={() => toggle(product.id)}>

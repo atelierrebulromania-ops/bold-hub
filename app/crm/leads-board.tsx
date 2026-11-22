@@ -16,29 +16,33 @@ export type Lead = {
   claimed_by: string | null; claimed_at: string | null; partner_id: string | null; received_at: string; follow_up_at: string | null;
 };
 
-type Tab = "new" | "working" | "won" | "lost" | "all";
+type Tab = "new" | "working" | "won" | "lost" | "unqualified" | "all";
+// Closed stages: the lead is out of the work list (unqualified and lost carry a reason).
+const closedStatuses = ["won", "lost", "unqualified"];
+// Quick reasons for an unqualified lead; the agent can edit the text or write their own.
+const unqualifiedReasons = ["Nu mai este interesat", "Nu răspunde la telefon", "Nu își amintește de formular", "Persoană fizică, nu firmă", "Date de contact greșite"];
 type Result = { ok: boolean; message: string };
 
 const stages: { value: string; label: string; tone: string }[] = [
   { value: "new", label: "Nou", tone: "new" },
   { value: "to_contact", label: "De contactat", tone: "soon" },
-  { value: "contacted", label: "Contactat", tone: "open" },
+  { value: "qualified", label: "Calificat", tone: "qualified" },
+  { value: "unqualified", label: "Necalificat", tone: "open" },
   { value: "offer", label: "Ofertă trimisă", tone: "offer" },
   { value: "won", label: "Câștigat", tone: "paid" },
   { value: "lost", label: "Pierdut", tone: "overdue" },
 ];
 const stageOf = (value: string) => stages.find((stage) => stage.value === value) ?? stages[0];
 const sourceLabels: Record<string, string> = { meta: "Meta", website: "Site", google: "Google", tiktok: "TikTok", manual: "Manual", import: "Import" };
-const lostReasons = ["Preț", "Nu răspunde", "Nu e potrivit", "A ales alt furnizor", "Altul"];
 const tabs: { value: Tab; label: string }[] = [
   { value: "new", label: "Noi" }, { value: "working", label: "În lucru" }, { value: "won", label: "Câștigați" },
-  { value: "lost", label: "Pierduți" }, { value: "all", label: "Toate" },
+  { value: "lost", label: "Pierduți" }, { value: "unqualified", label: "Necalificați" }, { value: "all", label: "Toate" },
 ];
 
 function inTab(lead: Lead, tab: Tab) {
   if (tab === "all") return true;
-  if (tab === "won" || tab === "lost") return lead.status === tab;
-  const open = lead.status !== "won" && lead.status !== "lost";
+  if (tab === "won" || tab === "lost" || tab === "unqualified") return lead.status === tab;
+  const open = !closedStatuses.includes(lead.status);
   return open && (tab === "new" ? !lead.claimed_by : !!lead.claimed_by);
 }
 
@@ -127,7 +131,7 @@ export function LeadsBoard({ leads, names, currentUserId, canWork, canImport }: 
                 })()}</td>
                 <td className="nowrap">{lead.claimed_by
                   ? names[lead.claimed_by] ?? "—"
-                  : canWork && lead.status !== "won" && lead.status !== "lost"
+                  : canWork && !closedStatuses.includes(lead.status)
                     ? <button type="button" className="button button-primary crm-claim" disabled={pending} onClick={(event) => { event.stopPropagation(); run(() => claimLead(lead.id)); }}>Preia</button>
                     : <span className="muted-cell">Nepreluat</span>}</td>
               </tr>;
@@ -143,6 +147,24 @@ export function LeadsBoard({ leads, names, currentUserId, canWork, canImport }: 
   );
 }
 
+// The reason for closing a lead (lost or unqualified): quick reasons fill the text, which the agent can still edit.
+function ClosingBox({ lead, label, action, quick, reason, setReason, pending, onConfirm, onCancel }: {
+  lead: Lead; label: string; action: string; quick: string[]; reason: string; setReason: (value: string) => void; pending: boolean;
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  return <div className="crm-lost-box">
+    <label htmlFor={`reason-${lead.id}`}>{label}</label>
+    {quick.length > 0 && <div className="crm-reasons">{quick.map((item) =>
+      <button key={item} type="button" className={reason === item ? "selected" : ""} onClick={() => setReason(item)}>{item}</button>)}</div>}
+    <textarea id={`reason-${lead.id}`} className="crm-note" value={reason} maxLength={300} rows={3} autoFocus
+      onChange={(event) => setReason(event.target.value)} placeholder={quick.length ? "Alege un motiv de mai sus sau scrie-l cu cuvintele tale…" : "Scrie pe scurt motivul, cu cuvintele tale…"} />
+    <div className="crm-lost-actions">
+      <button type="button" className="button button-danger" disabled={pending || !reason.trim()} onClick={onConfirm}>{action}</button>
+      <button type="button" className="button button-outline" disabled={pending} onClick={onCancel}>Renunță</button>
+    </div>
+  </div>;
+}
+
 function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run, onClose }: {
   lead: Lead; names: Record<string, string>; currentUserId: string; canWork: boolean; pending: boolean; feedback: Result | null;
   run: (action: () => Promise<Result>, after?: () => void) => void; onClose: () => void;
@@ -150,11 +172,12 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
   const [activity, setActivity] = useState<LeadActivity[] | null>(null);
   const [note, setNote] = useState("");
   const [writing, setWriting] = useState(false);
-  const [lostReason, setLostReason] = useState("");
-  const [losing, setLosing] = useState(false);
+  // The closing being written: "unqualified" after the first call, "lost" after the offer.
+  const [closing, setClosing] = useState<"lost" | "unqualified" | null>(null);
+  const [reason, setReason] = useState("");
   const [converting, setConverting] = useState(false);
   const holder = lead.claimed_by === currentUserId;
-  const closed = lead.status === "won" || lead.status === "lost";
+  const closed = closedStatuses.includes(lead.status);
   const stage = stageOf(lead.status);
 
   useEffect(() => {
@@ -200,7 +223,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
           {!lead.claimed_by ? <button type="button" className="button button-primary" disabled={pending} onClick={() => run(() => claimLead(lead.id))}>Preia lead-ul</button>
             : !holder ? <p className="muted">Lead-ul e preluat de {names[lead.claimed_by] ?? "alt agent"}. Doar el îl poate muta între etape.</p>
             : <>
-              <ol className="crm-stepper">{stages.filter((item) => ["to_contact", "contacted", "offer"].includes(item.value)).map((item, index, list) => {
+              <ol className="crm-stepper">{stages.filter((item) => ["to_contact", "qualified", "offer"].includes(item.value)).map((item, index, list) => {
                 const current = list.findIndex((step) => step.value === lead.status);
                 const state = index < current ? "done" : index === current ? "current" : "next";
                 return <li key={item.value} className={state}>
@@ -220,22 +243,26 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
             </>}
         </section>}
 
-        {canWork && holder && lead.status === "offer" && <section className="detail-section"><h3>Rezultat</h3>
-          {!losing ? <div className="crm-result">
-            <button type="button" className="button crm-won" disabled={pending} onClick={() => setConverting(true)}>✓ Câștigat<small>devine client nou</small></button>
-            <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => setLosing(true)}>✕ Pierdut<small>alege motivul</small></button>
-          </div> : <div className="crm-lost-box">
-            <p>De ce s-a pierdut?</p>
-            <div className="crm-reasons">{lostReasons.map((reason) => <button key={reason} type="button" className={lostReason === reason ? "selected" : ""}
-              onClick={() => setLostReason(reason)}>{reason}</button>)}</div>
-            <div className="crm-lost-actions">
-              <button type="button" className="button button-danger" disabled={pending || !lostReason} onClick={() => run(() => setLeadStatus(lead.id, "lost", lostReason), () => setLosing(false))}>Marchează pierdut</button>
-              <button type="button" className="button button-outline" disabled={pending} onClick={() => { setLosing(false); setLostReason(""); }}>Renunță</button>
+        {canWork && holder && lead.status === "to_contact" && <section className="detail-section"><h3>Calificare</h3>
+          {closing !== "unqualified" ? <>
+            <p className="muted small crm-hint">După primul telefon: e un client potrivit, cu care merită să continui spre ofertă?</p>
+            <div className="crm-result">
+              <button type="button" className="button crm-won" disabled={pending} onClick={() => run(() => setLeadStatus(lead.id, "qualified", ""))}>✓ Calificat<small>urmează oferta</small></button>
+              <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => { setClosing("unqualified"); setReason(""); }}>✕ Necalificat<small>se oprește aici</small></button>
             </div>
-          </div>}
+          </> : <ClosingBox lead={lead} label="De ce nu e calificat?" action="Marchează necalificat" quick={unqualifiedReasons} reason={reason} setReason={setReason} pending={pending}
+            onConfirm={() => run(() => setLeadStatus(lead.id, "unqualified", reason), () => setClosing(null))} onCancel={() => setClosing(null)} />}
         </section>}
-        {lead.status === "lost" && <section className="detail-section"><h3>Pierdut</h3><p>{lead.lost_reason ?? "Fără motiv."}</p>
-          {canWork && (holder || !lead.claimed_by) && <button type="button" className="text-button" disabled={pending} onClick={() => run(() => setLeadStatus(lead.id, "contacted", ""))}>Redeschide</button>}</section>}
+        {canWork && holder && lead.status === "offer" && <section className="detail-section"><h3>Rezultat</h3>
+          {closing !== "lost" ? <div className="crm-result">
+            <button type="button" className="button crm-won" disabled={pending} onClick={() => setConverting(true)}>✓ Câștigat<small>devine client nou</small></button>
+            <button type="button" className="button crm-lost-button" disabled={pending} onClick={() => { setClosing("lost"); setReason(""); }}>✕ Pierdut<small>scrie motivul</small></button>
+          </div> : <ClosingBox lead={lead} label="De ce s-a pierdut?" action="Marchează pierdut" quick={[]} reason={reason} setReason={setReason} pending={pending}
+            onConfirm={() => run(() => setLeadStatus(lead.id, "lost", reason), () => setClosing(null))} onCancel={() => setClosing(null)} />}
+        </section>}
+        {(lead.status === "lost" || lead.status === "unqualified") && <section className="detail-section"><h3>{stage.label}</h3><p>{lead.lost_reason ?? "Fără motiv."}</p>
+          {canWork && (holder || !lead.claimed_by) && <button type="button" className="text-button" disabled={pending}
+            onClick={() => run(() => setLeadStatus(lead.id, lead.status === "lost" ? "qualified" : "to_contact", ""))}>Redeschide</button>}</section>}
 
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
 

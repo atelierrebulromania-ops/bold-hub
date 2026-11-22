@@ -50,8 +50,8 @@ async function mentionsClient(viewLink: string | null, clientName: string) {
   } catch { return false; }
 }
 
-// The proforma BOCP issued since `issuedFrom` for this client and total, skipping ones already linked.
-export async function findIssuedProforma(match: { issuedFrom: string; total: number; clientName: string; exclude: Set<string> }): Promise<BocpProforma | null> {
+// The proforma BOCP issued since `issuedFrom` for this client and total (any total when null), skipping ones already linked.
+export async function findIssuedProforma(match: { issuedFrom: string; total: number | null; clientName: string; exclude: Set<string> }): Promise<BocpProforma | null> {
   const candidates: BocpProforma[] = [];
   let page: number | null = 1;
   for (let fetched = 0; page !== null && fetched < MAX_PAGES; fetched++) {
@@ -60,7 +60,7 @@ export async function findIssuedProforma(match: { issuedFrom: string; total: num
       if (!raw || typeof raw !== "object") continue;
       const proforma = toProforma(raw as Record<string, unknown>);
       if (proforma && !proforma.cancelled && !match.exclude.has(proforma.bocpProformaId)
-        && proforma.date >= match.issuedFrom && Math.abs(proforma.total - match.total) < 0.1) {
+        && proforma.date >= match.issuedFrom && (match.total === null || Math.abs(proforma.total - match.total) < 0.1)) {
         candidates.push(proforma);
       }
     }

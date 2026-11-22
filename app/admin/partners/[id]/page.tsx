@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ClientFile, type AgentClient, type CatalogItem } from "@/app/account/clients-board";
-import { clientFileSelect, clientTab, collectionSelect, productCategories, toCollections } from "@/app/account/client-select";
+import { clientFileSelect, clientTab, collectionSelect, toCollections } from "@/app/account/client-select";
 import { b2bSkuFilter } from "@/lib/b2b-products";
 import { isLoginBlocked } from "@/lib/account-admin";
 import { requireRole } from "@/lib/auth";
@@ -35,7 +35,7 @@ export default async function AdminClientFilePage({ params, searchParams }: { pa
     <AppShell profile={profile} active="/admin/partners" section="Administrare" title={client?.business_name ?? "Client"}
       note={{ title: "Fișa clientului", text: "Fișa completă a clientului. Agentul, clientul din BOCP și contul se setează la Administrare." }}>
       {clientResult.error || usersResult.error || catalogResult.error || !client ? <p className="notice error" role="alert">Fișa clientului nu poate fi încărcată acum. Reîncarcă pagina.</p>
-        : <ClientFile key={`${client.id}-${client.bocp_contact_id ?? ""}`} client={client} catalog={catalog} categories={productCategories(catalog)} collections={toCollections(collectionsResult.data)} loginBlocked={loginBlocked} tab={clientTab(tab)}
+        : <ClientFile key={`${client.id}-${client.bocp_contact_id ?? ""}`} client={client} catalog={catalog} collections={toCollections(collectionsResult.data)} loginBlocked={loginBlocked} tab={clientTab(tab)}
           backHref="/admin/partners" backLabel="Toți clienții" admin={<AdminSection client={client} agents={agents} owners={owners} />} />}
     </AppShell>
   );

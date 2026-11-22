@@ -34,7 +34,7 @@ export type AgentClient = {
   billing_city: string | null;
   billing_county: string | null;
   billing_zip: string | null;
-  partner_discounts: { category: string | null; percent: number; channel: string }[];
+  partner_discounts: { product_id: string | null; percent: number; channel: string }[];
   // Loaded for the admin's client list only.
   account_id?: string | null;
   bocp_contact_id?: string | null;
@@ -295,8 +295,8 @@ const money = new Intl.NumberFormat("ro-RO", { minimumFractionDigits: 2, maximum
 
 // The client file on its own page: a summary on top and one tab per part. Shared by the agent's and the
 // admin's client lists; `admin` adds the admin-only tab.
-export function ClientFile({ client, catalog, categories, collections, loginBlocked, tab: initialTab, backHref, backLabel, admin }: {
-  client: AgentClient; catalog: CatalogItem[]; categories: string[]; collections: ProductCollection[]; loginBlocked: boolean;
+export function ClientFile({ client, catalog, collections, loginBlocked, tab: initialTab, backHref, backLabel, admin }: {
+  client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; loginBlocked: boolean;
   tab: ClientTab; backHref: string; backLabel: string; admin?: ReactNode;
 }) {
   const router = useRouter();
@@ -357,7 +357,7 @@ export function ClientFile({ client, catalog, categories, collections, loginBloc
             <div><ClientInvoices client={client} empty /></div>
           </div>}
           {tab === "puncte" && <LocationsEditor key={`loc-${client.id}`} client={client} onDone={done} />}
-          {tab === "discounturi" && <DiscountEditor key={`d-${client.id}`} client={client} categories={categories} onDone={done} />}
+          {tab === "discounturi" && <DiscountEditor key={`d-${client.id}`} client={client} catalog={catalog} collections={collections} onDone={done} />}
           {tab === "stoc" && <ParLevelEditor key={`p-${client.id}`} client={client} catalog={catalog} collections={collections} onDone={done} />}
           {tab === "custodie" && <div className="client-file-columns even">
             <CustodyEditor key={`c-${client.id}`} client={client} catalog={catalog} onDone={done} />
@@ -481,7 +481,7 @@ function LocationsEditor({ client, onDone }: { client: AgentClient; onDone: (res
   );
 }
 
-function DiscountEditor({ client, categories, onDone }: { client: AgentClient; categories: string[]; onDone: (result: { ok: boolean; message: string }) => void }) {
+function DiscountEditor({ client, catalog, collections, onDone }: { client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; onDone: (result: { ok: boolean; message: string }) => void }) {
   // The Consum tab shows for clients that order for their own consumption (or already have consumption rules).
   const consumption = client.own_consumption_discounts || client.partner_par_levels.some((level) => level.channel === "consumption");
   const [channel, setChannel] = useState<Channel>("resale");
@@ -502,21 +502,43 @@ function DiscountEditor({ client, categories, onDone }: { client: AgentClient; c
   function saveSame() {
     void saveDiscounts(client.id, [], "consumption", false).then(onDone);
   }
-  return <DiscountRules key={channel} client={client} categories={categories} channel={channel} header={<>{switcher}
+  return <DiscountRules key={channel} client={client} catalog={catalog} collections={collections} channel={channel} header={<>{switcher}
     {channel === "consumption" && <label className="check-line"><input type="checkbox" checked={false} onChange={() => setOwn(false)} /> Aceleași discounturi ca la revânzare</label>}</>} onDone={onDone} />;
 }
 
-function DiscountRules({ client, categories, channel, header, onDone }: { client: AgentClient; categories: string[]; channel: Channel; header: ReactNode; onDone: (result: { ok: boolean; message: string }) => void }) {
+function DiscountRules({ client, catalog, collections, channel, header, onDone }: {
+  client: AgentClient; catalog: CatalogItem[]; collections: ProductCollection[]; channel: Channel; header: ReactNode;
+  onDone: (result: { ok: boolean; message: string }) => void;
+}) {
   const initial = channel === "consumption" && !client.own_consumption_discounts ? channelRules(client.partner_discounts, "resale") : channelRules(client.partner_discounts, channel, true);
-  const [general, setGeneral] = useState(String(initial.find((rule) => rule.category === null)?.percent ?? ""));
-  const [rows, setRows] = useState(initial.filter((rule) => rule.category !== null).map((rule) => ({ category: rule.category!, percent: String(rule.percent) })));
+  const byId = new Map(catalog.map((item) => [item.id, item]));
+  const [general, setGeneral] = useState(String(initial.find((rule) => !rule.product_id)?.percent ?? ""));
+  const [rows, setRows] = useState(initial.filter((rule) => rule.product_id).map((rule) => ({ productId: rule.product_id!, percent: String(rule.percent) })));
+  const [bulk, setBulk] = useState("");
   const [pending, start] = useTransition();
-  const unused = categories.filter((category) => !rows.some((row) => row.category === category));
+  const [notice, setNotice] = useState<string | null>(null);
+  const missing = rows.filter((row) => !row.percent.trim()).length;
+
+  function add(items: CatalogItem[]) {
+    const have = new Set(rows.map((row) => row.productId));
+    const fresh = items.filter((item) => !have.has(item.id)).map((item) => ({ productId: item.id, percent: "" }));
+    setRows([...rows, ...fresh]);
+    return fresh.length;
+  }
+
+  // Every product of one of the agent's collections that has no discount of its own yet.
+  function addCollection(id: string) {
+    const collection = collections.find((item) => item.id === id);
+    if (!collection) return;
+    const added = add(collection.productIds.map((productId) => byId.get(productId)).filter((item): item is CatalogItem => !!item));
+    setNotice(added ? `Am adăugat ${added} ${added === 1 ? "produs" : "produse"} din „${collection.name}”. Pune procentul (sau același procent pentru toate) și salvează.`
+      : `Produsele din „${collection.name}” au deja discount.`);
+  }
 
   function save() {
     const rules: DiscountRule[] = [];
-    if (general.trim()) rules.push({ category: null, percent: Number(general.replace(",", ".")) });
-    for (const row of rows) if (row.percent.trim()) rules.push({ category: row.category, percent: Number(row.percent.replace(",", ".")) });
+    if (general.trim()) rules.push({ product_id: null, percent: Number(general.replace(",", ".")) });
+    for (const row of rows) rules.push({ product_id: row.productId, percent: Number(row.percent.replace(",", ".")) });
     start(async () => onDone(await saveDiscounts(client.id, rules, channel, true)));
   }
 
@@ -525,20 +547,36 @@ function DiscountRules({ client, categories, channel, header, onDone }: { client
       {header}
       <div className="discount-rows">
         <label className="discount-row"><span>Toate produsele</span><span className="percent-input"><input inputMode="decimal" value={general} onChange={(event) => setGeneral(event.target.value)} placeholder="0" />%</span></label>
-        {rows.map((row, index) => (
-          <div className="discount-row" key={row.category}>
-            <span>{row.category}</span>
-            <span className="percent-input"><input inputMode="decimal" value={row.percent} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, percent: event.target.value } : item))} />%</span>
-            <button type="button" className="remove-button" title="Scoate" aria-label={`Șterge regula ${row.category}`} onClick={() => setRows(rows.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
+      </div>
+      <div className="section-line discount-products-title"><h4>Discount pe produs</h4><span>{rows.length} {rows.length === 1 ? "produs" : "produse"}</span></div>
+      {rows.length > 0 && <div className="discount-rows">{rows.map((row, index) => {
+        const product = byId.get(row.productId);
+        return (
+          <div className="discount-row" key={row.productId}>
+            <span className="discount-product"><strong>{product?.name ?? "Produs scos din catalog"}</strong>{product && <small>SKU {product.sku}</small>}</span>
+            <span className="percent-input"><input inputMode="decimal" value={row.percent} placeholder="0" aria-label={`Discount ${product?.name ?? "produs"}`}
+              onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, percent: event.target.value } : item))} />%</span>
+            <button type="button" className="remove-button" title="Scoate" aria-label={`Scoate discountul pentru ${product?.name ?? "produs"}`} onClick={() => setRows(rows.filter((_, i) => i !== index))}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg></button>
           </div>
-        ))}
+        );
+      })}</div>}
+      {rows.length > 1 && <div className="discount-bulk">
+        <span className="muted small">Același procent pentru toate produsele din listă</span>
+        <span className="percent-input"><input inputMode="decimal" value={bulk} onChange={(event) => setBulk(event.target.value)} placeholder="0" aria-label="Procent pentru toate produsele" />%</span>
+        <button type="button" className="button button-outline" disabled={!bulk.trim()} onClick={() => { setRows(rows.map((row) => ({ ...row, percent: bulk.trim() }))); setBulk(""); }}>Aplică</button>
+      </div>}
+      <div className="par-add">
+        <ProductPicker catalog={catalog} exclude={new Set(rows.map((row) => row.productId))} onPick={(item) => { add([item]); setNotice(null); }} placeholder="Adaugă un produs (nume sau SKU)" />
+        {collections.length > 0 && <select value="" onChange={(event) => { if (event.target.value) addCollection(event.target.value); }} aria-label="Adaugă produsele unei colecții">
+          <option value="">+ Din colecție</option>
+          {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name} ({collection.productIds.length})</option>)}</select>}
       </div>
-      <div className="partner-billing-actions">
-        {unused.length > 0 && <select value="" onChange={(event) => { if (event.target.value) setRows([...rows, { category: event.target.value, percent: "" }]); }} aria-label="Adaugă discount pe categorie">
-          <option value="">+ Discount pe o categorie</option>{unused.map((category) => <option key={category} value={category}>{category}</option>)}</select>}
-        <button type="button" className="button button-outline" disabled={pending} onClick={save}>Salvează discounturile</button>
+      {notice && <p className="muted small">{notice}</p>}
+      <div className="partner-billing-actions discount-actions">
+        {missing > 0 && <span className="muted small">Completează procentul la {missing} {missing === 1 ? "produs" : "produse"} sau scoate-le.</span>}
+        <button type="button" className="button button-primary" disabled={pending || missing > 0} onClick={save}>Salvează discounturile</button>
       </div>
-      <p className="muted small">Regula pe categorie are prioritate față de cea pe toate produsele. Facturarea vede discounturile la emiterea facturii.</p>
+      <p className="muted small">Discountul pe produs are prioritate față de cel pe toate produsele. Se aplică automat în oferte, proforme și la facturare.</p>
     </section>
   );
 }

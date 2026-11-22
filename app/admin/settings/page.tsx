@@ -47,10 +47,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       <section className="admin-card auto-import-card stacked" aria-label="Alerte lead-uri">
         <div><h2>Alerte pentru lead-uri care așteaptă</h2>
-          <p>Lead nepreluat: anunță pe toți cei care lucrează în Lead. Lead preluat, dar necontactat: anunță agentul care l-a preluat. Fiecare lead dă o singură alertă. Alertele pleacă doar între 08:00 și 20:00. 0 oprește alerta.</p></div>
+          <p>Lead nepreluat: anunță pe toți cei care lucrează în Lead. Lead preluat, dar încă fără calificare: anunță agentul care l-a preluat. Fiecare lead dă o singură alertă. Alertele pleacă doar între 08:00 și 20:00. 0 oprește alerta.</p></div>
         <form action={setLeadAlertHours} className="settings-alerts">
           <label>Nepreluat după<span className="settings-days"><input type="number" name="unclaimed" min={0} max={168} defaultValue={settings?.lead_unclaimed_hours ?? 2} aria-label="Ore până la alerta pentru lead nepreluat" /><span>ore</span></span></label>
-          <label>Necontactat după<span className="settings-days"><input type="number" name="uncontacted" min={0} max={168} defaultValue={settings?.lead_uncontacted_hours ?? 24} aria-label="Ore până la alerta pentru lead necontactat" /><span>ore</span></span></label>
+          <label>Fără calificare după<span className="settings-days"><input type="number" name="uncontacted" min={0} max={168} defaultValue={settings?.lead_uncontacted_hours ?? 24} aria-label="Ore până la alerta pentru lead preluat și necalificat" /><span>ore</span></span></label>
           <SubmitButton className="button button-primary">Salvează</SubmitButton>
         </form>
       </section>

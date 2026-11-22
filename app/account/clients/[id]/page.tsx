@@ -4,7 +4,7 @@ import { b2bSkuFilter } from "@/lib/b2b-products";
 import { isLoginBlocked } from "@/lib/account-admin";
 import { requireRole } from "@/lib/auth";
 import { ClientFile, type AgentClient, type CatalogItem } from "../../clients-board";
-import { clientFileSelect, clientTab, collectionSelect, productCategories, toCollections } from "../../client-select";
+import { clientFileSelect, clientTab, collectionSelect, toCollections } from "../../client-select";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export default async function ClientFilePage({ params, searchParams }: { params:
     <AppShell profile={profile} active="/account" section="Clienți" title={client?.business_name ?? "Client"}
       note={{ title: "Fișa clientului", text: "Toate datele clientului, pe tab-uri. Fiecare tab se salvează separat." }}>
       {clientResult.error || catalogResult.error || !client ? <p className="notice error" role="alert">Fișa clientului nu poate fi încărcată acum. Reîncarcă pagina.</p>
-        : <ClientFile key={client.id} client={client} catalog={catalog} categories={productCategories(catalog)} collections={toCollections(collectionsResult.data)} loginBlocked={loginBlocked} tab={clientTab(tab) === "admin" ? "date" : clientTab(tab)}
+        : <ClientFile key={client.id} client={client} catalog={catalog} collections={toCollections(collectionsResult.data)} loginBlocked={loginBlocked} tab={clientTab(tab) === "admin" ? "date" : clientTab(tab)}
           backHref="/account" backLabel="Clienții mei" />}
     </AppShell>
   );

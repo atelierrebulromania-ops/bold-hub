@@ -1,9 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeCui } from "@/lib/anaf";
 import { sendConnectorOrder, updateConnectorOrder, type ConnectorOrder } from "@/lib/bocp/connector";
 import { findIssuedProforma } from "@/lib/bocp/proformas";
 import type { Database } from "@/lib/database.types";
-import { lineDiscount, money } from "@/lib/pricing";
+import { formatMoney, lineDiscount, money } from "@/lib/pricing";
 
 type Client = SupabaseClient<Database>;
 type Result = { ok: boolean; message: string };
@@ -23,14 +24,27 @@ async function loadDocument(supabase: Client, documentId: string) {
 
 type ProformaDocument = NonNullable<Awaited<ReturnType<typeof loadDocument>>>;
 
-// The proforma as a connector order: document prices with their discounts (per product or the document's), paid by bank transfer (so
-// BOCP issues the proforma). The order id is the document id, so a retry never duplicates it.
+// The proforma as a connector order: list prices, and the discounts (each product's own or the document's) as one "Discount X%" line
+// per percent and VAT rate, paid by bank transfer (so BOCP issues the proforma). The order id is the document id, so a retry never
+// duplicates it.
 function connectorOrder(document: ProformaDocument, date: string, cancelled = false): { order: ConnectorOrder; total: number } {
   let total = 0;
+  const discounts = new Map<string, NonNullable<ConnectorOrder["discounts"]>[number]>();
   const items = [...document.sales_document_items].sort((a, b) => a.position - b.position).map((item) => {
-    const price = money(item.unit_price * (1 - lineDiscount(item, document.discount_percent) / 100));
-    const priceWithVat = money(price * (1 + item.vat_percent / 100));
-    total += money(priceWithVat * item.quantity);
+    const vat = 1 + item.vat_percent / 100;
+    const percent = lineDiscount(item, document.discount_percent);
+    const price = money(item.unit_price);
+    const priceWithVat = money(item.unit_price * vat);
+    const discounted = money(item.unit_price * (1 - percent / 100));
+    const discountedWithVat = money(discounted * vat);
+    total += money(discountedWithVat * item.quantity);
+    if (percent > 0) {
+      const key = `${percent}|${item.vat_percent}`;
+      const line = discounts.get(key) ?? { name: `Discount ${percent}%`, vatPercent: item.vat_percent, value: 0, valueWithVat: 0 };
+      line.value = money(line.value + (price - discounted) * item.quantity);
+      line.valueWithVat = money(line.valueWithVat + (priceWithVat - discountedWithVat) * item.quantity);
+      discounts.set(key, line);
+    }
     return { code: item.sku, name: item.name, quantity: item.quantity, price, priceWithVat, vatPercent: item.vat_percent };
   });
   const vatId = document.client_vat_id?.trim() ?? "";
@@ -44,8 +58,10 @@ function connectorOrder(document: ProformaDocument, date: string, cancelled = fa
         name: document.client_name, isCompany: vatId.length > 0, vatId, registrationNumber: document.client_registration ?? "",
         phone: document.contact_phone || document.partners?.contact_phone || "", email: document.contact_email || document.partners?.contact_email || "",
         address: { street: document.client_street ?? "", city: document.client_city ?? "", county: document.client_county ?? "", zip: document.client_zip ?? "", country: "Romania" },
+        uniqueId: normalizeCui(vatId) ?? undefined,
       },
       items,
+      discounts: [...discounts.values()],
       withProforma: true,
       cancelled,
     },
@@ -68,6 +84,10 @@ export async function linkIssuedProforma(supabase: Client, documentId: string, a
     let proforma;
     try {
       proforma = await findIssuedProforma({ issuedFrom: sentOn, total, clientName: document.client_name, exclude });
+      // On the last try, the client's proforma with another total: BOCP priced it differently. It is linked anyway, with a warning.
+      if (!proforma && attempt === attempts - 1) {
+        proforma = await findIssuedProforma({ issuedFrom: sentOn, total: null, clientName: document.client_name, exclude });
+      }
     } catch {
       return { ok: false, message: "BOCP nu a răspuns. Verifică din nou peste câteva secunde (funcționează doar de pe rețeaua permisă în BOCP)." };
     }
@@ -75,7 +95,10 @@ export async function linkIssuedProforma(supabase: Client, documentId: string, a
       const { data } = await supabase.rpc("record_proforma_number", {
         p_id: documentId, p_bocp_proforma_id: proforma.bocpProformaId, p_number: proforma.number, p_date: proforma.date, p_total: proforma.total,
       });
-      return data ? { ok: true, message: `Proforma ${proforma.number} a fost emisă în BOCP.` } : { ok: false, message: "Nu am putut salva proforma. Reîncarcă pagina." };
+      if (!data) return { ok: false, message: "Nu am putut salva proforma. Reîncarcă pagina." };
+      return Math.abs(proforma.total - total) < 0.1
+        ? { ok: true, message: `Proforma ${proforma.number} a fost emisă în BOCP.` }
+        : { ok: false, message: `Proforma ${proforma.number} a fost emisă în BOCP cu ${formatMoney(proforma.total)} lei, nu cu ${formatMoney(total)} lei. Verifică prețurile cu facturarea.` };
     }
   }
   return { ok: false, message: "Comanda a ajuns în BOCP, dar proforma nu apare încă. Apasă „Verifică în BOCP” peste câteva secunde." };
