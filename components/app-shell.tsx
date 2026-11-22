@@ -48,6 +48,9 @@ const sections: { label: string; items: NavItem[] }[] = [
   { label: "CATALOAGE", items: [
     { href: "/catalogs", label: "Cataloage HoReCa", roles: ["admin", "catalog_editor"], icon: <svg {...svg}><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M8 7h6M8 11h6"/></svg> },
   ] },
+  { label: "MARKETING", items: [
+    { href: "/marketing", label: "Calendar comunicare", roles: ["admin", "marketing"], icon: <svg {...svg}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M13 17h4"/></svg> },
+  ] },
   { label: "ISTORIC", items: [
     { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "owner", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },

@@ -11,9 +11,11 @@ export type Profile = { id: string; full_name: string; role: UserRole; realRole:
 
 export const staffRoles: readonly UserRole[] = ["admin", "owner", "operator_depozit", "operator_facturare", "account"];
 // Roles the admin can preview with the dev switcher: the staff roles plus the catalog editor.
-export const previewRoles: readonly UserRole[] = [...staffRoles, "catalog_editor"];
+export const previewRoles: readonly UserRole[] = [...staffRoles, "catalog_editor", "marketing"];
 // Who may use the HoReCa catalogs module (checked again by row security in the database).
 export const catalogRoles: readonly UserRole[] = ["admin", "catalog_editor"];
+// Who may use the Marketing section (checked again by row security in the database).
+export const marketingRoles: readonly UserRole[] = ["admin", "marketing"];
 export const viewAsCookie = "boldhub-view-as";
 
 const partnerPrefix = "partner:";
@@ -48,6 +50,7 @@ export function homeFor(role: UserRole): string {
   if (role === "operator_depozit") return "/warehouse";
   if (role === "contabilitate") return "/accounting/overview";
   if (role === "catalog_editor") return "/catalogs";
+  if (role === "marketing") return "/marketing";
   return "/orders";
 }
 
