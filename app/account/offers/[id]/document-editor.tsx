@@ -91,6 +91,9 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
   const matches = needle.length < 2 ? [] : catalog.filter((item) => !lines.some((line) => line.productId === item.id)
     && `${item.name} ${item.sku}`.toLocaleLowerCase("ro").includes(needle)).slice(0, 8);
   const setField = (key: keyof typeof client, value: string) => setClient({ ...client, [key]: value });
+  // A product's own discount for the picked client ("" = the document's discount).
+  const ruleFor = (rules: DiscountRule[], productId: string) => { const rule = rules.find((item) => item.product_id === productId); return rule ? String(rule.percent) : ""; };
+  const clientRules = clients.find((item) => item.id === partnerId)?.partner_discounts ?? [];
 
   function pickClient(id: string) {
     const found = clients.find((item) => item.id === id);
@@ -102,8 +105,9 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
       contactName: "", contactEmail: found.contact_email ?? "", contactPhone: found.contact_phone,
     });
     setSaveAsPartner(false);
-    // The client's discount on the whole range is the starting point for the document.
+    // The client's discount on the whole range is the starting point for the document; products with their own discount get it on the line.
     setDiscount(String(discountFor(found.partner_discounts, null)));
+    setLines((current) => current.map((line) => ({ ...line, discount: ruleFor(found.partner_discounts, line.productId) })));
   }
 
   // Adds a collection's products (quantity 1) that are not on the document yet.
@@ -111,7 +115,7 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
     const collection = collections.find((item) => item.id === id);
     setCollectionId("");
     if (!collection) return;
-    const added = collectionLines(collection, catalog, lines);
+    const added = collectionLines(collection, catalog, lines).map((line) => ({ ...line, discount: ruleFor(clientRules, line.productId) }));
     setLines([...lines, ...added]);
     setFeedback({ ok: true, message: added.length
       ? `Am adăugat ${added.length} ${added.length === 1 ? "produs" : "produse"} din „${collection.name}”. Setează cantitățile sau scoate ce nu trebuie.`
@@ -265,7 +269,7 @@ function Editor({ document, related, initialKind, clients, catalog, collections,
           {editable && <div className="product-picker">
             <input className="group-member-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Adaugă produs (nume sau SKU)" aria-label="Adaugă produs" />
             {matches.length > 0 && <div className="group-member-list request-options">{matches.map((item) => (
-              <button key={item.id} type="button" className="request-option" onClick={() => { setLines([...lines, { productId: item.id, name: item.name, sku: item.sku, quantity: "1", unitPrice: item.list_price ?? 0, vatPercent: item.vat_percent ?? 21, discount: "" }]); setQuery(""); }}>
+              <button key={item.id} type="button" className="request-option" onClick={() => { setLines([...lines, { productId: item.id, name: item.name, sku: item.sku, quantity: "1", unitPrice: item.list_price ?? 0, vatPercent: item.vat_percent ?? 21, discount: ruleFor(clientRules, item.id) }]); setQuery(""); }}>
                 <span>{item.name}</span><small>SKU {item.sku} · {formatMoney(item.list_price ?? 0)} lei</small>
               </button>
             ))}</div>}
@@ -326,7 +330,8 @@ function DocumentActions({ document, related, pending, act }: {
     : document.partner_carts?.invoiced_at && document.partner_carts.bocp_invoice_id ? `/billing/invoice/${document.partner_carts.id}` : null;
   const open = document.status === "issued" && !document.cart_id && !document.invoice_requested_at;
 
-  if (cancelling) {
+  // The form closes once the proforma is no longer open (cancelled or sent on).
+  if (cancelling && open) {
     return <div className="proforma-cancel">
       <label>Motivul anulării (opțional)<input value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="ex. clientul a renunțat" autoFocus /></label>
       <button type="button" className="text-button" onClick={() => setCancelling(false)}>Renunță</button>
@@ -362,6 +367,7 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
   const cart = document.partner_carts;
   const source = related.find((item) => item.id === document.source_document_id);
   const steps: { label: string; detail: string; done: boolean }[] = [];
+  let warning: string | null = null;
 
   if (document.kind === "offer") {
     const proformas = related.filter((item) => item.kind === "proforma");
@@ -371,10 +377,15 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
     if (source) steps.push({ label: "Din oferta", detail: source.number ?? "—", done: true });
     steps.push({ label: "Proformă în BOCP", done: document.status !== "issuing",
       detail: document.status === "issuing" ? "Comanda a ajuns în BOCP, se așteaptă numărul proformei" : `${document.number}${document.bocp_proforma_total !== null ? ` · ${formatMoney(document.bocp_proforma_total)} lei` : ""} · stoc rezervat în BOCP` });
+    // BOCP prices the proforma itself: a different total means it did not take the document's discounts.
+    const expected = documentTotals(document.sales_document_items, document.discount_percent).total;
+    if (document.bocp_proforma_total !== null && Math.abs(document.bocp_proforma_total - expected) >= 0.1) {
+      warning = `Atenție la total: în BoldHub proforma are ${formatMoney(expected)} lei, în BOCP ${formatMoney(document.bocp_proforma_total)} lei. Verifică prețurile cu facturarea.`;
+    }
     if (document.status === "cancel_requested" || document.status === "cancelled") {
+      const reason = document.cancel_reason ? ` · Motiv: ${document.cancel_reason}` : "";
       steps.push({ label: "Anulare", done: document.status === "cancelled",
-        detail: document.status === "cancelled" ? `Anulată în BOCP${document.cancelled_at ? ` · ${formatDateTime(document.cancelled_at)}` : ""}` : "Stoc eliberat · facturarea anulează proforma în BOCP" });
-      if (document.cancel_reason) steps.push({ label: "Motiv", detail: document.cancel_reason, done: true });
+        detail: document.status === "cancelled" ? `Anulată în BOCP${document.cancelled_at ? ` · ${formatDateTime(document.cancelled_at)}` : ""}${reason}` : `Stoc eliberat · facturarea anulează proforma în BOCP${reason}` });
     } else if (cart) {
       const stage = cart.invoiced_at ? "Facturată" : cart.status === "delivered" ? "La facturare" : cart.prepared_at ? "Pe raft" : "În depozit (de pregătit)";
       steps.push({ label: "Comandă rezervată", detail: stage, done: cart.status === "delivered" });
@@ -390,6 +401,7 @@ function DocumentProgress({ document, related }: { document: EditorDocument; rel
 
   return <section className="document-block document-progress"><h3>Parcurs</h3>
     <ol className="progress-steps">{steps.map((step) => <li key={step.label} className={step.done ? "done" : ""}><strong>{step.label}</strong><span>{step.detail}</span></li>)}</ol>
+    {warning && <p className="notice warning progress-warning" role="status">{warning}</p>}
   </section>;
 }
 

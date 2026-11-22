@@ -81,15 +81,17 @@ export default async function HelpPage() {
             <dl className="help-terms">
               <dt>Noi</dt><dd>Lead-uri pe care nu le-a preluat nimeni. Oricine le poate prelua.</dd>
               <dt>În lucru</dt><dd>Lead-uri preluate și deschise. Bifează <strong>Doar ale mele</strong> ca să le vezi doar pe ale tale.</dd>
-              <dt>Câștigați / Pierduți / Toate</dt><dd>Lead-urile închise și lista completă. Caută după nume, firmă, telefon, email sau campanie.</dd>
+              <dt>Câștigați / Pierduți / Necalificați / Toate</dt><dd>Lead-urile închise și lista completă. Caută după nume, firmă, telefon, email sau campanie.</dd>
             </dl>
             <h3>Etape</h3>
             <dl className="help-terms">
-              <dt><span className="payment-chip soon">De contactat</span></dt><dd>L-ai preluat, urmează să-l suni.</dd>
-              <dt><span className="payment-chip open">Contactat</span></dt><dd>Ați vorbit; discuția continuă.</dd>
+              <dt><span className="payment-chip soon">De contactat</span></dt><dd>L-ai preluat, urmează să-l suni. După ce ați vorbit, treci-l la Calificare.</dd>
+              <dt><span className="payment-chip open">Calificare</span></dt><dd>Ați vorbit. Aici alegi: <strong>Calificat</strong> (e un client potrivit, urmează oferta) sau <strong>Necalificat</strong>.</dd>
+              <dt><span className="payment-chip qualified">Calificat</span></dt><dd>Poți trimite oferta: treci lead-ul la Ofertă trimisă.</dd>
+              <dt><span className="payment-chip open">Necalificat</span></dt><dd>Nu mai e interesat, nu răspunde, nu e firmă etc.: lead-ul se oprește aici. Alegi un motiv rapid sau îl scrii tu. Se poate redeschide.</dd>
               <dt><span className="payment-chip offer">Ofertă trimisă</span></dt><dd>BoldHub îți amintește după {offerDays} zile dacă nu s-a închis; poți amâna cu +3, +7 sau +14 zile.</dd>
               <dt><span className="payment-chip paid">Câștigat</span></dt><dd>Completezi datele firmei (CUI-ul se caută la ANAF) și lead-ul devine clientul tău. Din lead ai apoi link direct la fișa clientului.</dd>
-              <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Alegi motivul (preț, nu răspunde, nu e potrivit, alt furnizor, altul). Se poate redeschide.</dd>
+              <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Scrii motivul cu cuvintele tale (până la 300 de caractere). Se poate redeschide.</dd>
             </dl>
             <h3>Butoane</h3>
             <dl className="help-terms">
@@ -119,7 +121,7 @@ export default async function HelpPage() {
             <dl className="help-terms">
               <dt>Date firmă</dt><dd>Datele de facturare (din ANAF) și contactul. Bifa <strong>Client prioritar</strong> face ca depozitul să-i livreze imediat. În dreapta: facturile clientului din BOCP, cu scadența și ce mai are de plată, plus PDF-ul facturii.</dd>
               <dt>Puncte de lucru</dt><dd>Pentru firmele cu mai multe locații. <strong>Centralizat</strong>: un stoc și o comandă pe firmă, livrată la punctul principal. <strong>Pe punct de lucru</strong>: fiecare punct are stocul, comenzile și (dacă vrei) contul lui; factura rămâne una pe CUI. Din <strong>Editează</strong> schimbi adresa, dezactivezi un punct sau îl ștergi (doar dacă n-a avut comenzi).</dd>
-              <dt>Discounturi</dt><dd>Procent pe toate produsele și, separat, pe categorii (regula pe categorie are prioritate). Fără termen. Se aplică automat în oferte, proforme și la facturare. Pe Consum poți păstra aceleași discounturi sau pune altele.</dd>
+              <dt>Discounturi</dt><dd>Procent pe toate produsele și, separat, pe produse anume (discountul pe produs are prioritate). Adaugi produsele pe rând sau o colecție întreagă, apoi poți pune același procent pentru toate. Fără termen. Se aplică automat în oferte, proforme și la facturare. Pe Consum poți păstra aceleași discounturi sau pune altele.</dd>
               <dt>Stoc inițial</dt><dd>Ce trebuie să aibă clientul mereu: produsele și cantitățile. Clientul numără ce i-a rămas, iar aplicația comandă diferența. Are două tab-uri:
                 <ul className="help-list">
                   <li><strong>Revânzare</strong>: produsele pe care le vinde. Aici alegi <strong>regimul</strong>: Cumpărare (fiecare livrare se facturează) sau Consignație (marfa rămâne a noastră până o vinde; se facturează periodic ce a vândut, cu comisionul lui).</li>

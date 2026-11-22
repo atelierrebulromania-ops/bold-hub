@@ -995,11 +995,12 @@ export type Database = {
         ]
       }
       partner_discounts: {
-        Row: { category: string | null; channel: string; created_at: string; id: string; partner_id: string; percent: number }
-        Insert: { category?: string | null; created_at?: string; id?: string; partner_id: string; percent: number }
-        Update: { category?: string | null; created_at?: string; id?: string; partner_id?: string; percent?: number }
+        Row: { category: string | null; channel: string; created_at: string; id: string; partner_id: string; percent: number; product_id: string | null }
+        Insert: { category?: string | null; created_at?: string; id?: string; partner_id: string; percent: number; product_id?: string | null }
+        Update: { category?: string | null; created_at?: string; id?: string; partner_id?: string; percent?: number; product_id?: string | null }
         Relationships: [
           { foreignKeyName: "partner_discounts_partner_id_fkey"; columns: ["partner_id"]; isOneToOne: false; referencedRelation: "partners"; referencedColumns: ["id"] },
+          { foreignKeyName: "partner_discounts_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
         ]
       }
       sales_document_items: {

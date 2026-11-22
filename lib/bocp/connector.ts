@@ -13,8 +13,12 @@ export type ConnectorOrder = {
   orderId: string;
   date: string;
   mentions: string;
-  client: { name: string; isCompany: boolean; vatId: string; registrationNumber: string; phone: string; email: string; address: ConnectorAddress };
+  // uniqueId (the CUI) lets BOCP recognise the same client on every order instead of creating a new one.
+  client: { name: string; isCompany: boolean; vatId: string; registrationNumber: string; phone: string; email: string; address: ConnectorAddress; uniqueId?: string };
+  // List prices: BOCP prices the documents it issues from its own catalog, whatever price the order carries.
   items: { code: string; name: string; quantity: number; price: number; priceWithVat: number; vatPercent: number }[];
+  // Discounts go as their own negative lines (positive amounts here), the only form BOCP keeps on the proforma.
+  discounts?: { name: string; vatPercent: number; value: number; valueWithVat: number }[];
   // The connector issues a proforma only for bank_transfer orders; plain reservations go as credit.
   withProforma?: boolean;
   // Cancelling the order releases its stock; a proforma issued for it stays (billing cancels it).
@@ -63,17 +67,25 @@ function payload(order: ConnectorOrder) {
       representative: order.client.name,
       email: order.client.email,
       phone: order.client.phone,
+      ...(order.client.uniqueId ? { client_unique_id: order.client.uniqueId } : {}),
       vat_id: order.client.isCompany ? order.client.vatId : "",
       registration_number: order.client.isCompany ? order.client.registrationNumber : "",
       invoice_address: address,
       delivery_address: { ...address, shipping_contact_name: order.client.name, shipping_contact_phone: order.client.phone },
     },
-    // List prices: billing applies the partner's discount when it issues the invoice.
-    items: order.items.map((item) => ({
-      type: "product", code: item.code, item_name: item.name, item_quantity: item.quantity,
-      item_price: money(item.price), item_vat_percent: item.vatPercent, item_price_with_vat: money(item.priceWithVat),
-      line_value_with_vat: money(item.priceWithVat * item.quantity),
-    })),
+    // List prices (B2B carts send no discounts: billing applies the partner's discount on the invoice).
+    items: [
+      ...order.items.map((item) => ({
+        type: "product", code: item.code, item_name: item.name, item_quantity: item.quantity,
+        item_price: money(item.price), item_vat_percent: item.vatPercent, item_price_with_vat: money(item.priceWithVat),
+        line_value_with_vat: money(item.priceWithVat * item.quantity),
+      })),
+      ...(order.discounts ?? []).filter((discount) => discount.valueWithVat > 0).map((discount) => ({
+        type: "discount", code: "DISCOUNT", item_name: discount.name, item_quantity: 1,
+        item_price: -money(discount.value), item_vat_percent: discount.vatPercent, item_price_with_vat: -money(discount.valueWithVat),
+        line_value_with_vat: -money(discount.valueWithVat),
+      })),
+    ],
     payment_method: order.withProforma ? "bank_transfer" : "credit",
     payments: [],
   };

@@ -36,10 +36,10 @@ export type BillingCart = {
   // (consignment, transfer voucher) and its own-consumption part (purchase, invoice).
   regime: string;
   partners: { sales_mode: string; business_name: string; location_name: string; type: string; is_important_client: boolean; contact_phone: string; contact_email: string | null;
-    own_consumption_discounts: boolean; partner_discounts: { category: string | null; percent: number; channel: string }[] } | null;
+    own_consumption_discounts: boolean; partner_discounts: { product_id: string | null; percent: number; channel: string }[] } | null;
   // The offer/proforma the cart came from: its discount replaces the client's rules.
   sales_documents: { kind: string; number: string | null; discount_percent: number; sales_document_items: { sku: string; discount_percent: number | null }[] } | null;
-  partner_cart_items: { id: string; quantity_needed: number; channel: string; products: { name: string; sku: string; variant_label: string | null; category: string | null } | null }[];
+  partner_cart_items: { id: string; quantity_needed: number; channel: string; products: { id: string; name: string; sku: string; variant_label: string | null; category: string | null } | null }[];
 };
 
 const typeLabels: Record<string, string> = { reseller: "Revânzător", horeca: "HoReCa", altul: "Altul" };
@@ -63,7 +63,7 @@ function invoiceLines(carts: BillingCart[]) {
       const source = cart.sales_documents;
       const discount = source
         ? source.sales_document_items.find((line) => line.sku === item.products?.sku)?.discount_percent ?? source.discount_percent
-        : discountFor(channelRules(cart.partners?.partner_discounts ?? [], item.channel, cart.partners?.own_consumption_discounts), item.products?.category ?? null);
+        : discountFor(channelRules(cart.partners?.partner_discounts ?? [], item.channel, cart.partners?.own_consumption_discounts), item.products?.id ?? null);
       const sku = item.products?.sku ?? "—";
       const key = `${sku}|${discount}`;
       const line = lines.get(key) ?? { key, name: item.products?.name ?? "Produs", variant: item.products?.variant_label ?? null, sku,
