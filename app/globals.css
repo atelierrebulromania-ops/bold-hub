@@ -1154,6 +1154,7 @@ p.push-toggle { display: block; }
 .webhook-urls span { color: #65676b; font-size: .72rem; font-weight: 700; }
 .webhook-urls code { display: block; padding: 9px 11px; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; font-size: .72rem; white-space: nowrap; }
 .payment-chip.offer { color: #6b4fd1; background: #efebff; }
+.payment-chip.qualified { color: #0f6e6e; background: #e1f4f2; }
 .crm-late { color: #a13032 !important; font-weight: 700 !important; }
 .crm-deadline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #dcd3ff; border-radius: 8px; background: #f7f5ff; font-size: .76rem; }
 .crm-deadline.late { border-color: #f2c4c6; background: #fff4f4; color: #a13032; }
@@ -1187,6 +1188,10 @@ p.push-toggle { display: block; }
 .crm-lost-button:hover:not(:disabled) { background: #fff5f5; }
 .crm-lost-box { padding: 12px; border: 1px solid #f0c3c5; border-radius: 9px; background: #fffafa; }
 .crm-lost-box label { display: block; margin: 0 0 8px; font-size: .78rem; font-weight: 700; }
+.crm-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.crm-reasons button { padding: .4rem .7rem; border: 1px solid #e1e4e9; border-radius: 999px; background: #fff; color: #4b4f56; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.crm-reasons button.selected { border-color: #c62f33; background: #c62f33; color: #fff; }
+.crm-hint { margin: 0 0 10px; }
 .crm-lost-box .crm-note { background: #fff; }
 .crm-lost-actions { display: flex; gap: 8px; }
 .crm-panel-footer { display: flex; align-items: center; gap: 12px; }

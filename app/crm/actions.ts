@@ -53,6 +53,7 @@ export async function setLeadStatus(leadId: string, status: string, reason: stri
   const { supabase, canWork } = await worker();
   if (!canWork || !uuid.test(leadId)) return { ok: false, message: "Nu ai acces." };
   if (status === "lost" && !reason.trim()) return { ok: false, message: "Scrie motivul pentru care lead-ul e pierdut." };
+  if (status === "unqualified" && !reason.trim()) return { ok: false, message: "Scrie motivul pentru care lead-ul nu e calificat." };
   const { data, error } = await supabase.rpc("set_lead_status", { p_id: leadId, p_status: status, p_reason: reason });
   if (error) return { ok: false, message: "Etapa nu este validă." };
   return done(data ? { ok: true, message: "Etapa a fost schimbată." } : { ok: false, message: "Doar cine a preluat lead-ul îi poate schimba etapa." });

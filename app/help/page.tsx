@@ -81,12 +81,13 @@ export default async function HelpPage() {
             <dl className="help-terms">
               <dt>Noi</dt><dd>Lead-uri pe care nu le-a preluat nimeni. Oricine le poate prelua.</dd>
               <dt>În lucru</dt><dd>Lead-uri preluate și deschise. Bifează <strong>Doar ale mele</strong> ca să le vezi doar pe ale tale.</dd>
-              <dt>Câștigați / Pierduți / Toate</dt><dd>Lead-urile închise și lista completă. Caută după nume, firmă, telefon, email sau campanie.</dd>
+              <dt>Câștigați / Pierduți / Necalificați / Toate</dt><dd>Lead-urile închise și lista completă. Caută după nume, firmă, telefon, email sau campanie.</dd>
             </dl>
             <h3>Etape</h3>
             <dl className="help-terms">
-              <dt><span className="payment-chip soon">De contactat</span></dt><dd>L-ai preluat, urmează să-l suni.</dd>
-              <dt><span className="payment-chip open">Contactat</span></dt><dd>Ați vorbit; discuția continuă.</dd>
+              <dt><span className="payment-chip soon">De contactat</span></dt><dd>L-ai preluat, urmează să-l suni. După discuție îl marchezi Calificat sau Necalificat.</dd>
+              <dt><span className="payment-chip qualified">Calificat</span></dt><dd>După primul telefon, e un client potrivit: urmează oferta.</dd>
+              <dt><span className="payment-chip open">Necalificat</span></dt><dd>Nu mai e interesat, nu răspunde, nu e firmă etc.: lead-ul se oprește aici. Alegi un motiv rapid sau îl scrii tu. Se poate redeschide.</dd>
               <dt><span className="payment-chip offer">Ofertă trimisă</span></dt><dd>BoldHub îți amintește după {offerDays} zile dacă nu s-a închis; poți amâna cu +3, +7 sau +14 zile.</dd>
               <dt><span className="payment-chip paid">Câștigat</span></dt><dd>Completezi datele firmei (CUI-ul se caută la ANAF) și lead-ul devine clientul tău. Din lead ai apoi link direct la fișa clientului.</dd>
               <dt><span className="payment-chip overdue">Pierdut</span></dt><dd>Scrii motivul cu cuvintele tale (până la 300 de caractere). Se poate redeschide.</dd>
@@ -99,7 +100,7 @@ export default async function HelpPage() {
             <h3>Alerte</h3>
             <ul className="help-list">
               {unclaimed > 0 && <li>Lead nou <strong>nepreluat în {unclaimed} {unclaimed === 1 ? "oră" : "ore"}</strong>: primiți toți o notificare.</li>}
-              {uncontacted > 0 && <li>Lead preluat, dar <strong>necontactat în {uncontacted} de ore</strong>: primești tu o notificare.</li>}
+              {uncontacted > 0 && <li>Lead preluat, dar <strong>fără calificare în {uncontacted} de ore</strong>: primești tu o notificare.</li>}
               <li>Ofertă fără răspuns după <strong>{offerDays} zile</strong>: primești tu o notificare.</li>
             </ul>
             <p className="muted">Alertele vin o singură dată pe lead, între 08:00 și 20:00. Doar agentul care a preluat lead-ul îl poate muta între etape.</p>
