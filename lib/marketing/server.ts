@@ -4,7 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { effectiveRole, marketingRoles } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { EventColor, MarketingEvent, MarketingLane } from "./calendar";
+import { layoutLane, type EventColor, type MarketingEvent, type MarketingLane } from "./calendar";
 
 // Server side of the communication calendar: access check for route handlers, loading a year, and the
 // campaign pictures in the private storage bucket.
@@ -42,12 +42,20 @@ export async function loadCalendar(supabase: Client, year: number) {
   };
 }
 
-// Every year that has at least one event (for the year switcher and the default year).
+// Every year that has at least one event (for the year switcher and the default year), and how many
+// sub-rows each category needs in its fullest year: the board keeps that height in every year, so it
+// looks the same while it is being filled in.
 export async function yearsWithEvents(supabase: Client) {
-  const { data } = await supabase.from("marketing_events").select("start_date,end_date");
+  const { data } = await supabase.from("marketing_events").select("lane_id,title,start_date,end_date");
   const years = new Set<number>();
   for (const row of data ?? []) for (let y = Number(row.start_date.slice(0, 4)); y <= Number(row.end_date.slice(0, 4)); y++) years.add(y);
-  return [...years];
+  const byLane = new Map<string, NonNullable<typeof data>>();
+  for (const row of data ?? []) byLane.set(row.lane_id, [...(byLane.get(row.lane_id) ?? []), row]);
+  const laneRows: Record<string, number> = {};
+  for (const year of years) {
+    for (const [laneId, events] of byLane) laneRows[laneId] = Math.max(laneRows[laneId] ?? 1, layoutLane(events, year, 30).rows);
+  }
+  return { years: [...years], laneRows };
 }
 
 export function isImagePath(path: string) {

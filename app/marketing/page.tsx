@@ -12,7 +12,7 @@ export default async function MarketingCalendarPage({ searchParams }: { searchPa
   // Today's date in Romania, as YYYY-MM-DD.
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bucharest" });
   const currentYear = Number(today.slice(0, 4));
-  const [years, share] = await Promise.all([
+  const [{ years, laneRows }, share] = await Promise.all([
     yearsWithEvents(supabase),
     supabase.from("marketing_share_links").select("token").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
@@ -23,7 +23,7 @@ export default async function MarketingCalendarPage({ searchParams }: { searchPa
     <AppShell profile={profile} active="/marketing" section="Marketing" title="Communication calendar"
       note={{ title: "Communication calendar", text: "The year's campaigns and events on one board. Click an event to edit it; Share gives a read-only link." }}>
       {calendar
-        ? <CalendarBoard year={year} today={today} lanes={calendar.lanes} events={calendar.events} shareToken={share.data?.token ?? null} />
+        ? <CalendarBoard year={year} today={today} lanes={calendar.lanes} events={calendar.events} laneRows={laneRows} shareToken={share.data?.token ?? null} />
         : <p className="preview-alert warning admin-feedback" role="alert">The calendar could not be loaded. Reload the page.</p>}
     </AppShell>
   );
