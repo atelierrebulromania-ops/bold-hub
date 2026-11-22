@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { effectiveRole, marketingRoles } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { EventColor, LaneKind, MarketingEvent, MarketingLane } from "./calendar";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { EventColor, MarketingEvent, MarketingLane } from "./calendar";
 
 // Server side of the communication calendar: access check for route handlers, loading a year, and the
 // campaign pictures in the private storage bucket.
@@ -26,18 +27,18 @@ export async function marketingAccess(): Promise<{ supabase: Client; userId: str
   return marketingRoles.includes(role) ? { supabase, userId } : null;
 }
 
-const eventColumns = "id,lane_id,title,start_date,end_date,dates_tbc,show_dates,color,stock_in,notes,image_path";
+const eventColumns = "id,lane_id,title,start_date,end_date,dates_tbc,show_dates,notes,image_path";
 
 // All categories and the events that touch the year.
 export async function loadCalendar(supabase: Client, year: number) {
   const [lanes, events] = await Promise.all([
-    supabase.from("marketing_lanes").select("id,name,subtitle,kind,show_images,position").order("position"),
+    supabase.from("marketing_lanes").select("id,name,subtitle,color,show_images,position").order("position"),
     supabase.from("marketing_events").select(eventColumns).lte("start_date", `${year}-12-31`).gte("end_date", `${year}-01-01`).order("start_date"),
   ]);
   if (lanes.error || events.error) return null;
   return {
-    lanes: (lanes.data ?? []).map(lane => ({ ...lane, kind: lane.kind as LaneKind })) as MarketingLane[],
-    events: (events.data ?? []).map(event => ({ ...event, color: event.color as EventColor })) as MarketingEvent[],
+    lanes: (lanes.data ?? []).map(lane => ({ ...lane, color: lane.color as EventColor })) as MarketingLane[],
+    events: (events.data ?? []) as MarketingEvent[],
   };
 }
 
@@ -58,4 +59,22 @@ export async function removeImageIfUnused(supabase: Client, path: string | null)
   if (!path || !imagePattern.test(path)) return;
   const { count } = await supabase.from("marketing_events").select("id", { count: "exact", head: true }).eq("image_path", path);
   if (count === 0) await supabase.storage.from(calendarImagesBucket).remove([path]);
+}
+
+// ---- Share link ------------------------------------------------------------------------------------------
+
+const tokenPattern = /^[A-Za-z0-9_-]{32,64}$/;
+
+export function isShareToken(token: string) {
+  return tokenPattern.test(token);
+}
+
+// The shared (read-only) calendar: whoever has a valid link sees the board, without an account. Read on the
+// server with the service client, only after the token matches the one an editor created.
+export async function sharedCalendarClient(token: string): Promise<Client | null> {
+  if (!tokenPattern.test(token)) return null;
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data } = await admin.from("marketing_share_links").select("id").eq("token", token).maybeSingle();
+  return data ? admin : null;
 }

@@ -1,13 +1,12 @@
 // Marketing communication calendar: data shapes, colours and the board layout (where each block sits in
 // the year and on which sub-row of its category). Pure code, shared by the board, the server and the tests.
 
-export type LaneKind = "band" | "events";
-
+// A row of the board (a campaign line). Its events are drawn in its colour.
 export type MarketingLane = {
   id: string;
   name: string;
   subtitle: string;
-  kind: LaneKind;
+  color: EventColor;
   show_images: boolean;
   position: number;
 };
@@ -20,24 +19,22 @@ export type MarketingEvent = {
   end_date: string;
   dates_tbc: boolean;
   show_dates: boolean;
-  color: EventColor;
-  stock_in: string | null;
   notes: string | null;
   image_path: string | null;
 };
 
-// The fixed palette of the original calendar. Users pick one of these; no free colours.
+// The fixed palette of the original calendar. Each category takes one of these; no free colours.
 export const eventColors = {
-  dark: { label: "Gri închis", background: "#3B3B3B", text: "#FFFFFF" },
-  grey: { label: "Gri", background: "#A3A3A3", text: "#FFFFFF" },
-  light: { label: "Gri deschis", background: "#D6D6D6", text: "#333333" },
-  purple: { label: "Mov", background: "#7B1F6C", text: "#FFFFFF" },
-  orange: { label: "Portocaliu", background: "#D9845A", text: "#FFFFFF" },
-  red: { label: "Roșu", background: "#F03B3B", text: "#FFFFFF" },
+  dark: { label: "Dark grey", background: "#3B3B3B", text: "#FFFFFF" },
+  grey: { label: "Grey", background: "#A3A3A3", text: "#FFFFFF" },
+  light: { label: "Light grey", background: "#D6D6D6", text: "#333333" },
+  purple: { label: "Purple", background: "#7B1F6C", text: "#FFFFFF" },
+  orange: { label: "Orange", background: "#D9845A", text: "#FFFFFF" },
+  red: { label: "Red", background: "#F03B3B", text: "#FFFFFF" },
 } as const;
 export type EventColor = keyof typeof eventColors;
 
-export const monthNames = ["IAN", "FEB", "MAR", "APR", "MAI", "IUN", "IUL", "AUG", "SEP", "OCT", "NOI", "DEC"] as const;
+export const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
 const dayMs = 86_400_000;
 const isoPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -103,7 +100,7 @@ export function layoutLane<T extends Pick<MarketingEvent, "start_date" | "end_da
   return { items, rows: Math.max(rowEnds.length, 1) };
 }
 
-// "(15 IAN – 30 MAR)", "(9–12 MAR)" within one month, "(21 MAR)", "(TBC)"
+// "(15 JAN – 30 MAR)", "(9–12 MAR)" within one month, "(21 MAR)", "(TBC)"
 export function formatRange(start: string, end: string, tbc: boolean) {
   if (tbc) return "(TBC)";
   const label = (iso: string) => { const [, month, day] = iso.split("-"); return `${Number(day)} ${monthNames[Number(month) - 1]}`; };

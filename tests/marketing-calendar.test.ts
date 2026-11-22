@@ -63,7 +63,7 @@ test("events crossing the new year are clipped to the year shown", () => {
 });
 
 test("dates printed on the board", () => {
-  assert.equal(formatRange("2027-01-15", "2027-03-30", false), "(15 IAN – 30 MAR)");
+  assert.equal(formatRange("2027-01-15", "2027-03-30", false), "(15 JAN – 30 MAR)");
   assert.equal(formatRange("2027-03-21", "2027-03-21", false), "(21 MAR)");
   assert.equal(formatRange("2027-03-09", "2027-03-12", false), "(9–12 MAR)");
   assert.equal(formatRange("2027-01-01", "2027-01-31", true), "(TBC)");
@@ -86,12 +86,15 @@ test("which year opens", () => {
 test("event fields are validated with plain messages", async () => {
   const { parseEvent, parseLane } = await import("../lib/marketing/validate.ts");
   const lane = "0d0e9a9c-0000-4000-8000-000000000001";
-  const ok = parseEvent({ title: "  Black   Friday ", laneId: lane, startDate: "2027-11-01", endDate: "2027-11-30", color: "red", showDates: false });
+  const ok = parseEvent({ title: "  Black   Friday ", laneId: lane, startDate: "2027-11-01", endDate: "2027-11-30", showDates: false });
   assert.ok(ok.ok);
-  if (ok.ok) assert.deepEqual([ok.value.title, ok.value.color, ok.value.showDates, ok.value.datesTbc], ["Black Friday", "red", false, false]);
-  const bad = parseEvent({ title: "", laneId: "x", startDate: "2027-11-30", endDate: "2027-11-01", color: "pink" });
+  if (ok.ok) assert.deepEqual([ok.value.title, ok.value.showDates, ok.value.datesTbc], ["Black Friday", false, false]);
+  const bad = parseEvent({ title: "", laneId: "x", startDate: "2027-11-30", endDate: "2027-11-01" });
   assert.ok(!bad.ok);
-  if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["color", "endDate", "laneId", "title"]);
-  const band = parseLane({ name: "Linie de produs", kind: "band", showImages: true });
-  assert.ok(band.ok && band.value.kind === "band" && band.value.showImages === false);
+  if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["endDate", "laneId", "title"]);
+  // A category carries the colour its events are drawn in.
+  const category = parseLane({ name: "Commercial events", color: "purple", showImages: true });
+  assert.ok(category.ok && category.value.color === "purple" && category.value.showImages);
+  const noColour = parseLane({ name: "Extras", color: "pink" });
+  assert.ok(!noColour.ok && "color" in noColour.errors);
 });

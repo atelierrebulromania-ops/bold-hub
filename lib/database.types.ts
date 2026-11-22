@@ -1255,8 +1255,15 @@ export type Database = {
           },
         ]
       }
+      marketing_share_links: {
+        Row: { created_at: string; created_by: string | null; id: string; token: string }
+        Insert: { created_at?: string; created_by?: string | null; id?: string; token: string }
+        Update: { created_at?: string; created_by?: string | null; id?: string; token?: string }
+        Relationships: []
+      }
       marketing_lanes: {
         Row: {
+          color: string
           created_at: string
           id: string
           kind: string
@@ -1267,6 +1274,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          color?: string
           created_at?: string
           id?: string
           kind?: string
@@ -1277,6 +1285,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          color?: string
           created_at?: string
           id?: string
           kind?: string
