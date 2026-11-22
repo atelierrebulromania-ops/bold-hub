@@ -18,27 +18,29 @@ import { createShareLink, deleteEvent, deleteLane, disableShareLink, discardUplo
 // right away (the board reloads from the server).
 
 const bucket = "marketing-calendar-images";
-const imageUrl = (path: string) => `/marketing/image?path=${encodeURIComponent(path)}`;
+const imageBase = "/marketing/image?path=";
+const imageUrl = (path: string) => imageBase + encodeURIComponent(path);
 // Row heights (px): plain categories and the one with campaign pictures.
 const rowHeight = { events: 52, images: 214 } as const;
 
 type Dialog = { kind: "event"; event: MarketingEvent | null; laneId: string } | { kind: "lanes" } | { kind: "share" } | null;
 
-// The year switcher: previous / next year (links, so the address keeps the year).
-export function YearNav({ year, href }: { year: number; href: (year: number) => string }) {
+// The year switcher: previous / next year (links, so the address keeps the year). `base` ends in "year=".
+export function YearNav({ year, base }: { year: number; base: string }) {
   return (
     <nav className="mk-years" aria-label="Calendar year">
-      <Link href={href(year - 1)} aria-label={`Year ${year - 1}`}>‹</Link>
+      <Link href={`${base}${year - 1}`} aria-label={`Year ${year - 1}`}>‹</Link>
       <strong>{year}</strong>
-      <Link href={href(year + 1)} aria-label={`Year ${year + 1}`}>›</Link>
+      <Link href={`${base}${year + 1}`} aria-label={`Year ${year + 1}`}>›</Link>
     </nav>
   );
 }
 
 // The board itself. Without onOpen it is read-only (the shared page): blocks only show their details on hover.
-export function CalendarSheet({ year, today, lanes, events, image, onOpen }: {
+// Pictures load from `imageBase` + the picture's path.
+export function CalendarSheet({ year, today, lanes, events, imageBase, onOpen }: {
   year: number; today: string; lanes: MarketingLane[]; events: MarketingEvent[];
-  image: (path: string) => string; onOpen?: (event: MarketingEvent, laneId: string) => void;
+  imageBase: string; onOpen?: (event: MarketingEvent, laneId: string) => void;
 }) {
   const months = monthStarts(year);
   const now = todayOffset(year, new Date(`${today}T12:00:00Z`));
@@ -85,8 +87,10 @@ export function CalendarSheet({ year, today, lanes, events, image, onOpen }: {
                     {lane.show_images && (
                       <span className="mk-event-image">
                         {event.image_path
-                          ? <img src={image(event.image_path)} alt="" loading="lazy" />
-                          : <span className="mk-placeholder" aria-label="No picture"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m21 17-5-5-9 8" /></svg>Campaign picture</span>}
+                          ? <img src={imageBase + encodeURIComponent(event.image_path)} alt="" loading="lazy" />
+                          // Editors see where a picture is missing; the shared preview shows a plain box.
+                          : onOpen ? <span className="mk-placeholder" aria-label="No picture"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m21 17-5-5-9 8" /></svg>Campaign picture</span>
+                            : <span className="mk-placeholder is-blank" />}
                       </span>
                     )}
                   </>;
@@ -113,7 +117,7 @@ export function CalendarBoard({ year, today, lanes, events, shareToken }: {
   return (
     <div className="mk-page">
       <div className="mk-toolbar">
-        <YearNav year={year} href={option => `/marketing?year=${option}`} />
+        <YearNav year={year} base="/marketing?year=" />
         <div className="mk-actions">
           <button type="button" className="button button-primary" disabled={!firstLane}
             onClick={() => firstLane && setDialog({ kind: "event", event: null, laneId: firstLane.id })}>+ Event</button>
@@ -123,7 +127,7 @@ export function CalendarBoard({ year, today, lanes, events, shareToken }: {
         </div>
       </div>
 
-      <CalendarSheet year={year} today={today} lanes={lanes} events={events} image={imageUrl}
+      <CalendarSheet year={year} today={today} lanes={lanes} events={events} imageBase={imageBase}
         onOpen={(event, laneId) => setDialog({ kind: "event", event, laneId })} />
 
       {dialog?.kind === "event" && <EventDialog event={dialog.event} laneId={dialog.laneId} lanes={lanes} year={year} today={today} onClose={() => setDialog(null)} />}

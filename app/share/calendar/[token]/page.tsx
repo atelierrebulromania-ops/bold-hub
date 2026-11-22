@@ -24,11 +24,11 @@ export default async function SharedCalendarPage({ params, searchParams }: {
   return (
     <main className="mk-share-page mk-page">
       <div className="mk-toolbar">
-        <YearNav year={year} href={option => `${base}?year=${option}`} />
+        <YearNav year={year} base={`${base}?year=`} />
         <span className="mk-share-badge">Preview · read-only</span>
       </div>
       {calendar
-        ? <CalendarSheet year={year} today={today} lanes={calendar.lanes} events={calendar.events} image={path => `${base}/image?path=${encodeURIComponent(path)}`} />
+        ? <CalendarSheet year={year} today={today} lanes={calendar.lanes} events={calendar.events} imageBase={`${base}/image?path=`} />
         : <p className="mk-share-missing">The calendar could not be loaded. Reload the page.</p>}
     </main>
   );

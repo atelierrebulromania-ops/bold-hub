@@ -1678,6 +1678,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .mk-event-image { position: relative; flex: 1; overflow: hidden; border-radius: 0 0 3px 3px; background: #f0f0f0; }
 .mk-event-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mk-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; border: 1px dashed #b8b8b8; border-top: 0; border-radius: 0 0 3px 3px; color: #8a8d91; font-size: .6rem; font-weight: 700; }
+.mk-placeholder.is-blank { border-style: solid; border-color: #e4e4e4; }
 .mk-placeholder svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .mk-empty { padding: 22px; color: var(--muted); font-size: .85rem; text-align: center; }
 .mk-dialog-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 20px; }
@@ -1710,6 +1711,14 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .mk-share-page { min-height: 100dvh; padding: 22px 24px 40px; background: var(--canvas, #f0f2f5); }
 .mk-share-badge { padding: .35rem .7rem; border-radius: 999px; background: #fff; border: 1px solid var(--line); color: var(--muted); font-size: .74rem; font-weight: 700; }
 .mk-share-missing { max-width: 520px; margin: 18vh auto 0; padding: 22px; border-radius: 11px; background: #fff; text-align: center; font-size: .95rem; }
+@media (max-width: 700px) {
+  .mk-sheet { min-width: 1000px; }
+  .mk-row { grid-template-columns: 120px minmax(0, 1fr); }
+  .mk-label strong { font-size: .72rem; overflow-wrap: anywhere; }
+  .mk-label small { font-size: .58rem; }
+  .mk-title { padding-left: 20px; font-size: 1.1rem; text-align: left; }
+  .mk-share-page { padding: 14px 12px 30px; }
+}
 .mk-lane-row.is-new { border-style: dashed; }
 .mk-new-label { align-self: center; font-size: .72rem; }
 .mk-order { display: grid; gap: 2px; }
