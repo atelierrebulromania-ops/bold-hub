@@ -38,8 +38,9 @@ export function YearNav({ year, base }: { year: number; base: string }) {
 
 // The board itself. Without onOpen it is read-only (the shared page): blocks only show their details on hover.
 // Pictures load from `imageBase` + the picture's path.
-export function CalendarSheet({ year, today, lanes, events, imageBase, onOpen }: {
-  year: number; today: string; lanes: MarketingLane[]; events: MarketingEvent[];
+// Each category keeps at least `laneRows` sub-rows (its fullest year), so the board does not grow while filled in.
+export function CalendarSheet({ year, today, lanes, events, laneRows, imageBase, onOpen }: {
+  year: number; today: string; lanes: MarketingLane[]; events: MarketingEvent[]; laneRows: Record<string, number>;
   imageBase: string; onOpen?: (event: MarketingEvent, laneId: string) => void;
 }) {
   const months = monthStarts(year);
@@ -60,7 +61,9 @@ export function CalendarSheet({ year, today, lanes, events, imageBase, onOpen }:
 
         {lanes.length === 0 && <p className="mk-empty">{onOpen ? "The calendar has no category yet. Press “Categories” to add the first row (for example “Main communication”)." : "The calendar is empty."}</p>}
         {lanes.map(lane => {
-          const { items, rows } = layoutLane(events.filter(event => event.lane_id === lane.id), year, 30);
+          const layout = layoutLane(events.filter(event => event.lane_id === lane.id), year, 30);
+          const { items } = layout;
+          const rows = Math.max(layout.rows, laneRows[lane.id] ?? 1);
           const height = lane.show_images ? rowHeight.images : rowHeight.events;
           const color = eventColors[lane.color] ?? eventColors.dark;
           return (
@@ -108,8 +111,8 @@ export function CalendarSheet({ year, today, lanes, events, imageBase, onOpen }:
   );
 }
 
-export function CalendarBoard({ year, today, lanes, events, shareToken }: {
-  year: number; today: string; lanes: MarketingLane[]; events: MarketingEvent[]; shareToken: string | null;
+export function CalendarBoard({ year, today, lanes, events, laneRows, shareToken }: {
+  year: number; today: string; lanes: MarketingLane[]; events: MarketingEvent[]; laneRows: Record<string, number>; shareToken: string | null;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const firstLane = lanes[0];
@@ -127,7 +130,7 @@ export function CalendarBoard({ year, today, lanes, events, shareToken }: {
         </div>
       </div>
 
-      <CalendarSheet year={year} today={today} lanes={lanes} events={events} imageBase={imageBase}
+      <CalendarSheet year={year} today={today} lanes={lanes} events={events} laneRows={laneRows} imageBase={imageBase}
         onOpen={(event, laneId) => setDialog({ kind: "event", event, laneId })} />
 
       {dialog?.kind === "event" && <EventDialog event={dialog.event} laneId={dialog.laneId} lanes={lanes} year={year} today={today} onClose={() => setDialog(null)} />}
