@@ -20,12 +20,15 @@ type Tab = "new" | "working" | "won" | "lost" | "unqualified" | "all";
 // Closed stages: the lead is out of the work list (unqualified and lost carry a reason).
 const closedStatuses = ["won", "lost", "unqualified"];
 // Quick reasons for an unqualified lead; the agent can edit the text or write their own.
+// The steps of an open lead; the qualification (Calificat / Necalificat) is decided on the second one.
+const flowSteps = [{ value: "to_contact", label: "De contactat" }, { value: "contacted", label: "Calificare" }, { value: "offer", label: "Ofertă trimisă" }];
 const unqualifiedReasons = ["Nu mai este interesat", "Nu răspunde la telefon", "Nu își amintește de formular", "Persoană fizică, nu firmă", "Date de contact greșite"];
 type Result = { ok: boolean; message: string };
 
 const stages: { value: string; label: string; tone: string }[] = [
   { value: "new", label: "Nou", tone: "new" },
   { value: "to_contact", label: "De contactat", tone: "soon" },
+  { value: "contacted", label: "Calificare", tone: "open" },
   { value: "qualified", label: "Calificat", tone: "qualified" },
   { value: "unqualified", label: "Necalificat", tone: "open" },
   { value: "offer", label: "Ofertă trimisă", tone: "offer" },
@@ -223,13 +226,15 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
           {!lead.claimed_by ? <button type="button" className="button button-primary" disabled={pending} onClick={() => run(() => claimLead(lead.id))}>Preia lead-ul</button>
             : !holder ? <p className="muted">Lead-ul e preluat de {names[lead.claimed_by] ?? "alt agent"}. Doar el îl poate muta între etape.</p>
             : <>
-              <ol className="crm-stepper">{stages.filter((item) => ["to_contact", "qualified", "offer"].includes(item.value)).map((item, index, list) => {
-                const current = list.findIndex((step) => step.value === lead.status);
-                const state = index < current ? "done" : index === current ? "current" : "next";
+              <ol className="crm-stepper">{flowSteps.map((item, index) => {
+                // Calificare is one step: in progress while contacted, done once qualified (then the offer can be sent).
+                const position = lead.status === "to_contact" ? 0 : lead.status === "offer" ? 2 : 1;
+                const state = index < position || (index === 1 && lead.status === "qualified") ? "done" : index === position ? "current" : "next";
+                const locked = item.value === "offer" && lead.status !== "qualified";
                 return <li key={item.value} className={state}>
-                  <button type="button" disabled={pending || state === "current"} onClick={() => run(() => setLeadStatus(lead.id, item.value, ""))}
-                    aria-current={state === "current" ? "step" : undefined}>
-                    <span className="crm-step-dot" aria-hidden="true">{state === "done" ? "✓" : index + 1}</span>{item.label}</button>
+                  <button type="button" disabled={pending || state === "current" || locked} onClick={() => run(() => setLeadStatus(lead.id, item.value, ""))}
+                    aria-current={state === "current" ? "step" : undefined} title={locked ? "Mai întâi marchează lead-ul calificat" : undefined}>
+                    <span className="crm-step-dot" aria-hidden="true">{state === "done" ? "✓" : index + 1}</span>{index === 1 && lead.status === "qualified" ? "Calificat" : item.label}</button>
                 </li>;
               })}</ol>
               {lead.status === "offer" && (() => {
@@ -243,7 +248,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
             </>}
         </section>}
 
-        {canWork && holder && lead.status === "to_contact" && <section className="detail-section"><h3>Calificare</h3>
+        {canWork && holder && lead.status === "contacted" && <section className="detail-section"><h3>Calificare</h3>
           {closing !== "unqualified" ? <>
             <p className="muted small crm-hint">După primul telefon: e un client potrivit, cu care merită să continui spre ofertă?</p>
             <div className="crm-result">
@@ -262,7 +267,7 @@ function LeadPanel({ lead, names, currentUserId, canWork, pending, feedback, run
         </section>}
         {(lead.status === "lost" || lead.status === "unqualified") && <section className="detail-section"><h3>{stage.label}</h3><p>{lead.lost_reason ?? "Fără motiv."}</p>
           {canWork && (holder || !lead.claimed_by) && <button type="button" className="text-button" disabled={pending}
-            onClick={() => run(() => setLeadStatus(lead.id, lead.status === "lost" ? "qualified" : "to_contact", ""))}>Redeschide</button>}</section>}
+            onClick={() => run(() => setLeadStatus(lead.id, lead.status === "lost" ? "qualified" : "contacted", ""))}>Redeschide</button>}</section>}
 
         {feedback && <p className={`action-feedback ${feedback.ok ? "success" : "error"}`} role="status" aria-live="polite">{feedback.message}</p>}
 
