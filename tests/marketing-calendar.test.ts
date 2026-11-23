@@ -81,6 +81,9 @@ test("which year opens", () => {
   assert.equal(pickYear(undefined, 2026, [2027, 2028]), 2027);
   assert.equal(pickYear(undefined, 2026, []), 2026);
   assert.equal(pickYear("abc", 2026, [2027]), 2027);
+  // Never before 2026.
+  assert.equal(pickYear("2025", 2026, [2026]), 2026);
+  assert.equal(pickYear("1999", 2026, []), 2026);
 });
 
 test("event fields are validated with plain messages", async () => {

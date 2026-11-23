@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarSheet, YearNav } from "@/app/marketing/board";
+import { CalendarSheet, PrintButton, YearNav } from "@/app/marketing/board";
 import { pickYear } from "@/lib/marketing/calendar";
 import { loadCalendar, sharedCalendarClient, yearsWithEvents } from "@/lib/marketing/server";
 
@@ -25,7 +25,10 @@ export default async function SharedCalendarPage({ params, searchParams }: {
     <main className="mk-share-page mk-page">
       <div className="mk-toolbar">
         <YearNav year={year} base={`${base}?year=`} />
-        <span className="mk-share-badge">Preview · read-only</span>
+        <div className="mk-share-actions-bar">
+          <span className="mk-share-badge">Preview · read-only</span>
+          {calendar && <PrintButton />}
+        </div>
       </div>
       {calendar
         ? <CalendarSheet year={year} today={today} lanes={calendar.lanes} events={calendar.events} laneRows={laneRows} imageBase={`${base}/image?path=`} />

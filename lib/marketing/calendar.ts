@@ -118,9 +118,13 @@ export function todayOffset(year: number, today: Date) {
 
 // The year to open on: the one asked for; else this year if it has events; else the next year that has
 // some (a calendar is usually planned ahead); else this year.
+// The board does not go back before this year.
+export const FIRST_YEAR = 2026;
+
 export function pickYear(requested: string | undefined, currentYear: number, yearsWithEvents: number[]) {
   const asked = Number(requested);
-  if (Number.isInteger(asked) && asked >= 2000 && asked <= 2100) return asked;
-  if (yearsWithEvents.includes(currentYear)) return currentYear;
-  return yearsWithEvents.filter(year => year > currentYear).sort((a, b) => a - b)[0] ?? currentYear;
+  if (Number.isInteger(asked) && asked <= 2100 && requested) return Math.max(asked, FIRST_YEAR);
+  const now = Math.max(currentYear, FIRST_YEAR);
+  if (yearsWithEvents.includes(now)) return now;
+  return yearsWithEvents.filter(year => year > now).sort((a, b) => a - b)[0] ?? now;
 }
