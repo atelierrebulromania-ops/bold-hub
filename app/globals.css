@@ -1676,7 +1676,9 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .mk-event-card { background: transparent; }
 .mk-event-card .mk-event-text { flex: 0 0 auto; min-height: 58px; border-radius: 3px 3px 0 0; background: var(--mk-bg); }
 .mk-event-image { position: relative; flex: 1; overflow: hidden; border-radius: 0 0 3px 3px; background: #f0f0f0; }
-.mk-event-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Campaign pictures are 4:5 (portrait): as tall as the space allows, narrower blocks shrink them, centred under the title. */
+.mk-event-image:has(img) { container-type: size; display: grid; justify-items: center; align-items: start; background: transparent; }
+.mk-event-image img { display: block; width: min(100cqw, 80cqh); height: auto; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 0 0 3px 3px; }
 .mk-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; border: 1px dashed #b8b8b8; border-top: 0; border-radius: 0 0 3px 3px; color: #8a8d91; font-size: .6rem; font-weight: 700; }
 .mk-placeholder.is-blank { border-style: solid; border-color: #e4e4e4; }
 .mk-placeholder svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; }
