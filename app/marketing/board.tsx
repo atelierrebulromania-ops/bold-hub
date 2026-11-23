@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type CSSProperties, type FormEvent } from "react";
 import {
-  dayNumber, eventColors, formatRange, isoDate, layoutLane, monthStarts, todayOffset,
+  FIRST_YEAR, dayNumber, eventColors, formatRange, isoDate, layoutLane, monthStarts, todayOffset,
   type EventColor, type MarketingEvent, type MarketingLane,
 } from "@/lib/marketing/calendar";
 import type { FieldErrors } from "@/lib/marketing/validate";
@@ -29,11 +29,18 @@ type Dialog = { kind: "event"; event: MarketingEvent | null; laneId: string } | 
 export function YearNav({ year, base }: { year: number; base: string }) {
   return (
     <nav className="mk-years" aria-label="Calendar year">
-      <Link href={`${base}${year - 1}`} aria-label={`Year ${year - 1}`}>‹</Link>
+      {year > FIRST_YEAR
+        ? <Link href={`${base}${year - 1}`} aria-label={`Year ${year - 1}`}>‹</Link>
+        : <span className="mk-years-off" aria-hidden="true">‹</span>}
       <strong>{year}</strong>
       <Link href={`${base}${year + 1}`} aria-label={`Year ${year + 1}`}>›</Link>
     </nav>
   );
+}
+
+// Prints the board (the print styles keep only the calendar, landscape) — "Save as PDF" in the print dialog.
+export function PrintButton() {
+  return <button type="button" className="button button-outline" onClick={() => window.print()}>Print / PDF</button>;
 }
 
 // The board itself. Without onOpen it is read-only (the shared page): blocks only show their details on hover.
@@ -126,7 +133,7 @@ export function CalendarBoard({ year, today, lanes, events, laneRows, shareToken
             onClick={() => firstLane && setDialog({ kind: "event", event: null, laneId: firstLane.id })}>+ Event</button>
           <button type="button" className="button button-outline" onClick={() => setDialog({ kind: "lanes" })}>Categories</button>
           <button type="button" className="button button-outline" onClick={() => setDialog({ kind: "share" })}>Share</button>
-          <button type="button" className="button button-outline" onClick={() => window.print()}>Print / PDF</button>
+          <PrintButton />
         </div>
       </div>
 

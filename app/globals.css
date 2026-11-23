@@ -1646,6 +1646,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .mk-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
 .mk-years { display: flex; align-items: center; gap: 8px; }
 .mk-years a { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 1.1rem; text-decoration: none; }
+.mk-years-off { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; color: #c8ccd1; font-size: 1.1rem; }
 .mk-years strong { min-width: 56px; font-size: 1.5rem; font-weight: 800; text-align: center; letter-spacing: -.03em; }
 .mk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .mk-board { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: #fff; box-shadow: 0 1px 2px #1c1e2108; }
@@ -1711,6 +1712,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .mk-share-actions { display: flex; flex-wrap: wrap; gap: 16px; }
 /* The shared calendar: the board alone, full width, on a light page. */
 .mk-share-page { min-height: 100dvh; padding: 22px 24px 40px; background: var(--canvas, #f0f2f5); }
+.mk-share-actions-bar { display: flex; align-items: center; gap: 10px; }
 .mk-share-badge { padding: .35rem .7rem; border-radius: 999px; background: #fff; border: 1px solid var(--line); color: var(--muted); font-size: .74rem; font-weight: 700; }
 .mk-share-missing { max-width: 520px; margin: 18vh auto 0; padding: 22px; border-radius: 11px; background: #fff; text-align: center; font-size: .95rem; }
 @media (max-width: 700px) {
@@ -1737,6 +1739,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
   body:has(.mk-page) .app-sidebar, body:has(.mk-page) .topbar, body:has(.mk-page) .notification-rail,
   body:has(.mk-page) .mk-toolbar, body:has(.mk-page) .mk-today { display: none !important; }
   body:has(.mk-page) .app-shell, body:has(.mk-page) .app-main, body:has(.mk-page) .page-content { display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .mk-share-page { min-height: 0; padding: 0 !important; background: #fff !important; }
   .mk-page { page: mk-landscape; }
   .mk-board { overflow: visible; border: 0; box-shadow: none; }
   .mk-sheet { min-width: 0; width: 100%; padding: 0; zoom: .78; }
