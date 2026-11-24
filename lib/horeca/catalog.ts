@@ -89,17 +89,23 @@ const currencySymbols: Record<string, { symbol: string; before: boolean }> = {
   CHF: { symbol: " CHF", before: false },
 };
 
-// As in the reference catalog: "6.59€" (two decimals, dot separator).
+// As in the reference catalog: "6.59€" (two decimals, dot separator). A discounted price that needs a
+// third decimal (see discountedPrice) keeps it: "0.086€".
 export function formatPrice(price: number, currency: string) {
-  const amount = price.toFixed(2);
+  const amount = Math.round(price * 1000) % 10 === 0 ? price.toFixed(2) : price.toFixed(3);
   const sign = currencySymbols[currency] ?? { symbol: ` ${currency}`, before: false };
   return sign.before ? `${sign.symbol}${amount}` : `${amount}${sign.symbol}`;
 }
 
-// The price after the catalog's discount, rounded to cents (computed on cents to avoid float drift).
+// The price after the discount, rounded to cents (computed on cents to avoid float drift). On very small
+// prices rounding to cents can swallow the discount (0.09 at 5% = 0.0855, back to 0.09): then it is
+// rounded to a tenth of a cent instead (0.086), so the reduction stays visible.
 export function discountedPrice(price: number, percent: number) {
   if (!(percent > 0)) return price;
-  return Math.round(Math.round(price * 100) * (100 - percent) / 100) / 100;
+  const cents = Math.round(price * 100);
+  const rounded = Math.round(cents * (100 - percent) / 100);
+  if (rounded < cents) return rounded / 100;
+  return Math.round(cents * 10 * (100 - percent) / 100) / 1000;
 }
 
 // The discount shown for a product: its own percent if it has one (0 = none), otherwise the catalog's.
