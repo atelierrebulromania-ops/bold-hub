@@ -1601,6 +1601,7 @@ html.on-windows body, html.on-windows button, html.on-windows input, html.on-win
 .hc-thumb img, .hc-photo-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .hc-product-main { display: grid; gap: 3px; min-width: 0; }
 .hc-product-main strong { font-size: .84rem; overflow-wrap: anywhere; }
+.hc-product-main .outcome-chip { justify-self: start; }
 .hc-product-main > span:not(.outcome-chip) { color: var(--muted); font-size: .76rem; }
 .hc-product-main .outcome-chip { justify-self: start; }
 .hc-product-main s { color: #8a8d91; }

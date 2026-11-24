@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
-  catalogCurrencies, catalogLanguages, defaultCatalogTexts, discountedPrice, formatPercent, formatPrice, formatSize, sizeUnits,
+  catalogCurrencies, catalogLanguages, defaultCatalogTexts, discountedPrice, formatPercent, formatPrice, formatSize, productDiscount, sizeUnits,
   type CatalogCollection, type CatalogData, type CatalogLanguage, type CatalogProduct, type SizeUnit,
 } from "@/lib/horeca/catalog";
 import { noUnit, type FieldErrors } from "@/lib/horeca/validate";
@@ -31,6 +31,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
   const [currency, setCurrency] = useState(initial.currency);
   const [title, setTitle] = useState(initial.title);
   const [discount, setDiscount] = useState(initial.discount_percent);
+  const ownDiscounts = products.filter(product => product.discount_percent !== null).length;
   const [language, setLanguage] = useState<CatalogLanguage>(initial.language);
   const [tab, setTab] = useState<Tab>("products");
   const [status, setStatus] = useState<Status>({ kind: "saved" });
@@ -151,6 +152,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
           </div>
           <SaveBadge status={status} />
           {discount > 0 && <span className="outcome-chip remarks">Discount activ: {formatPercent(discount)} pe tot catalogul</span>}
+          {ownDiscounts > 0 && <span className="outcome-chip remarks">{ownDiscounts === 1 ? "1 produs" : `${ownDiscounts} produse`} cu discount propriu</span>}
         </div>
         <div className="hc-editor-actions">
           <Link className="button button-outline" href={`/catalogs/${catalogId}/preview`}>Previzualizare</Link>
@@ -190,7 +192,7 @@ export function CatalogEditor({ initial }: { initial: CatalogData }) {
       </div>
 
       {dialog && <ProductDialog catalogId={catalogId} product={dialog.product} collectionId={dialog.collectionId} collections={sortedCollections}
-        currency={currency} save={save} onDirty={setDialogDirty} onSaved={productSaved}
+        currency={currency} catalogDiscount={discount} save={save} onDirty={setDialogDirty} onSaved={productSaved}
         onClose={() => { setDialog(null); setDialogDirty(false); }} />}
     </div>
   );
@@ -254,7 +256,7 @@ function InfoForm({ initial, save, onDirty, onSaved }: { initial: CatalogData; s
       <fieldset>
         <legend>Discount</legend>
         <label>Discount pe tot catalogul (%)<input {...field("discountPercent")} inputMode="decimal" placeholder="0" />
-          <small>0 = fără discount. În PDF, la fiecare produs, prețul de listă apare tăiat și lângă el prețul cu discount. Prețurile salvate ale produselor nu se schimbă.</small>
+          <small>0 = fără discount. În PDF, la fiecare produs, prețul de listă apare tăiat și lângă el prețul cu discount. Un produs cu discount propriu (din fereastra produsului) îl folosește pe al lui. Prețurile salvate nu se schimbă.</small>
           <FieldError errors={errors} name="discountPercent" /></label>
       </fieldset>
       <fieldset>
@@ -375,9 +377,11 @@ function CollectionCard(props: {
                 <span className="hc-thumb">{product.image_path ? <img src={imageUrl(product.image_path)} alt="" loading="lazy" /> : <span>Fără foto</span>}</span>
                 <span className="hc-product-main">
                   <strong>{product.name}</strong>
-                  <span>{props.discount > 0
-                    ? <><s>{formatPrice(product.price, product.currency ?? props.currency)}</s> <b className="hc-discounted">{formatPrice(discountedPrice(product.price, props.discount), product.currency ?? props.currency)}</b></>
+                  <span>{productDiscount(product, props.discount) > 0
+                    ? <><s>{formatPrice(product.price, product.currency ?? props.currency)}</s> <b className="hc-discounted">{formatPrice(discountedPrice(product.price, productDiscount(product, props.discount)), product.currency ?? props.currency)}</b></>
                     : formatPrice(product.price, product.currency ?? props.currency)}{formatSize(product.size_value, product.size_unit, props.language) ? ` · ${formatSize(product.size_value, product.size_unit, props.language)}` : ""}{product.sku ? ` · ${product.sku}` : ""}</span>
+                  {product.discount_percent !== null && <span className="outcome-chip remarks hc-own-discount" title="Discount propriu, în locul celui de pe tot catalogul">
+                    {product.discount_percent > 0 ? `−${formatPercent(product.discount_percent)} pe produs` : "Fără discount pe produs"}</span>}
                   {!product.active && <span className="outcome-chip inactive">Ascuns în PDF</span>}
                 </span>
                 <span className="hc-product-actions">
@@ -398,7 +402,7 @@ function CollectionCard(props: {
 
 // ---- Product window ---------------------------------------------------------------------------------------
 
-type ProductValues = { name: string; collectionId: string; price: string; currency: string; sizeValue: string; sizeUnit: string; sku: string; imagePath: string; active: boolean };
+type ProductValues = { name: string; collectionId: string; price: string; currency: string; sizeValue: string; sizeUnit: string; sku: string; imagePath: string; active: boolean; discountPercent: string };
 
 // Resizes a photo in the browser (longest side 1600 px) and stores it as JPEG on white, so any photo the
 // user picks lands in the bucket in the one format the template expects, at a sensible size.
@@ -417,8 +421,8 @@ async function preparePhoto(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("blob")), "image/jpeg", 0.9));
 }
 
-function ProductDialog({ catalogId, product, collectionId, collections, currency, save, onDirty, onSaved, onClose }: {
-  catalogId: string; product: CatalogProduct | null; collectionId: string; collections: CatalogCollection[]; currency: string; save: Save;
+function ProductDialog({ catalogId, product, collectionId, collections, currency, catalogDiscount, save, onDirty, onSaved, onClose }: {
+  catalogId: string; product: CatalogProduct | null; collectionId: string; collections: CatalogCollection[]; currency: string; catalogDiscount: number; save: Save;
   onDirty: (dirty: boolean) => void; onSaved: (product: CatalogProduct) => void; onClose: () => void;
 }) {
   const start: ProductValues = {
@@ -427,6 +431,7 @@ function ProductDialog({ catalogId, product, collectionId, collections, currency
     // A new product starts in ml; an existing one without a size shows "-".
     sizeUnit: product ? (product.size_unit ?? noUnit) : "ml",
     sku: product?.sku ?? "", imagePath: product?.image_path ?? "", active: product?.active ?? true,
+    discountPercent: product?.discount_percent === null || product?.discount_percent === undefined ? "" : String(product.discount_percent),
   };
   const [values, setValues] = useState(start);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -513,6 +518,9 @@ function ProductDialog({ catalogId, product, collectionId, collections, currency
                 <option value={noUnit}>- (fără, nu apare în PDF)</option>
               </select><FieldError errors={errors} name="sizeUnit" /></label>
             <label>Cod produs (SKU)<input {...text("sku")} maxLength={40} placeholder="ex. AT03126" /><FieldError errors={errors} name="sku" /></label>
+            <label>Discount pe produs (%)<input {...text("discountPercent")} inputMode="decimal" placeholder={catalogDiscount > 0 ? `gol = ${formatPercent(catalogDiscount)} (catalog)` : "gol = fără discount"} />
+              <small>Gol: ia discountul catalogului. Un procent aici are prioritate; 0 = fără discount la acest produs.</small>
+              <FieldError errors={errors} name="discountPercent" /></label>
             <label className="hc-check"><input type="checkbox" checked={values.active} onChange={event => set("active", event.target.checked)} />Apare în PDF</label>
           </div>
         </div>

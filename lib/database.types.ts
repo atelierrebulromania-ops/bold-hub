@@ -1196,6 +1196,7 @@ export type Database = {
           collection_id: string
           created_at: string
           currency: string | null
+          discount_percent: number | null
           id: string
           image_path: string | null
           name: string
@@ -1212,6 +1213,7 @@ export type Database = {
           collection_id: string
           created_at?: string
           currency?: string | null
+          discount_percent?: number | null
           id?: string
           image_path?: string | null
           name: string
@@ -1228,6 +1230,7 @@ export type Database = {
           collection_id?: string
           created_at?: string
           currency?: string | null
+          discount_percent?: number | null
           id?: string
           image_path?: string | null
           name?: string

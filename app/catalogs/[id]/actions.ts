@@ -26,11 +26,12 @@ function touched(catalogId: string) {
   revalidatePath(`/catalogs/${catalogId}`);
 }
 
-const productColumns = "id,collection_id,name,price,currency,size_value,size_unit,sku,image_path,position,active";
+const productColumns = "id,collection_id,name,price,currency,size_value,size_unit,sku,image_path,position,active,discount_percent";
 type ProductRow = { id: string; collection_id: string; name: string; price: number; currency: string | null; size_value: number | null;
-  size_unit: string | null; sku: string | null; image_path: string | null; position: number; active: boolean };
+  size_unit: string | null; sku: string | null; image_path: string | null; position: number; active: boolean; discount_percent: number | null };
 const toProduct = (row: ProductRow): CatalogProduct => ({
   ...row, price: Number(row.price), size_value: row.size_value === null ? null : Number(row.size_value), size_unit: row.size_unit as SizeUnit | null,
+  discount_percent: row.discount_percent === null ? null : Number(row.discount_percent),
 });
 
 // ---- Catalog info and commercial terms --------------------------------------------------------------
@@ -145,6 +146,7 @@ export async function saveProduct(catalogId: string, productId: string | null, i
   const fields = {
     collection_id: value.collectionId, name: value.name, price: value.price, currency: value.currency,
     size_value: value.sizeValue, size_unit: value.sizeUnit, sku: value.sku, image_path: value.imagePath, active: value.active,
+    discount_percent: value.discountPercent,
   };
   const position = current && current.collection_id === value.collectionId ? current.position : await nextPosition(supabase, value.collectionId);
   const { data, error } = productId

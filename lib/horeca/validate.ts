@@ -21,6 +21,7 @@ export function parseAmount(value: unknown): number | null {
 export type ProductInput = {
   name: string; collectionId: string; price: number; currency: string | null;
   sizeValue: number | null; sizeUnit: SizeUnit | null; sku: string | null; imagePath: string | null; active: boolean;
+  discountPercent: number | null;
 };
 
 export function parseProduct(input: Record<string, unknown>): Parsed<ProductInput> {
@@ -54,9 +55,13 @@ export function parseProduct(input: Record<string, unknown>): Parsed<ProductInpu
   const sku = text(input.sku) || null;
   if (sku && sku.length > 40) errors.sku = "Codul poate avea cel mult 40 de caractere.";
   const imagePath = text(input.imagePath) || null;
+  // Empty = the catalog's discount; otherwise the product's own percent, 0 to 99.99 (0 = no discount for it).
+  const discountText = text(input.discountPercent).replace(/%$/, "").trim();
+  const discountPercent = discountText ? parseAmount(discountText) : null;
+  if (discountText && (discountPercent === null || discountPercent >= 100)) errors.discountPercent = "Scrie discountul ca procent între 0 și 99, de exemplu 20, sau lasă gol.";
   return Object.keys(errors).length
     ? { ok: false, errors }
-    : { ok: true, value: { name, collectionId, price: price as number, currency, sizeValue, sizeUnit, sku, imagePath, active: input.active !== false } };
+    : { ok: true, value: { name, collectionId, price: price as number, currency, sizeValue, sizeUnit, sku, imagePath, active: input.active !== false, discountPercent } };
 }
 
 export type CatalogInfoInput = {

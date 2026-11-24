@@ -28,6 +28,8 @@ export type CatalogProduct = {
   image_path: string | null;
   position: number;
   active: boolean;
+  // The product's own discount in percent; null = it takes the catalog's discount.
+  discount_percent: number | null;
 };
 
 export type CatalogCollection = {
@@ -98,6 +100,11 @@ export function formatPrice(price: number, currency: string) {
 export function discountedPrice(price: number, percent: number) {
   if (!(percent > 0)) return price;
   return Math.round(Math.round(price * 100) * (100 - percent) / 100) / 100;
+}
+
+// The discount shown for a product: its own percent if it has one (0 = none), otherwise the catalog's.
+export function productDiscount(product: Pick<CatalogProduct, "discount_percent">, catalogPercent: number) {
+  return product.discount_percent ?? catalogPercent;
 }
 
 // "10%", "12.5%"
