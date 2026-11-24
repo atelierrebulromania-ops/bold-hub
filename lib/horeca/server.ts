@@ -36,7 +36,7 @@ export async function loadCatalog(supabase: Client, id: string): Promise<Catalog
     supabase.from("horeca_catalogs").select("id,title,language,currency,cover_title,cover_subtitle,website,terms_vat,terms_currency,terms_payment,terms_delivery,terms_other,discount_percent")
       .eq("id", id).maybeSingle(),
     supabase.from("horeca_catalog_collections").select("id,label,name,position,active").eq("catalog_id", id).order("position"),
-    supabase.from("horeca_catalog_products").select("id,collection_id,name,price,currency,size_value,size_unit,sku,image_path,position,active")
+    supabase.from("horeca_catalog_products").select("id,collection_id,name,price,currency,size_value,size_unit,sku,image_path,position,active,discount_percent")
       .eq("catalog_id", id).order("position"),
   ]);
   if (!catalog.data || collections.error || products.error) return null;
@@ -48,6 +48,7 @@ export async function loadCatalog(supabase: Client, id: string): Promise<Catalog
     products: (products.data ?? []).map(product => ({
       ...product,
       price: Number(product.price),
+      discount_percent: product.discount_percent === null ? null : Number(product.discount_percent),
       size_value: product.size_value === null ? null : Number(product.size_value),
       size_unit: product.size_unit as SizeUnit | null,
     })),

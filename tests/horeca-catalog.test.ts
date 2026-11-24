@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cardsPerPage, discountedPrice, formatPercent, formatPrice, formatSize, pdfFileName, planCatalog, termsOf, type CatalogData, type CatalogProduct } from "../lib/horeca/catalog.ts";
+import { cardsPerPage, discountedPrice, formatPercent, formatPrice, formatSize, pdfFileName, planCatalog, productDiscount, termsOf, type CatalogData, type CatalogProduct } from "../lib/horeca/catalog.ts";
 
 function catalog(counts: number[], overrides: Partial<CatalogData> = {}): CatalogData {
   const collections = counts.map((_, index) => ({ id: `c${index}`, label: "COLECCIÓN SIGNATURE", name: `C${index}`, position: index, active: true }));
   const products: CatalogProduct[] = counts.flatMap((count, index) => Array.from({ length: count }, (_, n) => ({
     id: `p${index}-${n}`, collection_id: `c${index}`, name: `Produs ${n}`, price: 6.59, currency: null,
-    size_value: 550, size_unit: "ml" as const, sku: `AT${n}`, image_path: null, position: n, active: true,
+    size_value: 550, size_unit: "ml" as const, sku: `AT${n}`, image_path: null, position: n, active: true, discount_percent: null,
   })));
   return {
     id: "x", title: "T", language: "es", currency: "EUR", cover_title: "HO RE CA", cover_subtitle: "LISTA DE PRECIOS",
@@ -115,4 +115,23 @@ test("product fields are validated with plain messages", async () => {
   const bad = parseProduct({ name: "", collectionId: "x", price: "", sizeValue: "550", sizeUnit: "" });
   assert.ok(!bad.ok);
   if (!bad.ok) assert.deepEqual(Object.keys(bad.errors).sort(), ["collectionId", "name", "price", "sizeUnit"]);
+});
+
+test("product discount: its own percent wins over the catalog's; empty takes the catalog's", async () => {
+  assert.equal(productDiscount({ discount_percent: null }, 10), 10);
+  assert.equal(productDiscount({ discount_percent: 20 }, 10), 20);
+  assert.equal(productDiscount({ discount_percent: 0 }, 10), 0);
+  assert.equal(productDiscount({ discount_percent: 5 }, 0), 5);
+  const { parseProduct } = await import("../lib/horeca/validate.ts");
+  const base = { name: "Champú", collectionId: "0d0e9a9c-0000-4000-8000-000000000001", price: "6.59", sizeUnit: "-" };
+  const own = parseProduct({ ...base, discountPercent: "20%" });
+  assert.ok(own.ok && own.value.discountPercent === 20);
+  const empty = parseProduct({ ...base, discountPercent: " " });
+  assert.ok(empty.ok && empty.value.discountPercent === null);
+  const zero = parseProduct({ ...base, discountPercent: "0" });
+  assert.ok(zero.ok && zero.value.discountPercent === 0);
+  for (const bad of ["100", "-5", "zece"]) {
+    const result = parseProduct({ ...base, discountPercent: bad });
+    assert.ok(!result.ok && "discountPercent" in result.errors, bad);
+  }
 });

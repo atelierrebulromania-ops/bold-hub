@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ComponentProps } from "react";
 import { Document, Font, Image, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import {
-  discountedPrice, formatPrice, formatSize, planCatalog, sizeLabel, templateWording,
+  discountedPrice, formatPrice, productDiscount, formatSize, planCatalog, sizeLabel, templateWording,
   type CatalogCollection, type CatalogData, type CatalogProduct, type PlannedPage,
 } from "./catalog";
 
@@ -137,7 +137,7 @@ function Card({ ctx, product, left, top }: { ctx: Ctx; product: CatalogProduct; 
   const image = product.image_path ? ctx.images.get(product.image_path) : undefined;
   const size = formatSize(product.size_value, product.size_unit, ctx.catalog.language);
   const currency = product.currency ?? ctx.catalog.currency;
-  const discount = ctx.catalog.discount_percent;
+  const discount = productDiscount(product, ctx.catalog.discount_percent);
   return (
     <View style={{ ...s.card, left, top }} wrap={false}>
       <View style={s.cardImageBox}>
