@@ -84,6 +84,11 @@ test("catalog discount: rounded to cents, 0 leaves the price as it is", async ()
   assert.equal(discountedPrice(111.92, 12.5), 97.93);
   assert.equal(discountedPrice(1.07, 0), 1.07);
   assert.equal(formatPrice(discountedPrice(6.59, 10), "EUR"), "5.93€");
+  // A tiny price where cents would swallow the discount gets a third decimal.
+  assert.equal(discountedPrice(0.09, 5), 0.086);
+  assert.equal(formatPrice(discountedPrice(0.09, 5), "EUR"), "0.086€");
+  assert.equal(formatPrice(discountedPrice(0.09, 20), "EUR"), "0.07€");
+  assert.equal(formatPrice(0.1, "EUR"), "0.10€");
   assert.equal(formatPercent(10), "10%");
   assert.equal(formatPercent(12.5), "12.5%");
   const { parseCatalogInfo } = await import("../lib/horeca/validate.ts");
