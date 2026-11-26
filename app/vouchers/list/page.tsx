@@ -27,7 +27,7 @@ export default async function VouchersListPage() {
       </div>
       {error && <p className="preview-alert warning admin-feedback" role="alert">The vouchers could not be loaded. Reload the page.</p>}
       <section className="board-panel admin-card" aria-label="Vouchers">
-        <div className="handed-table-wrap"><table className="handed-table hc-list">
+        <div className="handed-table-wrap"><table className="handed-table hc-list dv-list">
           <thead><tr><th>Campaign</th><th>Brand</th><th>Discount code</th><th>Benefit</th><th>Start</th><th>Expiration</th><th>Status</th><th>Google Wallet</th><th>Apple Wallet</th><th>Views</th><th aria-label="Actions" /></tr></thead>
           <tbody>
             {vouchers.length === 0 && <tr><td colSpan={11} className="muted-cell">No vouchers yet. Create the first one with New voucher.</td></tr>}

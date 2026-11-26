@@ -214,8 +214,10 @@ export function VoucherForm({ voucher, assetBase, appleConfigured }: { voucher: 
       {color("backgroundColor", "Background colour")}
       {color("textColor", "Text colour")}
       {color("accentColor", "Accent colour")}
-      <label className="hc-check"><input type="checkbox" {...check("showDiscountValue")} />Display discount value</label>
-      <label className="hc-check"><input type="checkbox" {...check("showDiscountCode")} />Display discount code</label>
+      <div className="dv-checks dv-wide">
+        <label className="hc-check"><input type="checkbox" {...check("showDiscountValue")} />Display discount value</label>
+        <label className="hc-check"><input type="checkbox" {...check("showDiscountCode")} />Display discount code</label>
+      </div>
       <p className="dv-note dv-wide">Google Wallet uses the background colour, logo, hero image, title and fields. It chooses the text colour itself (white or black); the text and accent colours apply to the downloadable image and the landing page.</p>
     </fieldset>
   );
@@ -234,10 +236,12 @@ export function VoucherForm({ voucher, assetBase, appleConfigured }: { voucher: 
         <div><small>QR destination (with UTM)</small><code>{qr ?? "—"}</code>{qr && <CopyButton value={qr} label="Copy" />}</div>
         <div><small>Discount code</small><code>{values.discountCode || "—"}</code>{values.discountCode && <CopyButton value={values.discountCode} label="Copy" />}</div>
       </div>
+      <div className="dv-checks dv-wide">
       <label className="hc-check"><input type="checkbox" {...check("googleWalletEnabled")} />Enable Google Wallet</label>
       <label className="hc-check" title={appleConfigured ? undefined : "Apple Wallet is not configured yet."}><input type="checkbox" {...check("appleWalletEnabled")} disabled={!appleConfigured && !values.appleWalletEnabled} />Enable Apple Wallet {!appleConfigured && <em className="dv-muted">(not configured)</em>}</label>
       <label className="hc-check"><input type="checkbox" {...check("imageDownloadEnabled")} />Enable image download</label>
       <label className="hc-check" title="E-mail delivery will be configured later."><input type="checkbox" {...check("emailEnabled")} disabled={!values.emailEnabled} />Enable email delivery <em className="dv-muted">(later)</em></label>
+      </div>
     </fieldset>
   );
 

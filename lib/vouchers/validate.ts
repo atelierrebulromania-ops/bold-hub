@@ -35,9 +35,10 @@ function httpsUrl(value: unknown, field: string, errors: FieldErrors, label: str
   if (!raw) return null;
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:") throw new Error("protocol");
+    if (url.protocol !== "https:" || /\s/.test(raw)) throw new Error("protocol");
     if (raw.length > 500) { errors[field] = `${label} can have at most 500 characters.`; return null; }
-    return url.toString();
+    // Kept as typed (no trailing slash added), once it is known to be a valid https address.
+    return raw;
   } catch {
     errors[field] = `${label} must be a full https:// address.`;
     return null;
