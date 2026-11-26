@@ -1258,6 +1258,36 @@ export type Database = {
           },
         ]
       }
+      digital_vouchers: {
+        Row: { id: string; name: string; internal_name: string; brand: string; slug: string; discount_code: string; discount_type: string; discount_value: number; currency: string | null; short_description: string; long_description: string; starts_at: string; expires_at: string; timezone: string; language: string; terms: string; internal_notes: string; logo_path: string | null; hero_path: string | null; background_color: string; text_color: string; accent_color: string; title: string; subtitle: string; show_discount_value: boolean; show_discount_code: boolean; website_url: string | null; landing_url: string | null; discount_url: string | null; qr_url: string | null; utm_source: string; utm_medium: string; utm_campaign: string; extra_origins: string[]; google_wallet_enabled: boolean; apple_wallet_enabled: boolean; image_download_enabled: boolean; email_enabled: boolean; published: boolean; archived_at: string | null; created_at: string; created_by: string | null; updated_at: string; updated_by: string | null }
+        Insert: { id?: string; name: string; internal_name?: string; brand: string; slug: string; discount_code: string; discount_type?: string; discount_value: number; currency?: string | null; short_description?: string; long_description?: string; starts_at: string; expires_at: string; timezone?: string; language?: string; terms?: string; internal_notes?: string; logo_path?: string | null; hero_path?: string | null; background_color?: string; text_color?: string; accent_color?: string; title?: string; subtitle?: string; show_discount_value?: boolean; show_discount_code?: boolean; website_url?: string | null; landing_url?: string | null; discount_url?: string | null; qr_url?: string | null; utm_source?: string; utm_medium?: string; utm_campaign?: string; extra_origins?: string[]; google_wallet_enabled?: boolean; apple_wallet_enabled?: boolean; image_download_enabled?: boolean; email_enabled?: boolean; published?: boolean; archived_at?: string | null; created_at?: string; created_by?: string | null; updated_at?: string; updated_by?: string | null }
+        Update: { id?: string; name?: string; internal_name?: string; brand?: string; slug?: string; discount_code?: string; discount_type?: string; discount_value?: number; currency?: string | null; short_description?: string; long_description?: string; starts_at?: string; expires_at?: string; timezone?: string; language?: string; terms?: string; internal_notes?: string; logo_path?: string | null; hero_path?: string | null; background_color?: string; text_color?: string; accent_color?: string; title?: string; subtitle?: string; show_discount_value?: boolean; show_discount_code?: boolean; website_url?: string | null; landing_url?: string | null; discount_url?: string | null; qr_url?: string | null; utm_source?: string; utm_medium?: string; utm_campaign?: string; extra_origins?: string[]; google_wallet_enabled?: boolean; apple_wallet_enabled?: boolean; image_download_enabled?: boolean; email_enabled?: boolean; published?: boolean; archived_at?: string | null; created_at?: string; created_by?: string | null; updated_at?: string; updated_by?: string | null }
+        Relationships: []
+      }
+      digital_voucher_wallet_resources: {
+        Row: { id: string; voucher_id: string; platform: string; resource_type: string; external_id: string; sync_status: string; payload_hash: string | null; last_synced_at: string | null; last_error: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; voucher_id: string; platform: string; resource_type: string; external_id: string; sync_status?: string; payload_hash?: string | null; last_synced_at?: string | null; last_error?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; voucher_id?: string; platform?: string; resource_type?: string; external_id?: string; sync_status?: string; payload_hash?: string | null; last_synced_at?: string | null; last_error?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      digital_voucher_events: {
+        Row: { id: number; voucher_id: string; event_type: string; occurred_at: string; session_id: string | null; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; device_type: string; referrer_host: string | null }
+        Insert: { id?: number; voucher_id: string; event_type: string; occurred_at?: string; session_id?: string | null; utm_source?: string | null; utm_medium?: string | null; utm_campaign?: string | null; device_type?: string; referrer_host?: string | null }
+        Update: { id?: number; voucher_id?: string; event_type?: string; occurred_at?: string; session_id?: string | null; utm_source?: string | null; utm_medium?: string | null; utm_campaign?: string | null; device_type?: string; referrer_host?: string | null }
+        Relationships: []
+      }
+      digital_voucher_audit: {
+        Row: { id: number; voucher_id: string | null; action: string; changed_fields: string[]; actor_id: string | null; created_at: string }
+        Insert: { id?: number; voucher_id?: string | null; action: string; changed_fields?: string[]; actor_id?: string | null; created_at?: string }
+        Update: { id?: number; voucher_id?: string | null; action?: string; changed_fields?: string[]; actor_id?: string | null; created_at?: string }
+        Relationships: []
+      }
+      digital_voucher_rate_limits: {
+        Row: { key: string; window_start: string; hits: number }
+        Insert: { key: string; window_start: string; hits?: number }
+        Update: { key?: string; window_start?: string; hits?: number }
+        Relationships: []
+      }
       marketing_share_links: {
         Row: { created_at: string; created_by: string | null; id: string; token: string }
         Insert: { created_at?: string; created_by?: string | null; id?: string; token: string }
@@ -1514,6 +1544,8 @@ export type Database = {
       notify_backorder_stock: { Args: { p_items: Json }; Returns: number }
       can_view_crm: { Args: never; Returns: boolean }
       ingest_lead: { Args: { p_lead: Json }; Returns: string }
+      digital_voucher_rate_hit: { Args: { p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean }
+      digital_voucher_stats: { Args: { p_voucher_id?: string | null }; Returns: { voucher_id: string; event_type: string; total: number; sessions: number }[] }
       create_lead: { Args: { p_lead: Json }; Returns: string | null }
       claim_lead: { Args: { p_id: string }; Returns: boolean }
       release_lead: { Args: { p_id: string }; Returns: boolean }

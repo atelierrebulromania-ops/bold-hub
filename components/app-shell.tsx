@@ -51,6 +51,11 @@ const sections: { label: string; items: NavItem[] }[] = [
   { label: "MARKETING", items: [
     { href: "/marketing", label: "Calendar comunicare", roles: ["admin", "marketing"], icon: <svg {...svg}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M13 17h4"/></svg> },
   ] },
+  { label: "DIGITAL VOUCHERS", items: [
+    { href: "/vouchers", label: "Overview", roles: ["admin", "marketing"], icon: <svg {...svg}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> },
+    { href: "/vouchers/list", label: "Vouchers", roles: ["admin", "marketing"], icon: <svg {...svg}><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" strokeDasharray="2 2"/></svg> },
+    { href: "/vouchers/settings", label: "Settings", roles: ["admin", "marketing"], icon: <svg {...svg}><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg> },
+  ] },
   { label: "ISTORIC", items: [
     { href: "/orders/handed", label: "Predate curierului", roles: ["admin", "owner", "operator_depozit", "operator_facturare"], icon: <svg {...svg}><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg> },
   ] },
