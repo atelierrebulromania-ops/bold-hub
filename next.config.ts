@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/catalogs/\\[id\\]/pdf": ["./lib/horeca/assets/**/*", "./node_modules/pdfkit/js/standard-fonts/**/*", "./node_modules/pdfkit/package.json"],
     "/catalogs/image": ["./lib/horeca/assets/seed/**/*"],
+    // The downloadable voucher image uses the catalog's EB Garamond fonts.
+    "/api/public/vouchers/\\[slug\\]/image": ["./lib/horeca/assets/fonts/EBGaramond_*.ttf"],
   },
 };
 
